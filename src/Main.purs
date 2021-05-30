@@ -3,16 +3,16 @@ module Main where
 import Model
 import Prelude
 import Render
-import Utils
+import Common (GraphActions(..))
 import Data.Foldable (for_)
+import Data.Maybe (Maybe(..))
 import Effect (Effect)
-import Effect.Console (log)
 import Halogen as H
 import Halogen.Aff as HA
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
-import Halogen.HTML.Properties as HP
 import Halogen.VDom.Driver (runUI)
+import Utils (examplePiece)
 import Web.DOM.ParentNode (QuerySelector(..))
 
 main :: Effect Unit
@@ -21,42 +21,29 @@ main =
     $ do
         HA.awaitLoad
         elt <- HA.selectElement (QuerySelector "#app")
-        for_ elt (runUI svgComponent unit)
+        for_ elt (runUI appComponent unit)
 
-data Action
-  = Increment
-  | Decrement
-
-component =
-  H.mkComponent
-    { initialState
-    , render
-    , eval: H.mkEval $ H.defaultEval { handleAction = handleAction }
+type AppState
+  = { selected :: Maybe Int
+    , model :: Maybe Model
     }
+
+appComponent :: forall query input output m. H.Component query input output m
+appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultEval { handleAction = handleAction } }
   where
-  initialState _ = 0
-
-  render state =
-    HH.div_
-      [ HH.h1_ [ HH.text "Proto-Voice Annotation" ]
-      , HH.button [ HE.onClick \_ -> Decrement ] [ HH.text "-" ]
-      , HH.div_ [ HH.text $ show state ]
-      , HH.button [ HE.onClick \_ -> Increment ] [ HH.text "+" ]
-      ]
-
-  handleAction = case _ of
-    Increment -> H.modify_ \state -> state + 1
-    Decrement -> H.modify_ \state -> state - 1
-
-svgComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultEval { handleAction = handleAction } }
-  where
-  model = loadPiece examplePiece
-
-  initialState _ = { selected: 0 }
+  initialState :: input -> AppState
+  initialState _ = { selected: Nothing, model: Nothing }
 
   render st =
     HH.div
-      [ HP.style "overflow-x: scroll;" ]
-      [ renderReduction model.reduction st.selected ]
+      []
+      [ HH.h1_ [ HH.text "Proto-Voice Annotation" ]
+      , HH.button [ HE.onClick $ \_ -> LoadPiece examplePiece ] [ HH.text "Load Example Piece" ]
+      , case st.model of
+          Nothing -> HH.text ""
+          Just model -> renderReduction model.reduction st.selected
+      ]
 
-  handleAction _ = pure unit
+  handleAction (SelectSlice i) = H.modify_ \st -> st { selected = i }
+
+  handleAction (LoadPiece piece) = H.modify_ \st -> st { model = Just $ loadPiece piece }

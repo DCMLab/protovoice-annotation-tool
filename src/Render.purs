@@ -3,6 +3,7 @@ module Render where
 import Model
 import Prelude
 import Unfold
+import Common (GraphActions(..))
 import Data.Array (findIndex, fromFoldable, mapWithIndex)
 import Data.Int (toNumber)
 import Data.Map as M
@@ -14,9 +15,6 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Halogen.Svg.Attributes as SA
 import Halogen.Svg.Elements as SE
-
-data GraphActions
-  = SelectSlice Int
 
 scalex :: Number -> Number
 scalex x = x * 50.0
@@ -37,8 +35,14 @@ tspan = SE.element $ HH.ElemName "tspan"
 dy :: forall r i. String -> HH.IProp r i
 dy = SA.attr $ HH.AttrName "dy"
 
+svgFilter :: forall r i. String -> HH.IProp r i
+svgFilter = SA.attr $ HH.AttrName "filter"
+
 selColor :: SA.Color
 selColor = SA.RGB 30 144 255
+
+white :: SA.Color
+white = SA.RGB 255 255 255
 
 black :: SA.Color
 black = SA.RGB 0 0 0
@@ -46,26 +50,26 @@ black = SA.RGB 0 0 0
 lightgray :: SA.Color
 lightgray = SA.RGB 211 211 211
 
-renderSlice :: forall p. Int -> GraphSlice -> HH.HTML p GraphActions
+renderSlice :: forall p. Maybe Int -> GraphSlice -> HH.HTML p GraphActions
 renderSlice selid { id, notes, x, depth: d } = case notes of
   Inner inotes ->
     SE.g
       [ cursor "pointer"
-      , HE.onClick $ \_ -> SelectSlice id
+      , HE.onClick $ \_ -> SelectSlice (if selected then Nothing else Just id)
       ]
       ( [ SE.rect
             [ SA.x $ scalex x - scalex 0.4
             , SA.y $ scaley d - scaley 0.4
             , SA.width $ scalex 0.8
-            , SA.height $ offset (M.size inotes) + scaley 0.8
-            , SA.fill $ if selected then (Just selColor) else Nothing
+            , SA.height $ offset (M.size inotes - 1) + scaley 0.8
+            , SA.fill $ if selected then (Just selColor) else (Just white)
             ]
         ]
           <> mapWithIndex mknote (getNotes inotes)
       )
   startstop -> mknode [ HH.text $ show startstop ] (scalex x) (scaley d) true
   where
-  selected = id == selid
+  selected = Just id == selid
 
   mknode text x y fill =
     SE.text
@@ -73,7 +77,7 @@ renderSlice selid { id, notes, x, depth: d } = case notes of
       , SA.y y
       , SA.text_anchor SA.AnchorMiddle
       , SA.dominant_baseline SA.BaselineMiddle
-      -- TODO: fill
+      , svgFilter (if fill then "url(#clear)" else "")
       ]
       text
 
@@ -82,7 +86,7 @@ renderSlice selid { id, notes, x, depth: d } = case notes of
     label =
       [ HH.text $ show p
       , tspan
-          [ dy "-7", SA.font_size SA.Small ]
+          [ dy "-7", SA.font_size SA.XSmall ]
           [ HH.text $ show n ]
       ]
 
@@ -129,18 +133,21 @@ renderTrans slices { id, left, right, edges } =
 
   findPitchIndex _ _ = 0
 
-renderReduction :: forall p. Reduction -> Int -> HH.HTML p GraphActions
+renderReduction :: forall p. Reduction -> Maybe Int -> HH.HTML p GraphActions
 renderReduction reduction selected =
-  SE.svg
-    [ SA.width width
-    , SA.height height
-    , SA.viewBox (negate $ scalex 1.0) (negate $ scaley 1.0) width height
+  HH.div
+    [ HP.style "overflow-x: scroll;" ]
+    [ SE.svg
+        [ SA.width width
+        , SA.height height
+        , SA.viewBox (negate $ scalex 1.0) (negate $ scaley 1.0) width height
+        ]
+        (svgTranss <> svgSlices)
     ]
-    (svgSlices <> svgTranss)
   where
   { slices, transitions, maxx, maxd } = evalGraph reduction
 
-  width = scalex maxx
+  width = scalex (maxx + 2.0)
 
   height = scaley (maxd + 4.0)
 

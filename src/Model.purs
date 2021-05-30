@@ -2,10 +2,11 @@ module Model where
 
 import Prelude
 import Data.Array as A
-import Data.Map as M
 import Data.Generic.Rep (class Generic)
+import Data.Int (toNumber)
 import Data.List (List(..))
 import Data.List as L
+import Data.Map as M
 import Data.Maybe (Maybe(..), maybe)
 import Data.Show.Generic (genericShow)
 import Data.Traversable (for, scanl, traverse, foldl)
@@ -47,6 +48,7 @@ type Edges
 type Slice
   = { id :: Int
     , notes :: StartStop Notes
+    , x :: Number
     }
 
 type Transition
@@ -83,7 +85,7 @@ type Model
     }
 
 startSlice :: Slice
-startSlice = { id: 0, notes: Start }
+startSlice = { id: 0, notes: Start, x: 0.0 }
 
 thawTrans :: Array Note -> Int -> Transition
 thawTrans ties id =
@@ -95,7 +97,7 @@ thawTrans ties id =
   }
 
 thawSlice :: Array { pitch :: Note, hold :: Boolean } -> Int -> Slice
-thawSlice slice id = { id, notes: Inner $ count $ map _.pitch slice }
+thawSlice slice id = { id, notes: Inner $ count $ map _.pitch slice, x: toNumber id }
   where
   count = foldl (\acc x -> M.insertWith (+) x 1 acc) M.empty
 
@@ -126,7 +128,7 @@ thawPiece piece =
 
   lastSeg =
     { trans: thawTrans [] imax
-    , rslice: { id: imax + 1, notes: Stop }
+    , rslice: { id: imax + 1, notes: Stop, x: toNumber (imax + 1) }
     , op: Freeze
     }
 

@@ -3,9 +3,8 @@ module Unfold where
 import Model
 import Prelude
 import Control.Monad.State as ST
-import Data.List (List(..), mapWithIndex)
+import Data.List (List(..))
 import Data.Map as M
-import Data.Int (toNumber)
 
 type GraphSlice
   = { id :: Int, depth :: Number, x :: Number, notes :: StartStop Notes }
@@ -20,8 +19,8 @@ type Graph
     , maxx :: Number
     }
 
-addSlice :: Slice -> Number -> Number -> ST.State Graph Unit
-addSlice { id, notes } depth x = do
+addSlice :: Slice -> Number -> ST.State Graph Unit
+addSlice { id, notes, x } depth = do
   ST.modify_ add
   where
   slice :: GraphSlice
@@ -41,11 +40,11 @@ addTrans { id, edges } il ir = ST.modify_ add
 
   add st = st { transitions = M.insert id trans st.transitions }
 
-nextTrans :: Int -> List { seg :: Segment, x :: Number, depth :: Number } -> ST.State Graph Unit
+nextTrans :: Int -> List { seg :: Segment, depth :: Number } -> ST.State Graph Unit
 nextTrans _ Nil = pure unit
 
 nextTrans leftId (Cons item agenda) = do
-  addSlice item.seg.rslice item.depth item.x
+  addSlice item.seg.rslice item.depth
   let
     rightId = item.seg.rslice.id
 
@@ -61,10 +60,10 @@ evalGraph :: Reduction -> Graph
 evalGraph reduction =
   flip ST.execState initState
     $ do
-        addSlice reduction.start 0.0 0.0
+        addSlice reduction.start 0.0
         nextTrans 0 agenda
   where
-  agenda = mapWithIndex (\i seg -> { seg, x: toNumber i, depth: 0.0 }) reduction.segments
+  agenda = map (\seg -> { seg, depth: 0.0 }) reduction.segments
 
   initState =
     { slices: M.empty
