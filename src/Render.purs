@@ -3,12 +3,11 @@ module Render where
 import Model
 import Prelude
 import Unfold
-import Common (GraphActions(..))
-import Data.Array (findIndex, fromFoldable, mapWithIndex)
+import Common (GraphActions(..), OuterSelection(..))
+import Data.Array (findIndex, fromFoldable, length, mapWithIndex)
 import Data.Int (toNumber)
 import Data.Map as M
 import Data.Maybe (Maybe(..), fromMaybe)
-import Data.Tuple (Tuple(..))
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
@@ -50,26 +49,30 @@ black = SA.RGB 0 0 0
 lightgray :: SA.Color
 lightgray = SA.RGB 211 211 211
 
-renderSlice :: forall p. Maybe Int -> GraphSlice -> HH.HTML p GraphActions
-renderSlice selid { id, notes, x, depth: d } = case notes of
+renderSlice :: forall p. OuterSelection -> GraphSlice -> HH.HTML p GraphActions
+renderSlice selection { id, notes, x, depth: d } = case notes of
   Inner inotes ->
-    SE.g
-      [ cursor "pointer"
-      , HE.onClick $ \_ -> SelectSlice (if selected then Nothing else Just id)
-      ]
+    SE.g (if selectable then selectionAttr else [])
       ( [ SE.rect
             [ SA.x $ scalex x - scalex 0.4
             , SA.y $ scaley d - scaley 0.4
             , SA.width $ scalex 0.8
-            , SA.height $ offset (M.size inotes - 1) + scaley 0.8
+            , SA.height $ offset (length inotes - 1) + scaley 0.8
             , SA.fill $ if selected then (Just selColor) else (Just white)
             ]
         ]
-          <> mapWithIndex mknote (getNotes inotes)
+          <> mapWithIndex mknote inotes
       )
   startstop -> mknode [ HH.text $ show startstop ] (scalex x) (scaley d) true
   where
-  selected = Just id == selid
+  selected = selection == SelSlice id
+
+  selectable = d == 0.0
+
+  selectionAttr =
+    [ cursor "pointer"
+    , HE.onClick $ \_ -> SelectOuter (if selected then SelNone else SelSlice id)
+    ]
 
   mknode text x y fill =
     SE.text
@@ -81,31 +84,39 @@ renderSlice selid { id, notes, x, depth: d } = case notes of
       ]
       text
 
-  mknote i (Tuple p n) = mknode label (scalex x) (scaley d + offset i) false
+  mknote i note = mknode label (scalex x) (scaley d + offset i) false
     where
     label =
-      [ HH.text $ show p
-      , tspan
-          [ dy "-7", SA.font_size SA.XSmall ]
-          [ HH.text $ show n ]
+      [ HH.text $ show note.pitch
+      , SE.title [] [ HH.text note.id ]
       ]
 
-renderTrans :: forall p. M.Map Int GraphSlice -> GraphTransition -> HH.HTML p GraphActions
-renderTrans slices { id, left, right, edges } =
+renderTrans :: forall p. OuterSelection -> M.Map Int GraphSlice -> GraphTransition -> HH.HTML p GraphActions
+renderTrans selection slices { id, left, right, edges } =
   fromMaybe (HH.text "")
     $ do
         { x: xl, depth: yl, notes: nl } <- M.lookup left slices
         { x: xr, depth: yr, notes: nr } <- M.lookup right slices
         let
+          selected = selection == SelTrans id
+
+          selectable = yl == 0.0 && yr == 0.0
+
+          selectionAttr =
+            [ cursor "pointer"
+            , HE.onClick $ \_ -> SelectOuter (if selected then SelNone else SelTrans id)
+            ]
+
           bar =
             [ SE.line
-                [ SA.x1 $ scalex xl
-                , SA.y1 $ scaley yl
-                , SA.x2 $ scalex xr
-                , SA.y2 $ scaley yr
-                , SA.stroke (Just $ lightgray)
-                , SA.strokeWidth 10.0
-                ]
+                $ [ SA.x1 $ scalex xl
+                  , SA.y1 $ scaley yl
+                  , SA.x2 $ scalex xr
+                  , SA.y2 $ scaley yr
+                  , SA.stroke (Just $ if selected then selColor else lightgray)
+                  , SA.strokeWidth 15.0
+                  ]
+                <> if selectable then selectionAttr else []
             ]
 
           mkedge { left: p1, right: p2 } =
@@ -125,16 +136,16 @@ renderTrans slices { id, left, right, edges } =
           edgeLines = map mkedge (edges.regular <> edges.passing) -- TODO
         pure $ SE.g [] (bar <> edgeLines)
   where
-  findPitchIndex (Inner pitch) (Inner notes) =
+  findPitchIndex (Inner note) (Inner notes) =
     fromMaybe 0
       $ findIndex
-          (\(Tuple p n) -> p == pitch)
-          (getNotes notes)
+          ((==) note)
+          notes
 
   findPitchIndex _ _ = 0
 
-renderReduction :: forall p. Reduction -> Maybe Int -> HH.HTML p GraphActions
-renderReduction reduction selected =
+renderReduction :: forall p. Reduction -> OuterSelection -> HH.HTML p GraphActions
+renderReduction reduction selection =
   HH.div
     [ HP.style "overflow-x: scroll;" ]
     [ SE.svg
@@ -151,6 +162,6 @@ renderReduction reduction selected =
 
   height = scaley (maxd + 4.0)
 
-  svgSlices = map (renderSlice selected) $ fromFoldable $ M.values slices
+  svgSlices = map (renderSlice selection) $ fromFoldable $ M.values slices
 
-  svgTranss = map (renderTrans slices) $ fromFoldable $ M.values transitions
+  svgTranss = map (renderTrans selection slices) $ fromFoldable $ M.values transitions

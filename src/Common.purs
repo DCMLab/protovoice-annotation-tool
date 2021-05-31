@@ -1,8 +1,19 @@
 module Common where
 
-import Data.Maybe (Maybe)
+import Prelude
 import Model (Piece)
 
+data OuterSelection
+  = SelNone
+  | SelSlice Int
+  | SelTrans Int
+
+derive instance eqOuterSelection :: Eq OuterSelection
+
 data GraphActions
-  = SelectSlice (Maybe Int)
+  = SelectOuter OuterSelection
   | LoadPiece Piece
+  | MergeAtSelected
+  | VertAtSelected
+  | UnMergeAtSelected
+  | UnVertAtSelected

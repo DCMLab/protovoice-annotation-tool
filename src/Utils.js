@@ -6,6 +6,14 @@ exports.examplePieceJSON = [
     { pitch: "D5", hold: false },
     { pitch: "D3", hold: true },
   ],
+];
+
+exports.examplePieceJSONLong = [
+  [{ pitch: "D5", hold: false }],
+  [
+    { pitch: "D5", hold: false },
+    { pitch: "D3", hold: true },
+  ],
   [
     { pitch: "A4", hold: false },
     { pitch: "D3", hold: true },
