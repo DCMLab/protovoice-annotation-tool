@@ -70,12 +70,6 @@ exports.examplePieceJSONLong = [
     { pitch: "D3", hold: true },
   ],
   [
-    { pitch: "G5", hold: false },
-    { pitch: "A4", hold: true },
-    { pitch: "C#4", hold: true },
-    { pitch: "D3", hold: true },
-  ],
-  [
     { pitch: "F5", hold: false },
     { pitch: "A4", hold: true },
     { pitch: "C#4", hold: true },
