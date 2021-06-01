@@ -1,14 +1,13 @@
 module Render where
 
-import Model
 import Prelude
-import Unfold
 import Common (GraphActions(..), OuterSelection(..))
+import Model (Reduction, SliceId, StartStop(..))
+import Unfold (GraphSlice, GraphTransition, evalGraph)
 import Data.Array (findIndex, fromFoldable, length, mapWithIndex)
 import Data.Int (toNumber)
 import Data.Map as M
 import Data.Maybe (Maybe(..), fromMaybe)
-import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
@@ -74,10 +73,10 @@ renderSlice selection { id, notes, x, depth: d } = case notes of
     , HE.onClick $ \_ -> SelectOuter (if selected then SelNone else SelSlice id)
     ]
 
-  mknode text x y fill =
+  mknode text xcoord ycoord fill =
     SE.text
-      [ SA.x x
-      , SA.y y
+      [ SA.x xcoord
+      , SA.y ycoord
       , SA.text_anchor SA.AnchorMiddle
       , SA.dominant_baseline SA.BaselineMiddle
       , svgFilter (if fill then "url(#clear)" else "")
@@ -91,7 +90,7 @@ renderSlice selection { id, notes, x, depth: d } = case notes of
       , SE.title [] [ HH.text note.id ]
       ]
 
-renderTrans :: forall p. OuterSelection -> M.Map Int GraphSlice -> GraphTransition -> HH.HTML p GraphActions
+renderTrans :: forall p. OuterSelection -> M.Map SliceId GraphSlice -> GraphTransition -> HH.HTML p GraphActions
 renderTrans selection slices { id, left, right, edges } =
   fromMaybe (HH.text "")
     $ do

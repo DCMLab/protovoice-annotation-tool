@@ -1,12 +1,12 @@
 module Common where
 
 import Prelude
-import Model (Piece)
+import Model (Piece, SliceId, TransId)
 
 data OuterSelection
   = SelNone
-  | SelSlice Int
-  | SelTrans Int
+  | SelSlice SliceId
+  | SelTrans TransId
 
 derive instance eqOuterSelection :: Eq OuterSelection
 

@@ -1,21 +1,32 @@
 module Unfold where
 
-import Model
 import Prelude
+import Model
+  ( Edges
+  , Notes
+  , Op(..)
+  , Reduction
+  , Segment
+  , Slice
+  , SliceId(..)
+  , StartStop
+  , TransId
+  , Transition
+  )
 import Control.Monad.State as ST
 import Data.List (List(..))
 import Data.List as L
 import Data.Map as M
 
 type GraphSlice
-  = { id :: Int, depth :: Number, x :: Number, notes :: StartStop Notes }
+  = { id :: SliceId, depth :: Number, x :: Number, notes :: StartStop Notes }
 
 type GraphTransition
-  = { id :: Int, left :: Int, right :: Int, edges :: Edges }
+  = { id :: TransId, left :: SliceId, right :: SliceId, edges :: Edges }
 
 type Graph
-  = { slices :: M.Map Int GraphSlice
-    , transitions :: M.Map Int GraphTransition
+  = { slices :: M.Map SliceId GraphSlice
+    , transitions :: M.Map TransId GraphTransition
     , maxd :: Number
     , maxx :: Number
     }
@@ -37,14 +48,14 @@ addSlice { id, notes, x } depth = do
       , slices = M.insert id slice st.slices
       }
 
-addTrans :: Transition -> Int -> Int -> ST.State Graph Unit
+addTrans :: Transition -> SliceId -> SliceId -> ST.State Graph Unit
 addTrans { id, edges } il ir = ST.modify_ add
   where
   trans = { left: il, right: ir, id, edges }
 
   add st = st { transitions = M.insert id trans st.transitions }
 
-nextTrans :: Int -> List AgendaItem -> ST.State Graph Unit
+nextTrans :: SliceId -> List AgendaItem -> ST.State Graph Unit
 nextTrans _ Nil = pure unit
 
 nextTrans leftId (Cons item agenda) = do
@@ -77,7 +88,7 @@ evalGraph reduction =
   flip ST.execState initState
     $ do
         addSlice reduction.start 0.0
-        nextTrans 0 agenda
+        nextTrans (SliceId 0) agenda
   where
   agenda = map (\seg -> { seg, depth: 0.0, omitSlice: false }) reduction.segments
 

@@ -53,19 +53,45 @@ type Edges
     , passing :: Array Edge
     }
 
+newtype SliceId
+  = SliceId Int
+
+instance showSliceId :: Show SliceId where
+  show (SliceId i) = "s" <> show i
+
+derive instance eqSliceId :: Eq SliceId
+
+derive instance ordSliceId :: Ord SliceId
+
+incS :: SliceId -> SliceId
+incS (SliceId i) = SliceId $ i + 1
+
+newtype TransId
+  = TransId Int
+
+instance showTransId :: Show TransId where
+  show (TransId i) = "t" <> show i
+
+derive instance eqTransId :: Eq TransId
+
+derive instance ordTransId :: Ord TransId
+
+incT :: TransId -> TransId
+incT (TransId i) = TransId $ i + 1
+
 type Slice
-  = { id :: Int
+  = { id :: SliceId
     , notes :: StartStop Notes
     , x :: Number
     }
 
 type Transition
-  = { id :: Int
+  = { id :: TransId
     , edges :: Edges
     }
 
-emptyTrans :: Int -> Transition
-emptyTrans id = { id, edges: { regular: [], passing: [] } }
+emptyTrans :: TransId -> Transition
+emptyTrans id = { id: id, edges: { regular: [], passing: [] } }
 
 data Op
   = Freeze
@@ -86,8 +112,8 @@ type Segment
 type Reduction
   = { start :: Slice
     , segments :: List Segment
-    , nextTransId :: Int
-    , nextSliceId :: Int
+    , nextTransId :: TransId
+    , nextSliceId :: SliceId
     }
 
 type Model
@@ -107,11 +133,11 @@ printSurface model = do
 -- ===============
 --
 startSlice :: Slice
-startSlice = { id: 0, notes: Start, x: 0.0 }
+startSlice = { id: SliceId 0, notes: Start, x: 0.0 }
 
 thawTrans :: Array Note -> Int -> Array { note :: Note, hold :: Boolean } -> Transition
 thawTrans ties id slice =
-  { id
+  { id: TransId id
   , edges:
       { regular: A.catMaybes $ map findSecond ties
       , passing: []
@@ -123,14 +149,14 @@ thawTrans ties id slice =
   findSecond fst = (\snd -> { left: Inner fst, right: Inner snd }) <$> find (\snd -> snd.pitch == fst.pitch) notes
 
 thawSlice :: Array { note :: Note, hold :: Boolean } -> Int -> Slice
-thawSlice slice id = { id, notes: Inner $ map _.note slice, x: toNumber id }
+thawSlice slice id = { id: SliceId id, notes: Inner $ map _.note slice, x: toNumber id }
 
 thawPiece :: Piece -> Reduction
 thawPiece piece =
   { start: startSlice
   , segments: L.fromFoldable $ segs
-  , nextSliceId: imax + 2
-  , nextTransId: imax + 1
+  , nextSliceId: SliceId $ imax + 2
+  , nextTransId: TransId $ imax + 1
   }
   where
   thaw st slice = { seg, ties, i: st.i + 1 }
@@ -152,7 +178,7 @@ thawPiece piece =
 
   lastSeg =
     { trans: thawTrans [] imax []
-    , rslice: { id: imax + 1, notes: Stop, x: toNumber (imax + 1) }
+    , rslice: { id: SliceId (imax + 1), notes: Stop, x: toNumber (imax + 1) }
     , op: Freeze
     }
 
@@ -175,18 +201,18 @@ doAt match f segs@(Cons seg rest) = case match segs of
   Nothing -> Cons seg <$> doAt match f rest
 
 -- | Merges two segment into a new segment with a 'Split' operation.
-mkMerge :: Int -> Segment -> Segment -> Segment
+mkMerge :: TransId -> Segment -> Segment -> Segment
 mkMerge id seg1 seg2 = { trans: emptyTrans id, rslice: seg2.rslice, op }
   where
   op = Split { childl: seg1, childr: seg2 }
 
 -- | Applies a merge at slice 'sliceId', if it exists on the reduction surface.
-mergeAtSlice :: Int -> Model -> Model
+mergeAtSlice :: SliceId -> Model -> Model
 mergeAtSlice sliceId model = case doAt matchSlice tryMerge model.reduction.segments of
-  Just segments' -> model { reduction { segments = segments', nextTransId = nextId + 1 } }
+  Just segments' -> model { reduction { segments = segments', nextTransId = incT nextTId } }
   Nothing -> model
   where
-  nextId = model.reduction.nextTransId
+  nextTId = model.reduction.nextTransId
 
   matchSlice :: List Segment -> Maybe (Tuple (Tuple Segment Segment) (List Segment))
   matchSlice = case _ of
@@ -194,11 +220,11 @@ mergeAtSlice sliceId model = case doAt matchSlice tryMerge model.reduction.segme
     _ -> Nothing
 
   tryMerge :: Tuple Segment Segment -> Maybe (List Segment)
-  tryMerge (Tuple seg1 seg2) = Just $ mkMerge nextId seg1 seg2 : Nil
+  tryMerge (Tuple seg1 seg2) = Just $ mkMerge nextTId seg1 seg2 : Nil
 
 -- | Verticalizes three segments into two new segments,
 -- the first of witch gets a 'Hori' operation.
-mkVert :: Int -> Int -> Segment -> Segment -> Segment -> Maybe (List Segment)
+mkVert :: TransId -> SliceId -> Segment -> Segment -> Segment -> Maybe (List Segment)
 mkVert tid sid l@{ rslice: { notes: Inner notesl } } m@{ rslice: { notes: Inner notesr } } r
   | A.all isRepeatingEdge m.trans.edges.regular = Just $ pleft : pright : Nil
     where
@@ -218,14 +244,21 @@ mkVert tid sid l@{ rslice: { notes: Inner notesl } } m@{ rslice: { notes: Inner 
 
     pleft = { trans: emptyTrans tid, rslice: topSlice, op: Hori { childl: l, childm: m, childr: r } }
 
-    pright = { trans: emptyTrans (tid + 1), rslice: r.rslice, op: Freeze }
+    pright = { trans: emptyTrans (incT tid), rslice: r.rslice, op: Freeze }
 
 mkVert _ _ _ _ _ = Nothing
 
 -- | Applies a verticalization at transition 'transId', if it exists on the reduction surface.
-vertAtMid :: Int -> Model -> Model
+vertAtMid :: TransId -> Model -> Model
 vertAtMid transId model = case doAt matchMid tryVert model.reduction.segments of
-  Just segments' -> model { reduction { segments = segments', nextTransId = nextTId + 2, nextSliceId = nextSId + 1 } }
+  Just segments' ->
+    model
+      { reduction
+        { segments = segments'
+        , nextTransId = incT $ incT nextTId
+        , nextSliceId = incS nextSId
+        }
+      }
   Nothing -> model
   where
   nextTId = model.reduction.nextTransId
@@ -239,7 +272,7 @@ vertAtMid transId model = case doAt matchMid tryVert model.reduction.segments of
   tryVert { l, m, r } = mkVert nextTId nextSId l m r
 
 -- | Undoes a merge at transition 'transId', if it exists, restoring its children.
-undoMergeAtTrans :: Int -> Model -> Model
+undoMergeAtTrans :: TransId -> Model -> Model
 undoMergeAtTrans transId model = case doAt matchTrans tryUnmerge model.reduction.segments of
   Just segments' -> model { reduction { segments = segments' } }
   Nothing -> model
@@ -253,7 +286,7 @@ undoMergeAtTrans transId model = case doAt matchTrans tryUnmerge model.reduction
     _ -> Nothing
 
 -- | Undoes a verticalization at slice 'sliceId', if it exists, restoring its children.
-undoVertAtSlice :: Int -> Model -> Model
+undoVertAtSlice :: SliceId -> Model -> Model
 undoVertAtSlice sliceId model = case doAt matchSlice tryUnvert model.reduction.segments of
   Just segments' -> model { reduction { segments = segments' } }
   Nothing -> model
