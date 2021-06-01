@@ -1,0 +1,90 @@
+#app {
+    margin-left: auto;
+    margin-right: auto;
+    max-width: 1044px;
+    padding: 0 10px;
+}
+
+#graph {
+    height: 100%;
+    overflow-x: scroll;
+}
+
+/* General visual stuff */
+
+.file-input {
+    width: 0.1px;
+    height: 0.1px;
+    opacity: 0;
+    overflow: hidden;
+    position: absolute;
+    z-index: -1;
+}
+
+
+
+.button-danger {
+    background: #d62728;
+    color: #fff;
+}
+
+.button-checked {
+    background-color: #2ca02c;
+    color: #fff;
+}
+
+.button-primary,
+.button-selected {
+    background-color: #1f77b4;
+    color: #fff;
+}
+
+.placeholder {
+    min-height: 1em;
+}
+
+.form-text {
+    padding: 0.5em 0;
+}
+
+@media screen and (min-width: 48em) {
+    .gh-input .load-padder {
+        margin-top: 28px;
+    }
+}
+
+/* .hide-show { */
+/*     display: inline-block; */
+/*     margin-left: auto; */
+/*     margin-right: 0; */
+/*     /\* width: 100%; *\/ */
+/*     /\* text-align: right; *\/ */
+/* } */
+
+
+.loading {
+    position: relative;
+    min-height: 100px;
+    width: 100%;
+}
+
+.loading:after {
+  content: " ";
+  display: block;
+  width: 64px;
+  height: 64px;
+  margin: 8px auto;
+  border-radius: 50%;
+  border: 6px solid #000;
+  border-color: #000 transparent #000 transparent;
+  animation: lds-dual-ring 1.2s linear infinite;
+}
+
+@keyframes lds-dual-ring {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
