@@ -2,6 +2,7 @@ module Model where
 
 import Prelude
 import Data.Array as A
+import Data.Either (Either(..))
 import Data.Foldable (find, foldl, for_)
 import Data.Generic.Rep (class Generic)
 import Data.Int (toNumber)
@@ -88,10 +89,11 @@ type Slice
 type Transition
   = { id :: TransId
     , edges :: Edges
+    , is2nd :: Boolean
     }
 
-emptyTrans :: TransId -> Transition
-emptyTrans id = { id: id, edges: { regular: [], passing: [] } }
+emptyTrans :: TransId -> Boolean -> Transition
+emptyTrans id is2nd = { id, is2nd, edges: { regular: [], passing: [] } }
 
 data Op
   = Freeze
@@ -138,6 +140,7 @@ startSlice = { id: SliceId 0, notes: Start, x: 0.0 }
 thawTrans :: Array Note -> Int -> Array { note :: Note, hold :: Boolean } -> Transition
 thawTrans ties id slice =
   { id: TransId id
+  , is2nd: false
   , edges:
       { regular: A.catMaybes $ map findSecond ties
       , passing: []
@@ -193,8 +196,8 @@ loadPiece piece = { piece, reduction: thawPiece piece }
 -- | A helper function that traverses the surface of a reduction (a list of segments)
 -- and applies an operation 'f' (which might fail)
 -- to segments starting with slice 'sliceId'.
-doAt :: forall a. (List Segment -> Maybe (Tuple a (List Segment))) -> (a -> Maybe (List Segment)) -> List Segment -> Maybe (List Segment)
-doAt match f Nil = Nothing
+doAt :: forall a. (List Segment -> Maybe (Tuple a (List Segment))) -> (a -> Either String (List Segment)) -> List Segment -> Either String (List Segment)
+doAt match f Nil = Left "not found"
 
 doAt match f segs@(Cons seg rest) = case match segs of
   Just (Tuple m remainder) -> (\result -> result <> remainder) <$> f m
@@ -202,15 +205,15 @@ doAt match f segs@(Cons seg rest) = case match segs of
 
 -- | Merges two segment into a new segment with a 'Split' operation.
 mkMerge :: TransId -> Segment -> Segment -> Segment
-mkMerge id seg1 seg2 = { trans: emptyTrans id, rslice: seg2.rslice, op }
+mkMerge id seg1 seg2 = { trans: emptyTrans id seg1.trans.is2nd, rslice: seg2.rslice, op }
   where
   op = Split { childl: seg1, childr: seg2 }
 
 -- | Applies a merge at slice 'sliceId', if it exists on the reduction surface.
-mergeAtSlice :: SliceId -> Model -> Model
+mergeAtSlice :: SliceId -> Model -> Either String Model
 mergeAtSlice sliceId model = case doAt matchSlice tryMerge model.reduction.segments of
-  Just segments' -> model { reduction { segments = segments', nextTransId = incT nextTId } }
-  Nothing -> model
+  Right segments' -> Right model { reduction { segments = segments', nextTransId = incT nextTId } }
+  Left err -> Left err
   where
   nextTId = model.reduction.nextTransId
 
@@ -219,14 +222,16 @@ mergeAtSlice sliceId model = case doAt matchSlice tryMerge model.reduction.segme
     Cons seg1 (Cons seg2 rest) -> if seg1.rslice.id == sliceId then Just (Tuple (Tuple seg1 seg2) rest) else Nothing
     _ -> Nothing
 
-  tryMerge :: Tuple Segment Segment -> Maybe (List Segment)
-  tryMerge (Tuple seg1 seg2) = Just $ mkMerge nextTId seg1 seg2 : Nil
+  tryMerge :: Tuple Segment Segment -> Either String (List Segment)
+  tryMerge (Tuple seg1 seg2) = Right $ mkMerge nextTId seg1 seg2 : Nil
 
 -- | Verticalizes three segments into two new segments,
 -- the first of witch gets a 'Hori' operation.
-mkVert :: TransId -> SliceId -> Segment -> Segment -> Segment -> Maybe (List Segment)
+mkVert :: TransId -> SliceId -> Segment -> Segment -> Segment -> Either String (List Segment)
 mkVert tid sid l@{ rslice: { notes: Inner notesl } } m@{ rslice: { notes: Inner notesr } } r
-  | A.all isRepeatingEdge m.trans.edges.regular = Just $ pleft : pright : Nil
+  | l.trans.is2nd = Left "Cannot vert right of a vert (not a leftmost derivation)!"
+  | not $ A.all isRepeatingEdge m.trans.edges.regular = Left "Middle transition of a vert must only contain repetition and passing edges!"
+  | otherwise = Right $ pleft : pright : Nil
     where
     countPitches notes = foldl (\counts n -> M.insertWith (+) n.pitch 1 counts) M.empty notes
 
@@ -242,24 +247,25 @@ mkVert tid sid l@{ rslice: { notes: Inner notesl } } m@{ rslice: { notes: Inner 
       , x: (l.rslice.x + m.rslice.x) / 2.0
       }
 
-    pleft = { trans: emptyTrans tid, rslice: topSlice, op: Hori { childl: l, childm: m, childr: r } }
+    pleft = { trans: emptyTrans tid false, rslice: topSlice, op: Hori { childl: l, childm: m, childr: r } }
 
-    pright = { trans: emptyTrans (incT tid), rslice: r.rslice, op: Freeze }
+    pright = { trans: emptyTrans (incT tid) true, rslice: r.rslice, op: Freeze }
 
-mkVert _ _ _ _ _ = Nothing
+mkVert _ _ _ _ _ = Left "Cannot vert an outer slice!"
 
 -- | Applies a verticalization at transition 'transId', if it exists on the reduction surface.
-vertAtMid :: TransId -> Model -> Model
+vertAtMid :: TransId -> Model -> Either String Model
 vertAtMid transId model = case doAt matchMid tryVert model.reduction.segments of
-  Just segments' ->
-    model
-      { reduction
-        { segments = segments'
-        , nextTransId = incT $ incT nextTId
-        , nextSliceId = incS nextSId
+  Right segments' ->
+    Right
+      model
+        { reduction
+          { segments = segments'
+          , nextTransId = incT $ incT nextTId
+          , nextSliceId = incS nextSId
+          }
         }
-      }
-  Nothing -> model
+  Left err -> Left err
   where
   nextTId = model.reduction.nextTransId
 
@@ -272,29 +278,29 @@ vertAtMid transId model = case doAt matchMid tryVert model.reduction.segments of
   tryVert { l, m, r } = mkVert nextTId nextSId l m r
 
 -- | Undoes a merge at transition 'transId', if it exists, restoring its children.
-undoMergeAtTrans :: TransId -> Model -> Model
+undoMergeAtTrans :: TransId -> Model -> Either String Model
 undoMergeAtTrans transId model = case doAt matchTrans tryUnmerge model.reduction.segments of
-  Just segments' -> model { reduction { segments = segments' } }
-  Nothing -> model
+  Right segments' -> Right model { reduction { segments = segments' } }
+  Left err -> Left err
   where
   matchTrans = case _ of
     Cons seg rest -> if seg.trans.id == transId then Just (Tuple seg rest) else Nothing
     _ -> Nothing
 
   tryUnmerge seg = case seg.op of
-    Split { childl, childr } -> Just $ childl : childr : Nil
-    _ -> Nothing
+    Split { childl, childr } -> Right $ childl : childr : Nil
+    _ -> Left "Operation is not a split!"
 
 -- | Undoes a verticalization at slice 'sliceId', if it exists, restoring its children.
-undoVertAtSlice :: SliceId -> Model -> Model
+undoVertAtSlice :: SliceId -> Model -> Either String Model
 undoVertAtSlice sliceId model = case doAt matchSlice tryUnvert model.reduction.segments of
-  Just segments' -> model { reduction { segments = segments' } }
-  Nothing -> model
+  Right segments' -> Right model { reduction { segments = segments' } }
+  Left err -> Left err
   where
   matchSlice = case _ of
     Cons pl (Cons pr rest) -> if pl.rslice.id == sliceId then Just (Tuple { pl, pr } rest) else Nothing
     _ -> Nothing
 
   tryUnvert { pl, pr } = case pl.op of
-    Hori { childl, childm, childr } -> Just $ childl : childm : childr : Nil
-    _ -> Nothing
+    Hori { childl, childm, childr } -> Right $ childl : childm : childr : Nil
+    _ -> Left "Operation is not a hori!"

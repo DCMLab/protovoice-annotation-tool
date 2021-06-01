@@ -3,10 +3,14 @@ module Main where
 import Model
 import Prelude
 import Render
-import Common (GraphActions(..), OuterSelection(..))
+import Common (GraphActions(..), OuterSelection(..), getSelSlice, getSelTrans)
+import Control.Monad.State (class MonadState)
+import Data.Either (Either(..))
 import Data.Foldable (for_)
 import Data.Maybe (Maybe(..))
 import Effect (Effect)
+import Effect.Class (class MonadEffect)
+import Effect.Class.Console (log)
 import Halogen as H
 import Halogen.Aff as HA
 import Halogen.HTML as HH
@@ -28,7 +32,27 @@ type AppState
     , model :: Maybe Model
     }
 
-appComponent :: forall query input output m. H.Component query input output m
+tryModelAction ::
+  forall a m.
+  (MonadState AppState m) =>
+  (MonadEffect m) =>
+  (OuterSelection -> Maybe a) ->
+  (a -> Model -> Either String Model) ->
+  m Unit
+tryModelAction selector action = do
+  st <- H.get
+  let
+    modelAndSel = do
+      sel <- selector st.selected
+      model <- st.model
+      pure { sel, model }
+  case modelAndSel of
+    Nothing -> pure unit
+    Just { sel, model } -> case action sel model of
+      Left err -> log err
+      Right model' -> H.put st { model = Just model', selected = SelNone }
+
+appComponent :: forall query input output m. (MonadEffect m) => H.Component query input output m
 appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultEval { handleAction = handleAction } }
   where
   initialState :: input -> AppState
@@ -51,19 +75,7 @@ appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultE
   handleAction = case _ of
     SelectOuter i -> H.modify_ \st -> st { selected = i }
     LoadPiece piece -> H.modify_ \st -> st { model = Just $ loadPiece piece, selected = SelNone }
-    MergeAtSelected ->
-      H.modify_ \st -> case st.selected of
-        SelSlice sel -> st { model = mergeAtSlice sel <$> st.model, selected = SelNone }
-        _ -> st
-    VertAtSelected ->
-      H.modify_ \st -> case st.selected of
-        SelTrans sel -> st { model = vertAtMid sel <$> st.model, selected = SelNone }
-        _ -> st
-    UnMergeAtSelected ->
-      H.modify_ \st -> case st.selected of
-        SelTrans sel -> st { model = undoMergeAtTrans sel <$> st.model, selected = SelNone }
-        _ -> st
-    UnVertAtSelected ->
-      H.modify_ \st -> case st.selected of
-        SelSlice sel -> st { model = undoVertAtSlice sel <$> st.model, selected = SelNone }
-        _ -> st
+    MergeAtSelected -> tryModelAction getSelSlice mergeAtSlice
+    VertAtSelected -> tryModelAction getSelTrans vertAtMid
+    UnMergeAtSelected -> tryModelAction getSelTrans undoMergeAtTrans
+    UnVertAtSelected -> tryModelAction getSelSlice undoVertAtSlice
