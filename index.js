@@ -10875,10 +10875,10 @@ var PS = {};
   var svgFilter = Halogen_Svg_Attributes.attr("filter");
   var selColor = new Halogen_Svg_Attributes.RGB(30, 144, 255);
   var scaley = function (y) {
-      return y * 50.0;
+      return y * 60.0;
   };
   var scalex = function (x) {
-      return x * 50.0;
+      return x * 60.0;
   };
   var offset = function (i) {
       return Data_Int.toNumber(i) * 20.0;
@@ -10923,7 +10923,7 @@ var PS = {};
                       return selectionAttr;
                   };
                   return [  ];
-              })())(Data_Semigroup.append(Data_Semigroup.semigroupArray)([ Halogen_Svg_Elements.rect([ Halogen_Svg_Attributes.x(scalex(v.x) - scalex(0.4)), Halogen_Svg_Attributes.y(scaley(v.depth) - scaley(0.4)), Halogen_Svg_Attributes.width(scalex(0.8)), Halogen_Svg_Attributes.height(offset(Data_Array.length(v.notes.value0) - 1 | 0) + scaley(0.8)), Halogen_Svg_Attributes.fill((function () {
+              })())(Data_Semigroup.append(Data_Semigroup.semigroupArray)([ Halogen_Svg_Elements.rect([ Halogen_Svg_Attributes.x(scalex(v.x) - scalex(0.24)), Halogen_Svg_Attributes.y(scaley(v.depth) - scaley(0.24)), Halogen_Svg_Attributes.width(scalex(0.48)), Halogen_Svg_Attributes.height(offset(Data_Array.length(v.notes.value0) - 1 | 0) + scaley(0.48)), Halogen_Svg_Attributes.fill((function () {
                   if (selected) {
                       return new Data_Maybe.Just(selColor);
                   };
