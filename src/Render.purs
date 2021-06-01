@@ -15,10 +15,10 @@ import Halogen.Svg.Attributes as SA
 import Halogen.Svg.Elements as SE
 
 scalex :: Number -> Number
-scalex x = x * 50.0
+scalex x = x * 60.0
 
 scaley :: Number -> Number
-scaley y = y * 50.0
+scaley y = y * 60.0
 
 offset :: Int -> Number
 offset i = toNumber i * 20.0
@@ -53,10 +53,10 @@ renderSlice selection { id, notes, x, depth: d } = case notes of
   Inner inotes ->
     SE.g (if selectable then selectionAttr else [])
       ( [ SE.rect
-            [ SA.x $ scalex x - scalex 0.4
-            , SA.y $ scaley d - scaley 0.4
-            , SA.width $ scalex 0.8
-            , SA.height $ offset (length inotes - 1) + scaley 0.8
+            [ SA.x $ scalex x - scalex 0.24
+            , SA.y $ scaley d - scaley 0.24
+            , SA.width $ scalex 0.48
+            , SA.height $ offset (length inotes - 1) + scaley 0.48
             , SA.fill $ if selected then (Just selColor) else (Just white)
             ]
         ]
