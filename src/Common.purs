@@ -1,28 +1,41 @@
 module Common where
 
 import Prelude
+import Data.Generic.Rep (class Generic)
 import Data.Maybe (Maybe(..))
-import Model (Piece, SliceId, TransId)
+import Data.Show.Generic (genericShow)
+import Model (Piece, SliceId, TransId, StartStop(..), Note)
 
-data OuterSelection
+data Selection
   = SelNone
   | SelSlice SliceId
   | SelTrans TransId
+  | SelNote { note :: String, parentSlices :: Array SliceId }
 
-derive instance eqOuterSelection :: Eq OuterSelection
+derive instance eqOuterSelection :: Eq Selection
 
-getSelSlice :: OuterSelection -> Maybe SliceId
+derive instance genericOuterSelection :: Generic Selection _
+
+instance showOuterSelection :: Show Selection where
+  show os = genericShow os
+
+getSelSlice :: Selection -> Maybe SliceId
 getSelSlice (SelSlice sid) = Just sid
 
 getSelSlice _ = Nothing
 
-getSelTrans :: OuterSelection -> Maybe TransId
+getSelTrans :: Selection -> Maybe TransId
 getSelTrans (SelTrans tid) = Just tid
 
 getSelTrans _ = Nothing
 
+noteIsSelected :: Selection -> StartStop Note -> Boolean
+noteIsSelected (SelNote sel) (Inner note) = sel.note == note.id
+
+noteIsSelected _ _ = false
+
 data GraphActions
-  = SelectOuter OuterSelection
+  = Select Selection
   | LoadPiece Piece
   | MergeAtSelected
   | VertAtSelected

@@ -6,7 +6,7 @@ import Data.Array as A
 import Data.List (List(..), (:))
 import Data.Map as M
 import Leftmost (Leftmost(..))
-import Model (Edges, Notes, Op(..), Reduction, Segment, Slice, SliceId(..), StartStop, TransId, Transition)
+import Model (Edges, Op(..), Reduction, Segment, Slice, SliceId(..), TransId, Transition)
 
 type AgendaItem a
   = { seg :: Segment, more :: a }
@@ -89,10 +89,10 @@ walkGraph alg start agenda = do
 -- -----------------------------------------------
 -- 
 type GraphSlice
-  = { id :: SliceId, depth :: Number, x :: Number, notes :: StartStop Notes }
+  = { depth :: Number, slice :: Slice }
 
 type GraphTransition
-  = { id :: TransId, left :: SliceId, right :: SliceId, edges :: Edges }
+  = { id :: TransId, left :: SliceId, right :: SliceId, edges :: Edges } -- TODO: just embed transition
 
 type Graph
   = { slices :: M.Map SliceId GraphSlice
@@ -104,17 +104,17 @@ type Graph
     }
 
 addGraphSlice :: Slice -> Number -> ST.State Graph Unit
-addGraphSlice { id, notes, x } depth = do
+addGraphSlice slice depth = do
   ST.modify_ add
   where
-  slice :: GraphSlice
-  slice = { id, depth, x, notes }
+  gslice :: GraphSlice
+  gslice = { depth, slice }
 
   add st =
     st
       { maxd = max depth st.maxd
-      , maxx = max x st.maxx
-      , slices = M.insert id slice st.slices
+      , maxx = max slice.x st.maxx
+      , slices = M.insert slice.id gslice st.slices
       }
 
 addGraphTrans :: Transition -> SliceId -> ST.State Graph Unit

@@ -31,6 +31,11 @@ data StartStop a
   | Inner a
   | Stop
 
+getInner :: forall a. StartStop a -> Maybe a
+getInner (Inner a) = Just a
+
+getInner _ = Nothing
+
 derive instance eqStartStop :: (Eq a) => Eq (StartStop a)
 
 instance showStartStop :: (Show a) => Show (StartStop a) where
@@ -42,9 +47,9 @@ type Edge
   = { left :: StartStop Note, right :: StartStop Note }
 
 isRepeatingEdge :: Edge -> Boolean
-isRepeatingEdge { left: Inner left, right: Inner right } = left.pitch == right.pitch
-
-isRepeatingEdge { left, right } = left == right
+isRepeatingEdge = case _ of
+  { left: Inner left, right: Inner right } -> left.pitch == right.pitch
+  _ -> false
 
 type Notes
   = Array Note
@@ -80,10 +85,27 @@ derive instance ordTransId :: Ord TransId
 incT :: TransId -> TransId
 incT (TransId i) = TransId $ i + 1
 
+data Parents
+  = NoParents
+  | VertParent SliceId
+  | MergeParents { left :: SliceId, right :: SliceId }
+
+derive instance genericParents :: Generic Parents _
+
+instance showParents :: Show Parents where
+  show p = genericShow p
+
+getParents :: Parents -> Array SliceId
+getParents = case _ of
+  NoParents -> []
+  VertParent p -> [ p ]
+  MergeParents { left, right } -> [ left, right ]
+
 type Slice
   = { id :: SliceId
     , notes :: StartStop Notes
     , x :: Number
+    , parents :: Parents
     }
 
 type Transition
@@ -135,7 +157,7 @@ printSurface model = do
 -- ===============
 --
 startSlice :: Slice
-startSlice = { id: SliceId 0, notes: Start, x: 0.0 }
+startSlice = { id: SliceId 0, notes: Start, x: 0.0, parents: NoParents }
 
 thawTrans :: Array Note -> Int -> Array { note :: Note, hold :: Boolean } -> Transition
 thawTrans ties id slice =
@@ -152,7 +174,12 @@ thawTrans ties id slice =
   findSecond fst = (\snd -> { left: Inner fst, right: Inner snd }) <$> find (\snd -> snd.pitch == fst.pitch) notes
 
 thawSlice :: Array { note :: Note, hold :: Boolean } -> Int -> Slice
-thawSlice slice id = { id: SliceId id, notes: Inner $ map _.note slice, x: toNumber id }
+thawSlice slice id =
+  { id: SliceId id
+  , notes: Inner $ map _.note slice
+  , x: toNumber id
+  , parents: NoParents
+  }
 
 thawPiece :: Piece -> Reduction
 thawPiece piece =
@@ -179,9 +206,15 @@ thawPiece piece =
 
   imax = maybe 0 _.i $ (A.last states)
 
+  lastSeg :: Segment
   lastSeg =
     { trans: thawTrans [] imax []
-    , rslice: { id: SliceId (imax + 1), notes: Stop, x: toNumber (imax + 1) }
+    , rslice:
+        { id: SliceId (imax + 1)
+        , notes: Stop
+        , x: toNumber (imax + 1)
+        , parents: NoParents
+        }
     , op: Freeze
     }
 
@@ -196,34 +229,46 @@ loadPiece piece = { piece, reduction: thawPiece piece }
 -- | A helper function that traverses the surface of a reduction (a list of segments)
 -- and applies an operation 'f' (which might fail)
 -- to segments starting with slice 'sliceId'.
-doAt :: forall a. (List Segment -> Maybe (Tuple a (List Segment))) -> (a -> Either String (List Segment)) -> List Segment -> Either String (List Segment)
-doAt match f Nil = Left "not found"
+doAt :: forall a. (List Segment -> Maybe (Tuple a (List Segment))) -> (SliceId -> a -> Either String (List Segment)) -> Reduction -> Either String (List Segment)
+doAt match f red = go red.start.id red.segments
+  where
+  go :: SliceId -> List Segment -> Either String (List Segment)
+  go _ Nil = Left "not found"
 
-doAt match f segs@(Cons seg rest) = case match segs of
-  Just (Tuple m remainder) -> (\result -> result <> remainder) <$> f m
-  Nothing -> Cons seg <$> doAt match f rest
+  go leftId segs@(Cons seg rest) = case match segs of
+    Just (Tuple m remainder) -> (\result -> result <> remainder) <$> f leftId m
+    Nothing -> Cons seg <$> go seg.rslice.id rest
+
+setParents :: Parents -> Segment -> Segment
+setParents p seg = seg { rslice { parents = p } }
 
 -- | Merges two segment into a new segment with a 'Split' operation.
-mkMerge :: TransId -> Segment -> Segment -> Segment
-mkMerge id seg1 seg2 = { trans: emptyTrans id seg1.trans.is2nd, rslice: seg2.rslice, op }
+mkMerge :: TransId -> SliceId -> Segment -> Segment -> Segment
+mkMerge tid leftId seg1 seg2 =
+  { trans: emptyTrans tid seg1.trans.is2nd
+  , rslice: seg2.rslice
+  , op
+  }
   where
-  op = Split { childl: seg1, childr: seg2 }
+  pars = MergeParents { left: leftId, right: seg2.rslice.id }
+
+  op = Split { childl: setParents pars seg1, childr: seg2 }
 
 -- | Applies a merge at slice 'sliceId', if it exists on the reduction surface.
 mergeAtSlice :: SliceId -> Model -> Either String Model
-mergeAtSlice sliceId model = case doAt matchSlice tryMerge model.reduction.segments of
+mergeAtSlice sliceId model = case doAt matchSlice tryMerge model.reduction of
   Right segments' -> Right model { reduction { segments = segments', nextTransId = incT nextTId } }
   Left err -> Left err
   where
   nextTId = model.reduction.nextTransId
 
-  matchSlice :: List Segment -> Maybe (Tuple (Tuple Segment Segment) (List Segment))
+  matchSlice :: List Segment -> Maybe (Tuple { seg1 :: Segment, seg2 :: Segment } (List Segment))
   matchSlice = case _ of
-    Cons seg1 (Cons seg2 rest) -> if seg1.rslice.id == sliceId then Just (Tuple (Tuple seg1 seg2) rest) else Nothing
+    Cons seg1 (Cons seg2 rest) -> if seg1.rslice.id == sliceId then Just (Tuple { seg1, seg2 } rest) else Nothing
     _ -> Nothing
 
-  tryMerge :: Tuple Segment Segment -> Either String (List Segment)
-  tryMerge (Tuple seg1 seg2) = Right $ mkMerge nextTId seg1 seg2 : Nil
+  tryMerge :: SliceId -> { seg1 :: Segment, seg2 :: Segment } -> Either String (List Segment)
+  tryMerge leftId { seg1, seg2 } = Right $ mkMerge nextTId leftId seg1 seg2 : Nil
 
 -- | Verticalizes three segments into two new segments,
 -- the first of witch gets a 'Hori' operation.
@@ -245,9 +290,19 @@ mkVert tid sid l@{ rslice: { notes: Inner notesl } } m@{ rslice: { notes: Inner 
       { notes: Inner $ newNotes $ M.unionWith max (countPitches notesl) (countPitches notesr)
       , id: sid
       , x: (l.rslice.x + m.rslice.x) / 2.0
+      , parents: NoParents
       }
 
-    pleft = { trans: emptyTrans tid false, rslice: topSlice, op: Hori { childl: l, childm: m, childr: r } }
+    pleft =
+      { trans: emptyTrans tid false
+      , rslice: topSlice
+      , op:
+          Hori
+            { childl: setParents (VertParent sid) l
+            , childm: setParents (VertParent sid) m
+            , childr: r
+            }
+      }
 
     pright = { trans: emptyTrans (incT tid) true, rslice: r.rslice, op: Freeze }
 
@@ -255,7 +310,7 @@ mkVert _ _ _ _ _ = Left "Cannot vert an outer slice!"
 
 -- | Applies a verticalization at transition 'transId', if it exists on the reduction surface.
 vertAtMid :: TransId -> Model -> Either String Model
-vertAtMid transId model = case doAt matchMid tryVert model.reduction.segments of
+vertAtMid transId model = case doAt matchMid tryVert model.reduction of
   Right segments' ->
     Right
       model
@@ -275,11 +330,11 @@ vertAtMid transId model = case doAt matchMid tryVert model.reduction.segments of
     Cons l (Cons m (Cons r rest)) -> if m.trans.id == transId then Just (Tuple { l, m, r } rest) else Nothing
     _ -> Nothing
 
-  tryVert { l, m, r } = mkVert nextTId nextSId l m r
+  tryVert _ { l, m, r } = mkVert nextTId nextSId l m r
 
 -- | Undoes a merge at transition 'transId', if it exists, restoring its children.
 undoMergeAtTrans :: TransId -> Model -> Either String Model
-undoMergeAtTrans transId model = case doAt matchTrans tryUnmerge model.reduction.segments of
+undoMergeAtTrans transId model = case doAt matchTrans tryUnmerge model.reduction of
   Right segments' -> Right model { reduction { segments = segments' } }
   Left err -> Left err
   where
@@ -287,13 +342,13 @@ undoMergeAtTrans transId model = case doAt matchTrans tryUnmerge model.reduction
     Cons seg rest -> if seg.trans.id == transId then Just (Tuple seg rest) else Nothing
     _ -> Nothing
 
-  tryUnmerge seg = case seg.op of
-    Split { childl, childr } -> Right $ childl : childr : Nil
+  tryUnmerge _ seg = case seg.op of
+    Split { childl, childr } -> Right $ (setParents NoParents childl) : childr : Nil
     _ -> Left "Operation is not a split!"
 
 -- | Undoes a verticalization at slice 'sliceId', if it exists, restoring its children.
 undoVertAtSlice :: SliceId -> Model -> Either String Model
-undoVertAtSlice sliceId model = case doAt matchSlice tryUnvert model.reduction.segments of
+undoVertAtSlice sliceId model = case doAt matchSlice tryUnvert model.reduction of
   Right segments' -> Right model { reduction { segments = segments' } }
   Left err -> Left err
   where
@@ -301,6 +356,11 @@ undoVertAtSlice sliceId model = case doAt matchSlice tryUnvert model.reduction.s
     Cons pl (Cons pr rest) -> if pl.rslice.id == sliceId then Just (Tuple { pl, pr } rest) else Nothing
     _ -> Nothing
 
-  tryUnvert { pl, pr } = case pl.op of
-    Hori { childl, childm, childr } -> Right $ childl : childm : childr : Nil
+  tryUnvert _ { pl, pr } = case pl.op of
+    Hori { childl, childm, childr } ->
+      Right
+        $ (setParents NoParents childl)
+        : (setParents NoParents childm)
+        : childr
+        : Nil
     _ -> Left "Operation is not a hori!"

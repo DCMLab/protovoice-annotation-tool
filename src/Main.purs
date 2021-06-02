@@ -1,9 +1,9 @@
 module Main where
 
-import Model
 import Prelude
-import Render
-import Common (GraphActions(..), OuterSelection(..), getSelSlice, getSelTrans)
+import Model (Model, loadPiece, mergeAtSlice, undoMergeAtTrans, undoVertAtSlice, vertAtMid)
+import Common (GraphActions(..), Selection(..), getSelSlice, getSelTrans)
+import Render (renderLeftmost, renderReduction)
 import Control.Monad.State (class MonadState)
 import Data.Either (Either(..))
 import Data.Foldable (for_)
@@ -28,7 +28,7 @@ main =
         for_ elt (runUI appComponent unit)
 
 type AppState
-  = { selected :: OuterSelection
+  = { selected :: Selection
     , model :: Maybe Model
     }
 
@@ -36,7 +36,7 @@ tryModelAction ::
   forall a m.
   (MonadState AppState m) =>
   (MonadEffect m) =>
-  (OuterSelection -> Maybe a) ->
+  (Selection -> Maybe a) ->
   (a -> Model -> Either String Model) ->
   m Unit
 tryModelAction selector action = do
@@ -74,10 +74,14 @@ appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultE
               [ renderReduction model.reduction st.selected
               , renderLeftmost model.reduction
               ]
+      , HH.p_
+          [ HH.text "Selection: "
+          , HH.text $ show st.selected
+          ]
       ]
 
   handleAction = case _ of
-    SelectOuter i -> H.modify_ \st -> st { selected = i }
+    Select s -> H.modify_ \st -> st { selected = s }
     LoadPiece piece -> H.modify_ \st -> st { model = Just $ loadPiece piece, selected = SelNone }
     MergeAtSelected -> tryModelAction getSelSlice mergeAtSlice
     VertAtSelected -> tryModelAction getSelTrans vertAtMid
