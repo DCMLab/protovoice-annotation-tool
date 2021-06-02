@@ -7205,6 +7205,13 @@ var PS = {};
           });
       };
   };
+  var gets = function (dictMonadState) {
+      return function (f) {
+          return state(dictMonadState)(function (s) {
+              return new Data_Tuple.Tuple(f(s), s);
+          });
+      };
+  };
   var get = function (dictMonadState) {
       return state(dictMonadState)(function (s) {
           return new Data_Tuple.Tuple(s, s);
@@ -7212,6 +7219,7 @@ var PS = {};
   };
   exports["MonadState"] = MonadState;
   exports["get"] = get;
+  exports["gets"] = gets;
   exports["put"] = put;
   exports["modify_"] = modify_;
 })(PS);
@@ -10694,32 +10702,120 @@ var PS = {};
   var Data_List_Types = $PS["Data.List.Types"];
   var Data_Map_Internal = $PS["Data.Map.Internal"];
   var Data_Ord = $PS["Data.Ord"];
+  var Data_Semigroup = $PS["Data.Semigroup"];
   var Data_Unit = $PS["Data.Unit"];
   var Model = $PS["Model"];                
-  var addTrans = function (v) {
-      return function (il) {
-          return function (ir) {
-              var trans = {
+  var withLeftId = function (id) {
+      return function (action) {
+          return Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(Control_Monad_State_Class.gets(Control_Monad_State_Trans.monadStateStateT(Data_Identity.monadIdentity))(function (v) {
+              return v.leftId;
+          }))(function (oldid) {
+              return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(Control_Monad_State_Class.modify_(Control_Monad_State_Trans.monadStateStateT(Data_Identity.monadIdentity))(function (st) {
+                  var $14 = {};
+                  for (var $15 in st) {
+                      if ({}.hasOwnProperty.call(st, $15)) {
+                          $14[$15] = st[$15];
+                      };
+                  };
+                  $14.leftId = id;
+                  return $14;
+              }))(function () {
+                  return Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(action)(function (res) {
+                      return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(Control_Monad_State_Class.modify_(Control_Monad_State_Trans.monadStateStateT(Data_Identity.monadIdentity))(function (st) {
+                          var $17 = {};
+                          for (var $18 in st) {
+                              if ({}.hasOwnProperty.call(st, $18)) {
+                                  $17[$18] = st[$18];
+                              };
+                          };
+                          $17.leftId = oldid;
+                          return $17;
+                      }))(function () {
+                          return Control_Applicative.pure(Control_Monad_State_Trans.applicativeStateT(Data_Identity.monadIdentity))(res);
+                      });
+                  });
+              });
+          });
+      };
+  };
+  var foldAgenda = function (v) {
+      return function (v1) {
+          if (v1 instanceof Data_List_Types.Nil) {
+              return Control_Applicative.pure(Control_Monad_State_Trans.applicativeStateT(Data_Identity.monadIdentity))(Data_Unit.unit);
+          };
+          if (v1 instanceof Data_List_Types.Cons && v1.value1 instanceof Data_List_Types.Nil) {
+              if (v1.value0.seg.op instanceof Model.Freeze) {
+                  return v.freezeOnly(v1.value0);
+              };
+              if (v1.value0.seg.op instanceof Model.Split) {
+                  return Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(v.splitOnly(v1.value0)(v1.value0.seg.op.value0))(function (children) {
+                      return foldAgenda(v)(children);
+                  });
+              };
+              if (v1.value0.seg.op instanceof Model.Hori) {
+                  return Control_Applicative.pure(Control_Monad_State_Trans.applicativeStateT(Data_Identity.monadIdentity))(Data_Unit.unit);
+              };
+              throw new Error("Failed pattern match at Unfold (line 101, column 3 - line 106, column 24): " + [ v1.value0.seg.op.constructor.name ]);
+          };
+          if (v1 instanceof Data_List_Types.Cons && v1.value1 instanceof Data_List_Types.Cons) {
+              if (v1.value0.seg.op instanceof Model.Freeze) {
+                  return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(v.freezeLeft(v1.value0))(function () {
+                      return foldAgenda(v)(v1.value1);
+                  });
+              };
+              if (v1.value0.seg.op instanceof Model.Split) {
+                  return Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(v.splitLeft(v1.value0)(v1.value0.seg.op.value0))(function (children) {
+                      return foldAgenda(v)(Data_Semigroup.append(Data_List_Types.semigroupList)(children)(v1.value1));
+                  });
+              };
+              if (v1.value0.seg.op instanceof Model.Hori) {
+                  if (v1.value1.value0.seg.op instanceof Model.Split) {
+                      return Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(v.splitRight(v1.value0)(v1.value1.value0)(v1.value1.value0.seg.op.value0))(function (children) {
+                          return foldAgenda(v)(Data_Semigroup.append(Data_List_Types.semigroupList)(new Data_List_Types.Cons(v1.value0, children))(v1.value1.value1));
+                      });
+                  };
+                  return Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(v.hori(v1.value0)(v1.value1.value0)(v1.value0.seg.op.value0))(function (children) {
+                      return foldAgenda(v)(Data_Semigroup.append(Data_List_Types.semigroupList)(children)(v1.value1.value1));
+                  });
+              };
+              throw new Error("Failed pattern match at Unfold (line 110, column 3 - line 127, column 45): " + [ v1.value0.seg.op.constructor.name ]);
+          };
+          throw new Error("Failed pattern match at Unfold (line 92, column 1 - line 95, column 41): " + [ v.constructor.name, v1.constructor.name ]);
+      };
+  };
+  var walkGraph = function (alg) {
+      return function (reduction) {
+          return function (agenda) {
+              return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(alg.init(reduction.start))(function () {
+                  return foldAgenda(alg)(agenda);
+              });
+          };
+      };
+  };
+  var addGraphTrans = function (v) {
+      return function (ir) {
+          var trans = function (il) {
+              return {
                   left: il,
                   right: ir,
                   id: v.id,
                   edges: v.edges
               };
-              var add = function (st) {
-                  var $10 = {};
-                  for (var $11 in st) {
-                      if ({}.hasOwnProperty.call(st, $11)) {
-                          $10[$11] = st[$11];
-                      };
-                  };
-                  $10.transitions = Data_Map_Internal.insert(Model.ordTransId)(v.id)(trans)(st.transitions);
-                  return $10;
-              };
-              return Control_Monad_State_Class.modify_(Control_Monad_State_Trans.monadStateStateT(Data_Identity.monadIdentity))(add);
           };
+          var add = function (st) {
+              var $38 = {};
+              for (var $39 in st) {
+                  if ({}.hasOwnProperty.call(st, $39)) {
+                      $38[$39] = st[$39];
+                  };
+              };
+              $38.transitions = Data_Map_Internal.insert(Model.ordTransId)(v.id)(trans(st.leftId))(st.transitions);
+              return $38;
+          };
+          return Control_Monad_State_Class.modify_(Control_Monad_State_Trans.monadStateStateT(Data_Identity.monadIdentity))(add);
       };
   };
-  var addSlice = function (v) {
+  var addGraphSlice = function (v) {
       return function (depth) {
           var slice = {
               id: v.id,
@@ -10728,119 +10824,153 @@ var PS = {};
               notes: v.notes
           };
           var add = function (st) {
-              var $17 = {};
-              for (var $18 in st) {
-                  if ({}.hasOwnProperty.call(st, $18)) {
-                      $17[$18] = st[$18];
+              var $45 = {};
+              for (var $46 in st) {
+                  if ({}.hasOwnProperty.call(st, $46)) {
+                      $45[$46] = st[$46];
                   };
               };
-              $17.maxd = Data_Ord.max(Data_Ord.ordNumber)(depth)(st.maxd);
-              $17.maxx = Data_Ord.max(Data_Ord.ordNumber)(v.x)(st.maxx);
-              $17.slices = Data_Map_Internal.insert(Model.ordSliceId)(v.id)(slice)(st.slices);
-              return $17;
+              $45.maxd = Data_Ord.max(Data_Ord.ordNumber)(depth)(st.maxd);
+              $45.maxx = Data_Ord.max(Data_Ord.ordNumber)(v.x)(st.maxx);
+              $45.slices = Data_Map_Internal.insert(Model.ordSliceId)(v.id)(slice)(st.slices);
+              return $45;
           };
           return Control_Monad_State_Class.modify_(Control_Monad_State_Trans.monadStateStateT(Data_Identity.monadIdentity))(add);
       };
   };
-  var unfoldAgenda = function (v) {
-      return function (v1) {
-          return function (v2) {
-              if (v2 instanceof Data_List_Types.Nil) {
-                  return Control_Applicative.pure(Control_Monad_State_Trans.applicativeStateT(Data_Identity.monadIdentity))(Data_Unit.unit);
+  var graphAlg = (function () {
+      var splitTrans = function (item) {
+          return function (split) {
+              return Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(Control_Monad_State_Class.gets(Control_Monad_State_Trans.monadStateStateT(Data_Identity.monadIdentity))(function (v) {
+                  return v.currentDepth;
+              }))(function (currentDepth) {
+                  return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(addGraphTrans(item.seg.trans)(item.seg.rslice.id))(function () {
+                      return Control_Applicative.pure(Control_Monad_State_Trans.applicativeStateT(Data_Identity.monadIdentity))(new Data_List_Types.Cons({
+                          seg: split.childl,
+                          more: {
+                              rdepth: Data_Ord.max(Data_Ord.ordNumber)(currentDepth)(item.more.rdepth) + 1.0
+                          }
+                      }, new Data_List_Types.Cons({
+                          seg: split.childr,
+                          more: {
+                              rdepth: item.more.rdepth
+                          }
+                      }, Data_List_Types.Nil.value)));
+                  });
+              });
+          };
+      };
+      var splitRight = function (left) {
+          return function (right) {
+              return function (split) {
+                  return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(withLeftId(left.seg.rslice.id)(addGraphTrans(right.seg.trans)(right.seg.rslice.id)))(function () {
+                      return Control_Applicative.pure(Control_Monad_State_Trans.applicativeStateT(Data_Identity.monadIdentity))(new Data_List_Types.Cons({
+                          seg: split.childl,
+                          more: {
+                              rdepth: Data_Ord.max(Data_Ord.ordNumber)(left.more.rdepth)(right.more.rdepth) + 1.0
+                          }
+                      }, new Data_List_Types.Cons({
+                          seg: split.childr,
+                          more: {
+                              rdepth: right.more.rdepth
+                          }
+                      }, Data_List_Types.Nil.value)));
+                  });
               };
-              if (v2 instanceof Data_List_Types.Cons && v2.value1 instanceof Data_List_Types.Nil) {
-                  if (v2.value0.seg.op instanceof Model.Freeze) {
-                      return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(addTrans(v2.value0.seg.trans)(v)(v2.value0.seg.rslice.id))(function () {
-                          return addSlice(v2.value0.seg.rslice)(v2.value0.rdepth);
-                      });
-                  };
-                  if (v2.value0.seg.op instanceof Model.Split) {
-                      return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(addTrans(v2.value0.seg.trans)(v)(v2.value0.seg.rslice.id))(function () {
-                          return unfoldAgenda(v)(v1)(new Data_List_Types.Cons({
-                              seg: v2.value0.seg.op.value0.childl,
-                              rdepth: Data_Ord.max(Data_Ord.ordNumber)(v1)(v2.value0.rdepth) + 1.0
-                          }, new Data_List_Types.Cons({
-                              seg: v2.value0.seg.op.value0.childr,
-                              rdepth: v2.value0.rdepth
-                          }, Data_List_Types.Nil.value)));
-                      });
-                  };
-                  if (v2.value0.seg.op instanceof Model.Hori) {
-                      return Control_Applicative.pure(Control_Monad_State_Trans.applicativeStateT(Data_Identity.monadIdentity))(Data_Unit.unit);
-                  };
-                  throw new Error("Failed pattern match at Unfold (line 54, column 3 - line 64, column 24): " + [ v2.value0.seg.op.constructor.name ]);
-              };
-              if (v2 instanceof Data_List_Types.Cons && v2.value1 instanceof Data_List_Types.Cons) {
-                  if (v2.value0.seg.op instanceof Model.Freeze) {
-                      return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(addTrans(v2.value0.seg.trans)(v)(v2.value0.seg.rslice.id))(function () {
-                          return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(addSlice(v2.value0.seg.rslice)(v2.value0.rdepth))(function () {
-                              return unfoldAgenda(v2.value0.seg.rslice.id)(v2.value0.rdepth)(v2.value1);
-                          });
-                      });
-                  };
-                  if (v2.value0.seg.op instanceof Model.Split) {
-                      return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(addTrans(v2.value0.seg.trans)(v)(v2.value0.seg.rslice.id))(function () {
-                          return unfoldAgenda(v)(v1)(new Data_List_Types.Cons({
-                              seg: v2.value0.seg.op.value0.childl,
-                              rdepth: Data_Ord.max(Data_Ord.ordNumber)(v1)(v2.value0.rdepth) + 1.0
-                          }, new Data_List_Types.Cons({
-                              seg: v2.value0.seg.op.value0.childr,
-                              rdepth: v2.value0.rdepth
-                          }, v2.value1)));
-                      });
-                  };
-                  if (v2.value0.seg.op instanceof Model.Hori) {
-                      if (v2.value1.value0.seg.op instanceof Model.Split) {
-                          return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(addTrans(v2.value1.value0.seg.trans)(v2.value0.seg.rslice.id)(v2.value1.value0.seg.rslice.id))(function () {
-                              return unfoldAgenda(v)(v1)(new Data_List_Types.Cons(v2.value0, new Data_List_Types.Cons({
-                                  seg: v2.value1.value0.seg.op.value0.childl,
-                                  rdepth: Data_Ord.max(Data_Ord.ordNumber)(v2.value0.rdepth)(v2.value1.value0.rdepth) + 1.0
-                              }, new Data_List_Types.Cons({
-                                  seg: v2.value1.value0.seg.op.value0.childr,
-                                  rdepth: v2.value1.value0.rdepth
-                              }, v2.value1.value1))));
-                          });
+          };
+      };
+      var init = function (start) {
+          return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(addGraphSlice(start)(0.0))(function () {
+              return Control_Monad_State_Class.modify_(Control_Monad_State_Trans.monadStateStateT(Data_Identity.monadIdentity))(function (st) {
+                  var $51 = {};
+                  for (var $52 in st) {
+                      if ({}.hasOwnProperty.call(st, $52)) {
+                          $51[$52] = st[$52];
                       };
-                      return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(addTrans(v2.value0.seg.trans)(v)(v2.value0.seg.rslice.id))(function () {
-                          return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(addSlice(v2.value0.seg.rslice)(v2.value0.rdepth))(function () {
-                              return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(addTrans(v2.value1.value0.seg.trans)(v2.value0.seg.rslice.id)(v2.value1.value0.seg.rslice.id))(function () {
-                                  var dsub = Data_Ord.max(Data_Ord.ordNumber)(v1)(Data_Ord.max(Data_Ord.ordNumber)(v2.value0.rdepth)(v2.value1.value0.rdepth)) + 1.0;
-                                  return unfoldAgenda(v)(v1)(new Data_List_Types.Cons({
-                                      seg: v2.value0.seg.op.value0.childl,
-                                      rdepth: dsub
+                  };
+                  $51.leftId = start.id;
+                  return $51;
+              });
+          });
+      };
+      var hori = function (left) {
+          return function (right) {
+              return function (v) {
+                  return Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(Control_Monad_State_Class.gets(Control_Monad_State_Trans.monadStateStateT(Data_Identity.monadIdentity))(function (v1) {
+                      return v1.currentDepth;
+                  }))(function (currentDepth) {
+                      return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(addGraphTrans(left.seg.trans)(left.seg.rslice.id))(function () {
+                          return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(addGraphSlice(left.seg.rslice)(left.more.rdepth))(function () {
+                              return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(withLeftId(left.seg.rslice.id)(addGraphTrans(right.seg.trans)(right.seg.rslice.id)))(function () {
+                                  var dsub = Data_Ord.max(Data_Ord.ordNumber)(currentDepth)(Data_Ord.max(Data_Ord.ordNumber)(left.more.rdepth)(right.more.rdepth)) + 1.0;
+                                  return Control_Applicative.pure(Control_Monad_State_Trans.applicativeStateT(Data_Identity.monadIdentity))(new Data_List_Types.Cons({
+                                      seg: v.childl,
+                                      more: {
+                                          rdepth: dsub
+                                      }
                                   }, new Data_List_Types.Cons({
-                                      seg: v2.value0.seg.op.value0.childm,
-                                      rdepth: dsub
+                                      seg: v.childm,
+                                      more: {
+                                          rdepth: dsub
+                                      }
                                   }, new Data_List_Types.Cons({
-                                      seg: v2.value0.seg.op.value0.childr,
-                                      rdepth: v2.value1.value0.rdepth
-                                  }, v2.value1.value1))));
+                                      seg: v.childr,
+                                      more: {
+                                          rdepth: right.more.rdepth
+                                      }
+                                  }, Data_List_Types.Nil.value))));
                               });
                           });
                       });
-                  };
-                  throw new Error("Failed pattern match at Unfold (line 68, column 3 - line 101, column 20): " + [ v2.value0.seg.op.constructor.name ]);
+                  });
               };
-              throw new Error("Failed pattern match at Unfold (line 48, column 1 - line 48, column 76): " + [ v.constructor.name, v1.constructor.name, v2.constructor.name ]);
           };
       };
-  };
+      var freezeTrans = function (left) {
+          return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(addGraphTrans(left.seg.trans)(left.seg.rslice.id))(function () {
+              return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(addGraphSlice(left.seg.rslice)(left.more.rdepth))(function () {
+                  return Control_Monad_State_Class.modify_(Control_Monad_State_Trans.monadStateStateT(Data_Identity.monadIdentity))(function (st) {
+                      var $60 = {};
+                      for (var $61 in st) {
+                          if ({}.hasOwnProperty.call(st, $61)) {
+                              $60[$61] = st[$61];
+                          };
+                      };
+                      $60.currentDepth = left.more.rdepth;
+                      $60.leftId = left.seg.rslice.id;
+                      return $60;
+                  });
+              });
+          });
+      };
+      return {
+          init: init,
+          freezeOnly: freezeTrans,
+          freezeLeft: freezeTrans,
+          splitOnly: splitTrans,
+          splitLeft: splitTrans,
+          splitRight: splitRight,
+          hori: hori
+      };
+  })();
   var evalGraph = function (reduction) {
       var initState = {
           slices: Data_Map_Internal.empty,
           transitions: Data_Map_Internal.empty,
           maxd: 0.0,
-          maxx: 0.0
+          maxx: 0.0,
+          currentDepth: 0.0,
+          leftId: 0
       };
       var agenda = Data_Functor.map(Data_List_Types.functorList)(function (seg) {
           return {
               seg: seg,
-              rdepth: 0.0
+              more: {
+                  rdepth: 0.0
+              }
           };
       })(reduction.segments);
-      return Data_Function.flip(Control_Monad_State.execState)(initState)(Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(addSlice(reduction.start)(0.0))(function () {
-          return unfoldAgenda(0)(0.0)(agenda);
-      }));
+      return Data_Function.flip(Control_Monad_State.execState)(initState)(walkGraph(graphAlg)(reduction)(agenda));
   };
   exports["evalGraph"] = evalGraph;
 })(PS);
