@@ -42,9 +42,8 @@ selColor = SA.RGB 30 144 255
 selColor' :: SA.Color
 selColor' = SA.RGB 100 200 255
 
-noteSelColor :: SA.Color
-noteSelColor = SA.RGB 255 0 0
-
+-- noteSelColor :: SA.Color
+-- noteSelColor = SA.RGB 255 0 0
 white :: SA.Color
 white = SA.RGB 255 255 255
 
@@ -90,7 +89,7 @@ renderSlice selection { slice: { id, notes, x, parents }, depth: d } = case note
         , SA.y $ ycoord - (0.5 * offset 1)
         , SA.width $ scalex 0.48
         , SA.height $ offset 1
-        , SA.fill $ if sel then (Just noteSelColor) else (Just white)
+        , SA.fill $ if sel then (Just selColor) else (Just white)
         ]
 
     label =
@@ -154,7 +153,7 @@ renderTrans selection slices { id, left, right, edges } =
               , SA.y1 $ scaley yl + offset offl
               , SA.x2 $ scalex xr
               , SA.y2 $ scaley yr + offset offr
-              , SA.stroke (Just $ if edgeSelected then noteSelColor else black)
+              , SA.stroke (Just $ if edgeSelected then selColor else black)
               , SA.strokeWidth 1.0
               ]
             where

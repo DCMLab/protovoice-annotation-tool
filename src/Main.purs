@@ -1,9 +1,7 @@
 module Main where
 
 import Prelude
-import Model (Model, loadPiece, mergeAtSlice, undoMergeAtTrans, undoVertAtSlice, vertAtMid)
-import Common (GraphActions(..), Selection(..), getSelSlice, getSelTrans)
-import Render (renderLeftmost, renderReduction)
+import Common (GraphActions(..), Selection(..), getSelSlice, getSelTrans, sliceSelected, transSelected)
 import Control.Monad.State (class MonadState)
 import Data.Either (Either(..))
 import Data.Foldable (for_)
@@ -15,7 +13,10 @@ import Halogen as H
 import Halogen.Aff as HA
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
+import Halogen.HTML.Properties as HP
 import Halogen.VDom.Driver (runUI)
+import Model (Model, loadPiece, mergeAtSlice, undoMergeAtTrans, undoVertAtSlice, vertAtMid)
+import Render (renderLeftmost, renderReduction)
 import Utils (examplePieceLong)
 import Web.DOM.ParentNode (QuerySelector(..))
 
@@ -63,10 +64,18 @@ appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultE
       []
       [ HH.h1_ [ HH.text "Proto-Voice Annotation" ]
       , HH.button [ HE.onClick $ \_ -> LoadPiece examplePieceLong ] [ HH.text "Load Example Piece" ]
-      , HH.button [ HE.onClick $ \_ -> MergeAtSelected ] [ HH.text "Merge Selected" ]
-      , HH.button [ HE.onClick $ \_ -> VertAtSelected ] [ HH.text "Vert Selected" ]
-      , HH.button [ HE.onClick $ \_ -> UnMergeAtSelected ] [ HH.text "Unmerge Selected" ]
-      , HH.button [ HE.onClick $ \_ -> UnVertAtSelected ] [ HH.text "Unvert Selected" ]
+      , HH.button
+          [ HE.onClick $ \_ -> MergeAtSelected, HP.enabled (sliceSelected st.selected) ]
+          [ HH.text "Merge Selected" ]
+      , HH.button
+          [ HE.onClick $ \_ -> VertAtSelected, HP.enabled (transSelected st.selected) ]
+          [ HH.text "Vert Selected" ]
+      , HH.button
+          [ HE.onClick $ \_ -> UnMergeAtSelected, HP.enabled (transSelected st.selected) ]
+          [ HH.text "Unmerge Selected" ]
+      , HH.button
+          [ HE.onClick $ \_ -> UnVertAtSelected, HP.enabled (sliceSelected st.selected) ]
+          [ HH.text "Unvert Selected" ]
       , case st.model of
           Nothing -> HH.text ""
           Just model ->

@@ -34,6 +34,21 @@ noteIsSelected (SelNote sel) (Inner note) = sel.note == note.id
 
 noteIsSelected _ _ = false
 
+sliceSelected :: Selection -> Boolean
+sliceSelected = case _ of
+  SelSlice _ -> true
+  _ -> false
+
+transSelected :: Selection -> Boolean
+transSelected = case _ of
+  SelTrans _ -> true
+  _ -> false
+
+noteSelected :: Selection -> Boolean
+noteSelected = case _ of
+  SelNote _ -> true
+  _ -> false
+
 data GraphActions
   = Select Selection
   | LoadPiece Piece
