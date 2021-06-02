@@ -69,7 +69,11 @@ appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultE
       , HH.button [ HE.onClick $ \_ -> UnVertAtSelected ] [ HH.text "Unvert Selected" ]
       , case st.model of
           Nothing -> HH.text ""
-          Just model -> renderReduction model.reduction st.selected
+          Just model ->
+            HH.div_
+              [ renderReduction model.reduction st.selected
+              , renderLeftmost model.reduction
+              ]
       ]
 
   handleAction = case _ of

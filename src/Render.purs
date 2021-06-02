@@ -2,8 +2,6 @@ module Render where
 
 import Prelude
 import Common (GraphActions(..), OuterSelection(..))
-import Model (Reduction, SliceId, StartStop(..))
-import Unfold (GraphSlice, GraphTransition, evalGraph)
 import Data.Array (findIndex, fromFoldable, length, mapWithIndex)
 import Data.Int (toNumber)
 import Data.Map as M
@@ -13,6 +11,8 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Halogen.Svg.Attributes as SA
 import Halogen.Svg.Elements as SE
+import Model (Reduction, SliceId, StartStop(..))
+import Unfold (GraphSlice, GraphTransition, evalGraph, reductionToLeftmost)
 
 scalex :: Number -> Number
 scalex x = x * 60.0
@@ -164,3 +164,8 @@ renderReduction reduction selection =
   svgSlices = map (renderSlice selection) $ fromFoldable $ M.values slices
 
   svgTranss = map (renderTrans selection slices) $ fromFoldable $ M.values transitions
+
+renderLeftmost :: forall p. Reduction -> HH.HTML p GraphActions
+renderLeftmost red = HH.ol_ $ map (\step -> HH.li_ [ HH.text $ show step ]) steps
+  where
+  steps = reductionToLeftmost red
