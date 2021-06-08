@@ -14,12 +14,19 @@ import Halogen.Aff as HA
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
+import Halogen.Query.Event (eventListener)
 import Halogen.VDom.Driver (runUI)
 import Model (Model, loadPiece, mergeAtSlice, noteSetExplanation, showReduction, undoMergeAtTrans, undoVertAtSlice, vertAtMid)
 import Render (renderLeftmost, renderNoteExplanation, renderReduction)
 import Unfold (evalGraph)
 import Utils (examplePieceLong)
 import Web.DOM.ParentNode (QuerySelector(..))
+import Web.Event.Event as E
+import Web.HTML (window)
+import Web.HTML.HTMLDocument (toEventTarget)
+import Web.HTML.Window (document)
+import Web.UIEvent.KeyboardEvent as KE
+import Web.UIEvent.KeyboardEvent.EventTypes as KET
 
 main :: Effect Unit
 main =
@@ -55,7 +62,7 @@ tryModelAction selector action = do
       Right model' -> H.put st { model = Just model', selected = SelNone }
 
 appComponent :: forall query input output m. (MonadEffect m) => H.Component query input output m
-appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultEval { handleAction = handleAction } }
+appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultEval { handleAction = handleAction, initialize = Just Init } }
   where
   initialState :: input -> AppState
   initialState _ = { selected: SelNone, model: Nothing }
@@ -96,6 +103,30 @@ appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultE
 
   handleAction = case _ of
     NoOp -> log "NoOp"
+    Init -> do
+      doc <- H.liftEffect $ document =<< window
+      H.subscribe' \sid ->
+        eventListener KET.keyup (toEventTarget doc) (KE.fromEvent >>> map HandleKey)
+    HandleKey ev -> case KE.key ev of
+      "m" -> pr ev *> handleAction MergeAtSelected
+      "M" -> pr ev *> handleAction UnMergeAtSelected
+      "v" -> pr ev *> handleAction VertAtSelected
+      "V" -> pr ev *> handleAction UnVertAtSelected
+      "Enter" -> do
+        pr ev
+        st <- H.get
+        case st.selected of
+          SelTrans _ -> handleAction VertAtSelected
+          SelSlice _ -> handleAction MergeAtSelected
+          _ -> pure unit
+      "Backspace" -> do
+        pr ev
+        st <- H.get
+        case st.selected of
+          SelTrans _ -> handleAction UnMergeAtSelected
+          SelSlice _ -> handleAction UnVertAtSelected
+          _ -> pure unit
+      _ -> pure unit
     Select s -> H.modify_ \st -> st { selected = s }
     LoadPiece piece -> H.modify_ \st -> st { model = Just $ loadPiece piece, selected = SelNone }
     MergeAtSelected -> tryModelAction getSelSlice mergeAtSlice
@@ -106,3 +137,5 @@ appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultE
       tryModelAction
         (const $ Just ne)
         (\{ noteId, expl } -> noteSetExplanation noteId expl)
+    where
+    pr ev = H.liftEffect $ E.preventDefault $ KE.toEvent ev
