@@ -6,7 +6,7 @@ import Data.Array as A
 import Data.List (List(..), (:))
 import Data.Map as M
 import Leftmost (Leftmost(..))
-import Model (Edges, Op(..), Reduction, Segment, Slice, SliceId(..), TransId, Transition)
+import Model (Edges, EndSegment, Op(..), Reduction, Segment, Slice, SliceId(..), TransId, Transition, attachSegment)
 
 type AgendaItem a
   = { seg :: Segment, more :: a }
@@ -15,12 +15,12 @@ type FFreeze a s
   = AgendaItem a -> ST.State s Unit
 
 type FSplit a s
-  = AgendaItem a -> { childl :: Segment, childr :: Segment } -> ST.State s (List (AgendaItem a))
+  = AgendaItem a -> { childl :: Segment, childr :: EndSegment } -> ST.State s (List (AgendaItem a))
 
 type FHori a s
   = AgendaItem a ->
     AgendaItem a ->
-    { childl :: Segment, childm :: Segment, childr :: Segment } ->
+    { childl :: Segment, childm :: Segment, childr :: EndSegment } ->
     ST.State s (List (AgendaItem a))
 
 type AgendaAlg a s
@@ -29,7 +29,7 @@ type AgendaAlg a s
     , freezeLeft :: FFreeze a s
     , splitOnly :: FSplit a s
     , splitLeft :: FSplit a s
-    , splitRight :: AgendaItem a -> AgendaItem a -> { childl :: Segment, childr :: Segment } -> ST.State s (List (AgendaItem a))
+    , splitRight :: AgendaItem a -> AgendaItem a -> { childl :: Segment, childr :: EndSegment } -> ST.State s (List (AgendaItem a))
     , hori :: FHori a s
     }
 
@@ -157,7 +157,9 @@ graphAlg =
     addGraphTrans item.seg.trans item.seg.rslice.id
     pure
       $ { seg: split.childl, more: { rdepth: max currentDepth item.more.rdepth + 1.0 } }
-      : { seg: split.childr, more: { rdepth: item.more.rdepth } }
+      : { seg: attachSegment split.childr item.seg.rslice
+        , more: { rdepth: item.more.rdepth }
+        }
       : Nil
 
   splitRight left right split = do
@@ -165,7 +167,9 @@ graphAlg =
       $ addGraphTrans right.seg.trans right.seg.rslice.id
     pure
       $ { seg: split.childl, more: { rdepth: max left.more.rdepth right.more.rdepth + 1.0 } }
-      : { seg: split.childr, more: { rdepth: right.more.rdepth } }
+      : { seg: attachSegment split.childr right.seg.rslice
+        , more: { rdepth: right.more.rdepth }
+        }
       : Nil
 
   hori left right { childl, childm, childr } = do
@@ -179,7 +183,7 @@ graphAlg =
     pure
       $ { seg: childl, more: { rdepth: dsub } }
       : { seg: childm, more: { rdepth: dsub } }
-      : { seg: childr, more: { rdepth: right.more.rdepth } }
+      : { seg: attachSegment childr right.seg.rslice, more: { rdepth: right.more.rdepth } }
       : Nil
 
 evalGraph :: Reduction -> Graph
@@ -225,18 +229,18 @@ reductionToLeftmost reduction = A.reverse $ A.fromFoldable $ flip ST.execState N
 
     freezeLeft _ = ST.modify_ (Cons $ LMFreezeLeft unit)
 
-    splitOnly _ { childl, childr } = do
+    splitOnly { seg } { childl, childr } = do
       ST.modify_ (Cons $ LMSplitOnly unit)
-      pure $ nothingMore <$> childl : childr : Nil
+      pure $ nothingMore <$> childl : attachSegment childr seg.rslice : Nil
 
-    splitLeft _ { childl, childr } = do
+    splitLeft { seg } { childl, childr } = do
       ST.modify_ (Cons $ LMSplitLeft unit)
-      pure $ nothingMore <$> childl : childr : Nil
+      pure $ nothingMore <$> childl : attachSegment childr seg.rslice : Nil
 
-    splitRight _ _ { childl, childr } = do
+    splitRight _ { seg } { childl, childr } = do
       ST.modify_ (Cons $ LMSplitRight unit)
-      pure $ nothingMore <$> childl : childr : Nil
+      pure $ nothingMore <$> childl : attachSegment childr seg.rslice : Nil
 
-    hori _ _ { childl, childm, childr } = do
+    hori _ { seg } { childl, childm, childr } = do
       ST.modify_ (Cons $ LMHorizontalize unit)
-      pure $ nothingMore <$> childl : childm : childr : Nil
+      pure $ nothingMore <$> childl : childm : attachSegment childr seg.rslice : Nil

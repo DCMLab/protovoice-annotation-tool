@@ -4,8 +4,9 @@ import Prelude
 import Data.Array (mapWithIndex)
 import Data.Maybe (Maybe, fromJust)
 import Data.Traversable (for)
+import Model (Note)
 import Partial.Unsafe (unsafePartial)
-import SimplePitch (SimplePitch, parseSimplePitch)
+import SimplePitch (parseSimplePitch)
 
 foreign import examplePieceJSON :: Array (Array { pitch :: String, hold :: Boolean })
 
@@ -24,14 +25,14 @@ addJSONIds piece = mapWithIndex (\s slice -> mapWithIndex (\n note -> { id: "not
 
 pieceFromJSON ::
   Array (Array { pitch :: String, hold :: Boolean, id :: String }) ->
-  Maybe (Array (Array { note :: { pitch :: SimplePitch, id :: String }, hold :: Boolean }))
+  Maybe (Array (Array { note :: Note, hold :: Boolean }))
 pieceFromJSON piece =
   for piece \slice ->
     for slice \note ->
       (\p -> { hold: note.hold, note: { pitch: p, id: note.id } }) <$> parseSimplePitch note.pitch
 
-examplePiece :: Array (Array { hold :: Boolean, note :: { id :: String, pitch :: SimplePitch } })
+examplePiece :: Array (Array { hold :: Boolean, note :: Note })
 examplePiece = unsafePartial $ fromJust $ pieceFromJSON examplePieceJSONWithIds
 
-examplePieceLong :: Array (Array { hold :: Boolean, note :: { id :: String, pitch :: SimplePitch } })
+examplePieceLong :: Array (Array { hold :: Boolean, note :: Note })
 examplePieceLong = unsafePartial $ fromJust $ pieceFromJSON examplePieceJSONLongWithIds

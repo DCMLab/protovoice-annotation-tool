@@ -1,10 +1,8 @@
 module Render where
 
 import Prelude
-import Model (Reduction, SliceId, StartStop(..), Note, getParents)
-import Unfold (GraphSlice, GraphTransition, evalGraph, reductionToLeftmost)
-import Common (GraphActions(..), Selection(..), noteIsSelected)
-import Data.Array (findIndex, fromFoldable, length, mapWithIndex)
+import Common (GraphAction(..), Selection(..), addParentToNote, noteIsSelected)
+import Data.Array (elem, findIndex, fromFoldable, length, mapWithIndex)
 import Data.Int (toNumber)
 import Data.Map as M
 import Data.Maybe (Maybe(..), fromMaybe)
@@ -13,6 +11,9 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Halogen.Svg.Attributes as SA
 import Halogen.Svg.Elements as SE
+import Model (Edge, Note, NoteExplanation, Reduction, SliceId, StartStop(..), getParents)
+import Unfold (Graph, GraphSlice, GraphTransition, reductionToLeftmost)
+import Web.UIEvent.MouseEvent (ctrlKey, shiftKey)
 
 scalex :: Number -> Number
 scalex x = x * 60.0
@@ -36,24 +37,27 @@ dy = SA.attr $ HH.AttrName "dy"
 svgFilter :: forall r i. String -> HH.IProp r i
 svgFilter = SA.attr $ HH.AttrName "filter"
 
-selColor :: SA.Color
-selColor = SA.RGB 30 144 255
+selColor :: Maybe SA.Color
+selColor = Just $ SA.RGB 30 144 255
 
-selColor' :: SA.Color
-selColor' = SA.RGB 100 200 255
+selColor' :: Maybe SA.Color
+selColor' = Just $ SA.RGB 135 206 250
+
+parentColor :: Maybe SA.Color
+parentColor = selColor'
 
 -- noteSelColor :: SA.Color
 -- noteSelColor = SA.RGB 255 0 0
-white :: SA.Color
-white = SA.RGB 255 255 255
+white :: Maybe SA.Color
+white = Just $ SA.RGB 255 255 255
 
-black :: SA.Color
-black = SA.RGB 0 0 0
+black :: Maybe SA.Color
+black = Just $ SA.RGB 0 0 0
 
-lightgray :: SA.Color
-lightgray = SA.RGB 211 211 211
+lightgray :: Maybe SA.Color
+lightgray = Just $ SA.RGB 211 211 211
 
-renderSlice :: forall p. Selection -> GraphSlice -> HH.HTML p GraphActions
+renderSlice :: forall p. Selection -> GraphSlice -> HH.HTML p GraphAction
 renderSlice selection { slice: { id, notes, x, parents }, depth: d } = case notes of
   Inner inotes ->
     SE.g (if selectable then selectionAttr else [])
@@ -62,14 +66,18 @@ renderSlice selection { slice: { id, notes, x, parents }, depth: d } = case note
             , SA.y $ scaley d - scaley 0.24
             , SA.width $ scalex 0.48
             , SA.height $ offset (length inotes - 1) + scaley 0.48
-            , SA.fill $ if selected then (Just selColor) else (Just white)
+            , SA.fill $ if selected then selColor else if activeParent then parentColor else white
             ]
         ]
           <> mapWithIndex mknote inotes
       )
-  startstop -> mknode [ HH.text $ show startstop ] (scalex x) (scaley d) false false true []
+  startstop -> mknode [ HH.text $ show startstop ] (scalex x) (scaley d) false true []
   where
   selected = selection == SelSlice id
+
+  activeParent = case selection of
+    SelNote { parents: noteParents } -> elem id $ getParents noteParents
+    _ -> false
 
   selectable = d == 0.0
 
@@ -78,8 +86,8 @@ renderSlice selection { slice: { id, notes, x, parents }, depth: d } = case note
     , HE.onClick $ \_ -> Select (if selected then SelNone else SelSlice id)
     ]
 
-  mknode text xcoord ycoord sel selable drawBg attr =
-    SE.g (if selable then attr else [])
+  mknode text xcoord ycoord sel drawBg attr =
+    SE.g attr
       $ (if drawBg then [ bg ] else [])
       <> [ label ]
     where
@@ -89,7 +97,7 @@ renderSlice selection { slice: { id, notes, x, parents }, depth: d } = case note
         , SA.y $ ycoord - (0.5 * offset 1)
         , SA.width $ scalex 0.48
         , SA.height $ offset 1
-        , SA.fill $ if sel then (Just selColor) else (Just white)
+        , SA.fill $ if sel then selColor else white
         ]
 
     label =
@@ -101,32 +109,43 @@ renderSlice selection { slice: { id, notes, x, parents }, depth: d } = case note
         ]
         text
 
-  mknote :: Int -> Note -> HH.HTML p GraphActions
-  mknote i note =
+  mknote :: Int -> { note :: Note, expl :: NoteExplanation } -> HH.HTML p GraphAction
+  mknote i { note, expl } =
     mknode
       label
       (scalex x)
       (scaley d + offset i)
       nselected
       nselectable
-      nselectable
-      attrs
+      (if clickable then attrsSel else [])
     where
     nselected = noteIsSelected selection (Inner note)
 
     nselectable = d /= 0.0
+
+    clickable = nselectable || activeParent
 
     label =
       [ HH.text $ show note.pitch
       , SE.title [] [ HH.text note.id ]
       ]
 
-    attrs =
+    attrsSel =
       [ cursor "pointer"
-      , HE.onClick $ \_ -> Select $ if nselected then SelNone else SelNote { note: note.id, parentSlices: getParents parents }
+      , HE.onClick
+          $ \ev ->
+              if ctrlKey ev then
+                if activeParent then
+                  addParentToNote selection id note
+                else
+                  NoOp
+              else if nselectable then
+                Select if nselected then SelNone else SelNote { note, expl, parents }
+              else
+                NoOp
       ]
 
-renderTrans :: forall p. Selection -> M.Map SliceId GraphSlice -> GraphTransition -> HH.HTML p GraphActions
+renderTrans :: forall p. Selection -> M.Map SliceId GraphSlice -> GraphTransition -> HH.HTML p GraphAction
 renderTrans selection slices { id, left, right, edges } =
   fromMaybe (HH.text "")
     $ do
@@ -141,19 +160,20 @@ renderTrans selection slices { id, left, right, edges } =
                   , SA.y1 $ scaley yl
                   , SA.x2 $ scalex xr
                   , SA.y2 $ scaley yr
-                  , SA.stroke (Just $ if transSelected then selColor else lightgray)
+                  , SA.stroke if transSelected then selColor else lightgray
                   , SA.strokeWidth 15.0
                   ]
                 <> if selectable then selectionAttr else []
             ]
 
+          mkedge :: Edge -> HH.HTML p GraphAction
           mkedge { left: p1, right: p2 } =
             SE.line
               [ SA.x1 $ scalex xl
               , SA.y1 $ scaley yl + offset offl
               , SA.x2 $ scalex xr
               , SA.y2 $ scaley yr + offset offr
-              , SA.stroke (Just $ if edgeSelected then selColor else black)
+              , SA.stroke if edgeSelected then selColor else black
               , SA.strokeWidth 1.0
               ]
             where
@@ -176,13 +196,13 @@ renderTrans selection slices { id, left, right, edges } =
   findPitchIndex (Inner note) (Inner notes) =
     fromMaybe 0
       $ findIndex
-          ((==) note)
+          (\n -> n.note == note)
           notes
 
   findPitchIndex _ _ = 0
 
-renderReduction :: forall p. Reduction -> Selection -> HH.HTML p GraphActions
-renderReduction reduction selection =
+renderReduction :: forall p. Graph -> Selection -> HH.HTML p GraphAction
+renderReduction graph selection =
   HH.div
     [ HP.style "overflow-x: scroll;" ]
     [ SE.svg
@@ -193,7 +213,7 @@ renderReduction reduction selection =
         (svgTranss <> svgSlices)
     ]
   where
-  { slices, transitions, maxx, maxd } = evalGraph reduction
+  { slices, transitions, maxx, maxd } = graph
 
   width = scalex (maxx + 2.0)
 
@@ -203,7 +223,12 @@ renderReduction reduction selection =
 
   svgTranss = map (renderTrans selection slices) $ fromFoldable $ M.values transitions
 
-renderLeftmost :: forall p. Reduction -> HH.HTML p GraphActions
+renderLeftmost :: forall p. Reduction -> HH.HTML p GraphAction
 renderLeftmost red = HH.ol_ $ map (\step -> HH.li_ [ HH.text $ show step ]) steps
   where
   steps = reductionToLeftmost red
+
+renderNoteExplanation :: forall p. Graph -> Selection -> HH.HTML p GraphAction
+renderNoteExplanation graph (SelNote { note, parents }) = HH.text $ show note.pitch <> " (" <> note.id <> ")"
+
+renderNoteExplanation _ _ = HH.text "No note selected."

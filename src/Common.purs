@@ -4,13 +4,13 @@ import Prelude
 import Data.Generic.Rep (class Generic)
 import Data.Maybe (Maybe(..))
 import Data.Show.Generic (genericShow)
-import Model (Piece, SliceId, TransId, StartStop(..), Note)
+import Model (Note, NoteExplanation, Parents(..), Piece, SliceId, StartStop(..), TransId, setHoriExplParent, setLeftExplParent, setRightExplParent)
 
 data Selection
   = SelNone
   | SelSlice SliceId
   | SelTrans TransId
-  | SelNote { note :: String, parentSlices :: Array SliceId }
+  | SelNote { note :: Note, expl :: NoteExplanation, parents :: Parents }
 
 derive instance eqOuterSelection :: Eq Selection
 
@@ -30,7 +30,7 @@ getSelTrans (SelTrans tid) = Just tid
 getSelTrans _ = Nothing
 
 noteIsSelected :: Selection -> StartStop Note -> Boolean
-noteIsSelected (SelNote sel) (Inner note) = sel.note == note.id
+noteIsSelected (SelNote sel) (Inner note) = sel.note.id == note.id
 
 noteIsSelected _ _ = false
 
@@ -49,10 +49,30 @@ noteSelected = case _ of
   SelNote _ -> true
   _ -> false
 
-data GraphActions
-  = Select Selection
+addParentToNote :: Selection -> SliceId -> Note -> GraphAction
+addParentToNote sel sliceId parNote
+  | SelNote { note: selNote, parents, expl } <- sel = case parents of
+    MergeParents { left, right }
+      | sliceId == left
+      , Just expl' <- setLeftExplParent parNote expl -> setExpl expl'
+      | sliceId == right
+      , Just expl' <- setRightExplParent parNote expl -> setExpl expl'
+      | otherwise -> NoOp
+    VertParent vslice
+      | sliceId == vslice
+      , Just expl' <- setHoriExplParent parNote expl -> setExpl expl'
+      | otherwise -> NoOp
+    NoParents -> NoOp
+    where
+    setExpl e = SetNoteExplanation { noteId: selNote.id, expl: e }
+  | otherwise = NoOp
+
+data GraphAction
+  = NoOp
+  | Select Selection
   | LoadPiece Piece
   | MergeAtSelected
   | VertAtSelected
   | UnMergeAtSelected
   | UnVertAtSelected
+  | SetNoteExplanation { noteId :: String, expl :: NoteExplanation }

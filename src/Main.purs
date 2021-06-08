@@ -1,11 +1,11 @@
 module Main where
 
 import Prelude
-import Common (GraphActions(..), Selection(..), getSelSlice, getSelTrans, sliceSelected, transSelected)
+import Common (GraphAction(..), Selection(..), getSelSlice, getSelTrans, sliceSelected, transSelected)
 import Control.Monad.State (class MonadState)
 import Data.Either (Either(..))
 import Data.Foldable (for_)
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), maybe)
 import Effect (Effect)
 import Effect.Class (class MonadEffect)
 import Effect.Class.Console (log)
@@ -15,8 +15,9 @@ import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Halogen.VDom.Driver (runUI)
-import Model (Model, loadPiece, mergeAtSlice, undoMergeAtTrans, undoVertAtSlice, vertAtMid)
-import Render (renderLeftmost, renderReduction)
+import Model (Model, loadPiece, mergeAtSlice, noteSetExplanation, showReduction, undoMergeAtTrans, undoVertAtSlice, vertAtMid)
+import Render (renderLeftmost, renderNoteExplanation, renderReduction)
+import Unfold (evalGraph)
 import Utils (examplePieceLong)
 import Web.DOM.ParentNode (QuerySelector(..))
 
@@ -78,21 +79,30 @@ appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultE
           [ HH.text "Unvert Selected" ]
       , case st.model of
           Nothing -> HH.text ""
-          Just model ->
+          Just model -> do
+            let
+              graph = evalGraph model.reduction
             HH.div_
-              [ renderReduction model.reduction st.selected
-              , renderLeftmost model.reduction
+              [ HH.p_ [ renderNoteExplanation graph st.selected ]
+              , renderReduction graph st.selected
+              --, renderLeftmost model.reduction
               ]
       , HH.p_
           [ HH.text "Selection: "
           , HH.text $ show st.selected
           ]
+      , HH.pre_ [ HH.text $ maybe "No Piece Loaded" (_.reduction >>> showReduction) st.model ]
       ]
 
   handleAction = case _ of
+    NoOp -> log "NoOp"
     Select s -> H.modify_ \st -> st { selected = s }
     LoadPiece piece -> H.modify_ \st -> st { model = Just $ loadPiece piece, selected = SelNone }
     MergeAtSelected -> tryModelAction getSelSlice mergeAtSlice
     VertAtSelected -> tryModelAction getSelTrans vertAtMid
     UnMergeAtSelected -> tryModelAction getSelTrans undoMergeAtTrans
     UnVertAtSelected -> tryModelAction getSelSlice undoVertAtSlice
+    SetNoteExplanation ne ->
+      tryModelAction
+        (const $ Just ne)
+        (\{ noteId, expl } -> noteSetExplanation noteId expl)
