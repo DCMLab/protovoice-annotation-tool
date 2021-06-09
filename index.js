@@ -6500,6 +6500,22 @@ var PS = {};
       NoOp.value = new NoOp();
       return NoOp;
   })();
+  var Init = (function () {
+      function Init() {
+
+      };
+      Init.value = new Init();
+      return Init;
+  })();
+  var HandleKey = (function () {
+      function HandleKey(value0) {
+          this.value0 = value0;
+      };
+      HandleKey.create = function (value0) {
+          return new HandleKey(value0);
+      };
+      return HandleKey;
+  })();
   var Select = (function () {
       function Select(value0) {
           this.value0 = value0;
@@ -6600,7 +6616,7 @@ var PS = {};
       if (x instanceof SelNote) {
           return new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inr(x.value0)));
       };
-      throw new Error("Failed pattern match at Common (line 17, column 1 - line 17, column 61): " + [ x.constructor.name ]);
+      throw new Error("Failed pattern match at Common (line 18, column 1 - line 18, column 61): " + [ x.constructor.name ]);
   }, function (x) {
       if (x instanceof Data_Generic_Rep.Inl) {
           return SelNone.value;
@@ -6614,7 +6630,7 @@ var PS = {};
       if (x instanceof Data_Generic_Rep.Inr && (x.value0 instanceof Data_Generic_Rep.Inr && x.value0.value0 instanceof Data_Generic_Rep.Inr)) {
           return new SelNote(x.value0.value0.value0);
       };
-      throw new Error("Failed pattern match at Common (line 17, column 1 - line 17, column 61): " + [ x.constructor.name ]);
+      throw new Error("Failed pattern match at Common (line 18, column 1 - line 18, column 61): " + [ x.constructor.name ]);
   });
   var showOuterSelection = new Data_Show.Show(function (os) {
       return Data_Show_Generic.genericShow(genericOuterSelection)(Data_Show_Generic.genericShowSum(Data_Show_Generic.genericShowConstructor(Data_Show_Generic.genericShowArgsNoArguments)(new Data_Symbol.IsSymbol(function () {
@@ -6661,7 +6677,7 @@ var PS = {};
                   if (Data_Boolean.otherwise) {
                       return NoOp.value;
                   };
-                  throw new Error("Failed pattern match at Common (line 52, column 1 - line 52, column 63): " + [ sel.constructor.name, sliceId.constructor.name, parNote.constructor.name ]);
+                  throw new Error("Failed pattern match at Common (line 53, column 1 - line 53, column 63): " + [ sel.constructor.name, sliceId.constructor.name, parNote.constructor.name ]);
               };
               if (sel instanceof SelNote) {
                   var setExpl = function (e) {
@@ -6682,7 +6698,7 @@ var PS = {};
                               if (sel.value0.parents instanceof Model.NoParents) {
                                   return NoOp.value;
                               };
-                              throw new Error("Failed pattern match at Common (line 52, column 1 - line 52, column 63): " + [ sel.value0.parents.constructor.name ]);
+                              throw new Error("Failed pattern match at Common (line 53, column 1 - line 53, column 63): " + [ sel.value0.parents.constructor.name ]);
                           };
                           if (sel.value0.parents instanceof Model.VertParent) {
                               var $77 = Data_Eq.eq(Model.eqSliceId)(sliceId)(sel.value0.parents.value0);
@@ -6738,6 +6754,8 @@ var PS = {};
   exports["transSelected"] = transSelected;
   exports["addParentToNote"] = addParentToNote;
   exports["NoOp"] = NoOp;
+  exports["Init"] = Init;
+  exports["HandleKey"] = HandleKey;
   exports["Select"] = Select;
   exports["LoadPiece"] = LoadPiece;
   exports["MergeAtSelected"] = MergeAtSelected;
@@ -8805,7 +8823,9 @@ var PS = {};
   exports["liftF"] = liftF;
   exports["foldFree"] = foldFree;
   exports["freeFunctor"] = freeFunctor;
+  exports["freeBind"] = freeBind;
   exports["freeApplicative"] = freeApplicative;
+  exports["freeApply"] = freeApply;
   exports["freeMonad"] = freeMonad;
 })(PS);
 (function($PS) {
@@ -9373,7 +9393,9 @@ var PS = {};
   var exports = $PS["Halogen.Query.HalogenM"];
   var Control_Monad_Free = $PS["Control.Monad.Free"];
   var Control_Monad_State_Class = $PS["Control.Monad.State.Class"];
+  var Data_Function = $PS["Data.Function"];
   var Data_Ord = $PS["Data.Ord"];
+  var Data_Unit = $PS["Data.Unit"];
   var Effect_Class = $PS["Effect.Class"];                                
   var SubscriptionId = function (x) {
       return x;
@@ -9492,6 +9514,9 @@ var PS = {};
   var HalogenM = function (x) {
       return x;
   };
+  var subscribe$prime = function (esc) {
+      return HalogenM(Control_Monad_Free.liftF(new Subscribe(esc, Data_Function["const"](Data_Unit.unit))));
+  };
   var ordSubscriptionId = Data_Ord.ordInt;
   var ordForkId = Data_Ord.ordInt;
   var monadHalogenM = Control_Monad_Free.freeMonad;
@@ -9510,7 +9535,9 @@ var PS = {};
           };
       })());
   };
-  var functorHalogenM = Control_Monad_Free.freeFunctor;     
+  var functorHalogenM = Control_Monad_Free.freeFunctor;
+  var bindHalogenM = Control_Monad_Free.freeBind;
+  var applyHalogenM = Control_Monad_Free.freeApply;         
   var applicativeHalogenM = Control_Monad_Free.freeApplicative;
   exports["State"] = State;
   exports["Subscribe"] = Subscribe;
@@ -9523,9 +9550,12 @@ var PS = {};
   exports["Kill"] = Kill;
   exports["GetRef"] = GetRef;
   exports["SubscriptionId"] = SubscriptionId;
+  exports["subscribe'"] = subscribe$prime;
   exports["ForkId"] = ForkId;
   exports["functorHalogenM"] = functorHalogenM;
+  exports["applyHalogenM"] = applyHalogenM;
   exports["applicativeHalogenM"] = applicativeHalogenM;
+  exports["bindHalogenM"] = bindHalogenM;
   exports["monadEffectHalogenM"] = monadEffectHalogenM;
   exports["monadStateHalogenM"] = monadStateHalogenM;
   exports["ordSubscriptionId"] = ordSubscriptionId;
@@ -9655,6 +9685,7 @@ var PS = {};
   var Data_Semigroup = $PS["Data.Semigroup"];
   var Effect = $PS["Effect"];
   var Effect_Ref = $PS["Effect.Ref"];
+  var Safe_Coerce = $PS["Safe.Coerce"];
   var Unsafe_Reference = $PS["Unsafe.Reference"];
   var unsubscribe = function (v) {
       return v;
@@ -9673,7 +9704,8 @@ var PS = {};
       return function (a) {
           return v(a);
       };
-  };
+  };                                                                   
+  var makeEmitter = Safe_Coerce.coerce();
   var create = function __do() {
       var subscribers = Effect_Ref["new"]([  ])();
       return {
@@ -9694,6 +9726,7 @@ var PS = {};
   };
   exports["create"] = create;
   exports["notify"] = notify;
+  exports["makeEmitter"] = makeEmitter;
   exports["subscribe"] = subscribe;
   exports["unsubscribe"] = unsubscribe;
 })(PS);
@@ -10527,7 +10560,8 @@ var PS = {};
   var Effect = $PS["Effect"];
   var Unsafe_Coerce = $PS["Unsafe.Coerce"];
   var Web_HTML_HTMLDocument_ReadyState = $PS["Web.HTML.HTMLDocument.ReadyState"];
-  var toParentNode = Unsafe_Coerce.unsafeCoerce; 
+  var toParentNode = Unsafe_Coerce.unsafeCoerce;
+  var toEventTarget = Unsafe_Coerce.unsafeCoerce;
   var toDocument = Unsafe_Coerce.unsafeCoerce;
   var readyState = (function () {
       var $0 = Data_Functor.map(Effect.functorEffect)((function () {
@@ -10542,6 +10576,7 @@ var PS = {};
   })();
   exports["toDocument"] = toDocument;
   exports["toParentNode"] = toParentNode;
+  exports["toEventTarget"] = toEventTarget;
   exports["readyState"] = readyState;
 })(PS);
 (function(exports) {
@@ -11407,6 +11442,32 @@ var PS = {};
   var style = attr("style");
   exports["style"] = style;
   exports["enabled"] = enabled;
+})(PS);
+(function($PS) {
+  // Generated by purs version 0.14.1
+  "use strict";
+  $PS["Halogen.Query.Event"] = $PS["Halogen.Query.Event"] || {};
+  var exports = $PS["Halogen.Query.Event"];
+  var Data_Foldable = $PS["Data.Foldable"];
+  var Effect = $PS["Effect"];
+  var Halogen_Subscription = $PS["Halogen.Subscription"];
+  var Web_Event_EventTarget = $PS["Web.Event.EventTarget"];                
+  var eventListener = function (eventType) {
+      return function (target) {
+          return function (f) {
+              return Halogen_Subscription.makeEmitter(function (push) {
+                  return function __do() {
+                      var listener = Web_Event_EventTarget.eventListener(function (ev) {
+                          return Data_Foldable.traverse_(Effect.applicativeEffect)(Data_Foldable.foldableMaybe)(push)(f(ev));
+                      })();
+                      Web_Event_EventTarget.addEventListener(eventType)(listener)(false)(target)();
+                      return Web_Event_EventTarget.removeEventListener(eventType)(listener)(false)(target);
+                  };
+              });
+          };
+      };
+  };
+  exports["eventListener"] = eventListener;
 })(PS);
 (function($PS) {
   // Generated by purs version 0.14.1
@@ -13029,6 +13090,90 @@ var PS = {};
   var examplePieceLong = Data_Maybe.fromJust()(pieceFromJSON(examplePieceJSONLongWithIds));
   exports["examplePieceLong"] = examplePieceLong;
 })(PS);
+(function(exports) {
+  "use strict";
+
+  exports.preventDefault = function (e) {
+    return function () {
+      return e.preventDefault();
+    };
+  };
+})(PS["Web.Event.Event"] = PS["Web.Event.Event"] || {});
+(function($PS) {
+  // Generated by purs version 0.14.1
+  "use strict";
+  $PS["Web.Event.Event"] = $PS["Web.Event.Event"] || {};
+  var exports = $PS["Web.Event.Event"];
+  var $foreign = $PS["Web.Event.Event"];
+  exports["preventDefault"] = $foreign.preventDefault;
+})(PS);
+(function(exports) {
+  "use strict";
+
+  exports.key = function (e) {
+    return e.key;
+  };
+})(PS["Web.UIEvent.KeyboardEvent"] = PS["Web.UIEvent.KeyboardEvent"] || {});
+(function(exports) {
+  "use strict";
+
+  exports._unsafeReadProtoTagged = function (nothing, just, name, value) {
+    if (typeof window !== "undefined") {
+      var ty = window[name];
+      if (ty != null && value instanceof ty) {
+        return just(value);
+      }
+    }
+    var obj = value;
+    while (obj != null) {
+      var proto = Object.getPrototypeOf(obj);
+      var constructorName = proto.constructor.name;
+      if (constructorName === name) {
+        return just(value);
+      } else if (constructorName === "Object") {
+        return nothing;
+      }
+      obj = proto;
+    }
+    return nothing;
+  };
+})(PS["Web.Internal.FFI"] = PS["Web.Internal.FFI"] || {});
+(function($PS) {
+  // Generated by purs version 0.14.1
+  "use strict";
+  $PS["Web.Internal.FFI"] = $PS["Web.Internal.FFI"] || {};
+  var exports = $PS["Web.Internal.FFI"];
+  var $foreign = $PS["Web.Internal.FFI"];
+  var Data_Maybe = $PS["Data.Maybe"];                
+  var unsafeReadProtoTagged = function (name) {
+      return function (value) {
+          return $foreign["_unsafeReadProtoTagged"](Data_Maybe.Nothing.value, Data_Maybe.Just.create, name, value);
+      };
+  };
+  exports["unsafeReadProtoTagged"] = unsafeReadProtoTagged;
+})(PS);
+(function($PS) {
+  // Generated by purs version 0.14.1
+  "use strict";
+  $PS["Web.UIEvent.KeyboardEvent"] = $PS["Web.UIEvent.KeyboardEvent"] || {};
+  var exports = $PS["Web.UIEvent.KeyboardEvent"];
+  var $foreign = $PS["Web.UIEvent.KeyboardEvent"];
+  var Unsafe_Coerce = $PS["Unsafe.Coerce"];
+  var Web_Internal_FFI = $PS["Web.Internal.FFI"];
+  var toEvent = Unsafe_Coerce.unsafeCoerce;                                 
+  var fromEvent = Web_Internal_FFI.unsafeReadProtoTagged("KeyboardEvent");
+  exports["fromEvent"] = fromEvent;
+  exports["toEvent"] = toEvent;
+  exports["key"] = $foreign.key;
+})(PS);
+(function($PS) {
+  // Generated by purs version 0.14.1
+  "use strict";
+  $PS["Web.UIEvent.KeyboardEvent.EventTypes"] = $PS["Web.UIEvent.KeyboardEvent.EventTypes"] || {};
+  var exports = $PS["Web.UIEvent.KeyboardEvent.EventTypes"];
+  var keyup = "keyup";
+  exports["keyup"] = keyup;
+})(PS);
 (function($PS) {
   // Generated by purs version 0.14.1
   "use strict";
@@ -13036,15 +13181,19 @@ var PS = {};
   var exports = $PS["Main"];
   var Common = $PS["Common"];
   var Control_Applicative = $PS["Control.Applicative"];
+  var Control_Apply = $PS["Control.Apply"];
   var Control_Bind = $PS["Control.Bind"];
   var Control_Monad_State_Class = $PS["Control.Monad.State.Class"];
   var Data_Either = $PS["Data.Either"];
   var Data_Foldable = $PS["Data.Foldable"];
   var Data_Function = $PS["Data.Function"];
+  var Data_Functor = $PS["Data.Functor"];
   var Data_Maybe = $PS["Data.Maybe"];
   var Data_Show = $PS["Data.Show"];
   var Data_Unit = $PS["Data.Unit"];
+  var Effect = $PS["Effect"];
   var Effect_Aff = $PS["Effect.Aff"];
+  var Effect_Class = $PS["Effect.Class"];
   var Effect_Class_Console = $PS["Effect.Class.Console"];
   var Halogen_Aff_Util = $PS["Halogen.Aff.Util"];
   var Halogen_Component = $PS["Halogen.Component"];
@@ -13052,12 +13201,19 @@ var PS = {};
   var Halogen_HTML_Elements = $PS["Halogen.HTML.Elements"];
   var Halogen_HTML_Events = $PS["Halogen.HTML.Events"];
   var Halogen_HTML_Properties = $PS["Halogen.HTML.Properties"];
+  var Halogen_Query_Event = $PS["Halogen.Query.Event"];
   var Halogen_Query_HalogenM = $PS["Halogen.Query.HalogenM"];
   var Halogen_VDom_Driver = $PS["Halogen.VDom.Driver"];
   var Model = $PS["Model"];
   var Render = $PS["Render"];
   var Unfold = $PS["Unfold"];
-  var Utils = $PS["Utils"];                
+  var Utils = $PS["Utils"];
+  var Web_Event_Event = $PS["Web.Event.Event"];
+  var Web_HTML = $PS["Web.HTML"];
+  var Web_HTML_HTMLDocument = $PS["Web.HTML.HTMLDocument"];
+  var Web_HTML_Window = $PS["Web.HTML.Window"];
+  var Web_UIEvent_KeyboardEvent = $PS["Web.UIEvent.KeyboardEvent"];
+  var Web_UIEvent_KeyboardEvent_EventTypes = $PS["Web.UIEvent.KeyboardEvent.EventTypes"];                
   var tryModelAction = function (dictMonadState) {
       return function (dictMonadEffect) {
           return function (selector) {
@@ -13081,20 +13237,20 @@ var PS = {};
                           };
                           if (v instanceof Data_Either.Right) {
                               return Control_Monad_State_Class.put(dictMonadState)((function () {
-                                  var $20 = {};
-                                  for (var $21 in st) {
-                                      if ({}.hasOwnProperty.call(st, $21)) {
-                                          $20[$21] = st[$21];
+                                  var $21 = {};
+                                  for (var $22 in st) {
+                                      if ({}.hasOwnProperty.call(st, $22)) {
+                                          $21[$22] = st[$22];
                                       };
                                   };
-                                  $20.model = new Data_Maybe.Just(v.value0);
-                                  $20.selected = Common.SelNone.value;
-                                  return $20;
+                                  $21.model = new Data_Maybe.Just(v.value0);
+                                  $21.selected = Common.SelNone.value;
+                                  return $21;
                               })());
                           };
-                          throw new Error("Failed pattern match at Main (line 53, column 28 - line 55, column 75): " + [ v.constructor.name ]);
+                          throw new Error("Failed pattern match at Main (line 60, column 28 - line 62, column 75): " + [ v.constructor.name ]);
                       };
-                      throw new Error("Failed pattern match at Main (line 51, column 3 - line 55, column 75): " + [ modelAndSel.constructor.name ]);
+                      throw new Error("Failed pattern match at Main (line 58, column 3 - line 62, column 75): " + [ modelAndSel.constructor.name ]);
                   });
               };
           };
@@ -13120,11 +13276,11 @@ var PS = {};
                   var graph = Unfold.evalGraph(st.model.value0.reduction);
                   return Halogen_HTML_Elements.div_([ Halogen_HTML_Elements.p_([ Render.renderNoteExplanation(graph)(st.selected) ]), Render.renderReduction(graph)(st.selected) ]);
               };
-              throw new Error("Failed pattern match at Main (line 80, column 9 - line 89, column 16): " + [ st.model.constructor.name ]);
-          })(), Halogen_HTML_Elements.p_([ Halogen_HTML_Core.text("Selection: "), Halogen_HTML_Core.text(Data_Show.show(Common.showOuterSelection)(st.selected)) ]), Halogen_HTML_Elements.pre_([ Halogen_HTML_Core.text(Data_Maybe.maybe("No Piece Loaded")(function ($42) {
+              throw new Error("Failed pattern match at Main (line 87, column 9 - line 96, column 16): " + [ st.model.constructor.name ]);
+          })(), Halogen_HTML_Elements.p_([ Halogen_HTML_Core.text("Selection: "), Halogen_HTML_Core.text(Data_Show.show(Common.showOuterSelection)(st.selected)) ]), Halogen_HTML_Elements.pre_([ Halogen_HTML_Core.text(Data_Maybe.maybe("No Piece Loaded")(function ($51) {
               return Model.showReduction((function (v) {
                   return v.reduction;
-              })($42));
+              })($51));
           })(st.model)) ]) ]);
       };
       var initialState = function (v) {
@@ -13133,54 +13289,113 @@ var PS = {};
               model: Data_Maybe.Nothing.value
           };
       };
-      var handleAction = function (v) {
-          if (v instanceof Common.NoOp) {
-              return Effect_Class_Console.log(Halogen_Query_HalogenM.monadEffectHalogenM(dictMonadEffect))("NoOp");
+      var handleAction = (function () {
+          var pr = function (ev) {
+              return Effect_Class.liftEffect(Halogen_Query_HalogenM.monadEffectHalogenM(dictMonadEffect))(Web_Event_Event.preventDefault(Web_UIEvent_KeyboardEvent.toEvent(ev)));
           };
-          if (v instanceof Common.Select) {
-              return Control_Monad_State_Class.modify_(Halogen_Query_HalogenM.monadStateHalogenM)(function (st) {
-                  var $30 = {};
-                  for (var $31 in st) {
-                      if ({}.hasOwnProperty.call(st, $31)) {
-                          $30[$31] = st[$31];
-                      };
+          return function (v) {
+              if (v instanceof Common.NoOp) {
+                  return Effect_Class_Console.log(Halogen_Query_HalogenM.monadEffectHalogenM(dictMonadEffect))("NoOp");
+              };
+              if (v instanceof Common.Init) {
+                  return Control_Bind.bind(Halogen_Query_HalogenM.bindHalogenM)(Effect_Class.liftEffect(Halogen_Query_HalogenM.monadEffectHalogenM(dictMonadEffect))(Control_Bind.bindFlipped(Effect.bindEffect)(Web_HTML_Window.document)(Web_HTML.window)))(function (doc) {
+                      return Halogen_Query_HalogenM["subscribe'"](function (sid) {
+                          return Halogen_Query_Event.eventListener(Web_UIEvent_KeyboardEvent_EventTypes.keyup)(Web_HTML_HTMLDocument.toEventTarget(doc))((function () {
+                              var $52 = Data_Functor.map(Data_Maybe.functorMaybe)(Common.HandleKey.create);
+                              return function ($53) {
+                                  return $52(Web_UIEvent_KeyboardEvent.fromEvent($53));
+                              };
+                          })());
+                      });
+                  });
+              };
+              if (v instanceof Common.HandleKey) {
+                  var v1 = Web_UIEvent_KeyboardEvent.key(v.value0);
+                  if (v1 === "m") {
+                      return Control_Apply.applySecond(Halogen_Query_HalogenM.applyHalogenM)(pr(v.value0))(handleAction(Common.MergeAtSelected.value));
                   };
-                  $30.selected = v.value0;
-                  return $30;
-              });
-          };
-          if (v instanceof Common.LoadPiece) {
-              return Control_Monad_State_Class.modify_(Halogen_Query_HalogenM.monadStateHalogenM)(function (st) {
-                  var $34 = {};
-                  for (var $35 in st) {
-                      if ({}.hasOwnProperty.call(st, $35)) {
-                          $34[$35] = st[$35];
-                      };
+                  if (v1 === "M") {
+                      return Control_Apply.applySecond(Halogen_Query_HalogenM.applyHalogenM)(pr(v.value0))(handleAction(Common.UnMergeAtSelected.value));
                   };
-                  $34.model = Data_Maybe.Just.create(Model.loadPiece(v.value0));
-                  $34.selected = Common.SelNone.value;
-                  return $34;
-              });
+                  if (v1 === "v") {
+                      return Control_Apply.applySecond(Halogen_Query_HalogenM.applyHalogenM)(pr(v.value0))(handleAction(Common.VertAtSelected.value));
+                  };
+                  if (v1 === "V") {
+                      return Control_Apply.applySecond(Halogen_Query_HalogenM.applyHalogenM)(pr(v.value0))(handleAction(Common.UnVertAtSelected.value));
+                  };
+                  if (v1 === "Enter") {
+                      return Control_Bind.discard(Control_Bind.discardUnit)(Halogen_Query_HalogenM.bindHalogenM)(pr(v.value0))(function () {
+                          return Control_Bind.bind(Halogen_Query_HalogenM.bindHalogenM)(Control_Monad_State_Class.get(Halogen_Query_HalogenM.monadStateHalogenM))(function (st) {
+                              if (st.selected instanceof Common.SelTrans) {
+                                  return handleAction(Common.VertAtSelected.value);
+                              };
+                              if (st.selected instanceof Common.SelSlice) {
+                                  return handleAction(Common.MergeAtSelected.value);
+                              };
+                              return Control_Applicative.pure(Halogen_Query_HalogenM.applicativeHalogenM)(Data_Unit.unit);
+                          });
+                      });
+                  };
+                  if (v1 === "Backspace") {
+                      return Control_Bind.discard(Control_Bind.discardUnit)(Halogen_Query_HalogenM.bindHalogenM)(pr(v.value0))(function () {
+                          return Control_Bind.bind(Halogen_Query_HalogenM.bindHalogenM)(Control_Monad_State_Class.get(Halogen_Query_HalogenM.monadStateHalogenM))(function (st) {
+                              if (st.selected instanceof Common.SelTrans) {
+                                  return handleAction(Common.UnMergeAtSelected.value);
+                              };
+                              if (st.selected instanceof Common.SelSlice) {
+                                  return handleAction(Common.UnVertAtSelected.value);
+                              };
+                              return Control_Applicative.pure(Halogen_Query_HalogenM.applicativeHalogenM)(Data_Unit.unit);
+                          });
+                      });
+                  };
+                  return Control_Applicative.pure(Halogen_Query_HalogenM.applicativeHalogenM)(Data_Unit.unit);
+              };
+              if (v instanceof Common.Select) {
+                  return Control_Monad_State_Class.modify_(Halogen_Query_HalogenM.monadStateHalogenM)(function (st) {
+                      var $39 = {};
+                      for (var $40 in st) {
+                          if ({}.hasOwnProperty.call(st, $40)) {
+                              $39[$40] = st[$40];
+                          };
+                      };
+                      $39.selected = v.value0;
+                      return $39;
+                  });
+              };
+              if (v instanceof Common.LoadPiece) {
+                  return Control_Monad_State_Class.modify_(Halogen_Query_HalogenM.monadStateHalogenM)(function (st) {
+                      var $43 = {};
+                      for (var $44 in st) {
+                          if ({}.hasOwnProperty.call(st, $44)) {
+                              $43[$44] = st[$44];
+                          };
+                      };
+                      $43.model = Data_Maybe.Just.create(Model.loadPiece(v.value0));
+                      $43.selected = Common.SelNone.value;
+                      return $43;
+                  });
+              };
+              if (v instanceof Common.MergeAtSelected) {
+                  return tryModelAction(Halogen_Query_HalogenM.monadStateHalogenM)(Halogen_Query_HalogenM.monadEffectHalogenM(dictMonadEffect))(Common.getSelSlice)(Model.mergeAtSlice);
+              };
+              if (v instanceof Common.VertAtSelected) {
+                  return tryModelAction(Halogen_Query_HalogenM.monadStateHalogenM)(Halogen_Query_HalogenM.monadEffectHalogenM(dictMonadEffect))(Common.getSelTrans)(Model.vertAtMid);
+              };
+              if (v instanceof Common.UnMergeAtSelected) {
+                  return tryModelAction(Halogen_Query_HalogenM.monadStateHalogenM)(Halogen_Query_HalogenM.monadEffectHalogenM(dictMonadEffect))(Common.getSelTrans)(Model.undoMergeAtTrans);
+              };
+              if (v instanceof Common.UnVertAtSelected) {
+                  return tryModelAction(Halogen_Query_HalogenM.monadStateHalogenM)(Halogen_Query_HalogenM.monadEffectHalogenM(dictMonadEffect))(Common.getSelSlice)(Model.undoVertAtSlice);
+              };
+              if (v instanceof Common.SetNoteExplanation) {
+                  return tryModelAction(Halogen_Query_HalogenM.monadStateHalogenM)(Halogen_Query_HalogenM.monadEffectHalogenM(dictMonadEffect))(Data_Function["const"](new Data_Maybe.Just(v.value0)))(function (v1) {
+                      return Model.noteSetExplanation(v1.noteId)(v1.expl);
+                  });
+              };
+              throw new Error("Failed pattern match at Main (line 104, column 18 - line 139, column 62): " + [ v.constructor.name ]);
           };
-          if (v instanceof Common.MergeAtSelected) {
-              return tryModelAction(Halogen_Query_HalogenM.monadStateHalogenM)(Halogen_Query_HalogenM.monadEffectHalogenM(dictMonadEffect))(Common.getSelSlice)(Model.mergeAtSlice);
-          };
-          if (v instanceof Common.VertAtSelected) {
-              return tryModelAction(Halogen_Query_HalogenM.monadStateHalogenM)(Halogen_Query_HalogenM.monadEffectHalogenM(dictMonadEffect))(Common.getSelTrans)(Model.vertAtMid);
-          };
-          if (v instanceof Common.UnMergeAtSelected) {
-              return tryModelAction(Halogen_Query_HalogenM.monadStateHalogenM)(Halogen_Query_HalogenM.monadEffectHalogenM(dictMonadEffect))(Common.getSelTrans)(Model.undoMergeAtTrans);
-          };
-          if (v instanceof Common.UnVertAtSelected) {
-              return tryModelAction(Halogen_Query_HalogenM.monadStateHalogenM)(Halogen_Query_HalogenM.monadEffectHalogenM(dictMonadEffect))(Common.getSelSlice)(Model.undoVertAtSlice);
-          };
-          if (v instanceof Common.SetNoteExplanation) {
-              return tryModelAction(Halogen_Query_HalogenM.monadStateHalogenM)(Halogen_Query_HalogenM.monadEffectHalogenM(dictMonadEffect))(Data_Function["const"](new Data_Maybe.Just(v.value0)))(function (v1) {
-                  return Model.noteSetExplanation(v1.noteId)(v1.expl);
-              });
-          };
-          throw new Error("Failed pattern match at Main (line 97, column 18 - line 108, column 62): " + [ v.constructor.name ]);
-      };
+      })();
       return Halogen_Component.mkComponent({
           initialState: initialState,
           render: render,
@@ -13188,7 +13403,7 @@ var PS = {};
               handleAction: handleAction,
               handleQuery: Halogen_Component.defaultEval.handleQuery,
               receive: Halogen_Component.defaultEval.receive,
-              initialize: Halogen_Component.defaultEval.initialize,
+              initialize: new Data_Maybe.Just(Common.Init.value),
               finalize: Halogen_Component.defaultEval.finalize
           })
       });
