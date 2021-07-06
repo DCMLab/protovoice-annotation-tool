@@ -50,6 +50,12 @@ noteSelected = case _ of
   SelNote _ -> true
   _ -> false
 
+outerSelected :: Selection -> Boolean
+outerSelected = case _ of
+  SelSlice _ -> true
+  SelTrans _ -> true
+  _ -> false
+
 addParentToNote :: Selection -> SliceId -> Note -> GraphAction
 addParentToNote sel sliceId parNote
   | SelNote { note: selNote, parents, expl } <- sel = case parents of
@@ -78,4 +84,6 @@ data GraphAction
   | VertAtSelected
   | UnMergeAtSelected
   | UnVertAtSelected
+  | CombineAny
+  | RemoveAny
   | SetNoteExplanation { noteId :: String, expl :: NoteExplanation }

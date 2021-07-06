@@ -1,7 +1,7 @@
 module Main where
 
 import Prelude
-import Common (GraphAction(..), Selection(..), getSelSlice, getSelTrans, sliceSelected, transSelected)
+import Common (GraphAction(..), Selection(..), getSelSlice, getSelTrans, outerSelected, sliceSelected, transSelected)
 import Control.Monad.State (class MonadState)
 import Data.Either (Either(..))
 import Data.Foldable (for_)
@@ -61,6 +61,56 @@ tryModelAction selector action = do
       Left err -> log err
       Right model' -> H.put st { model = Just model', selected = SelNone }
 
+combineAny :: forall o m. (MonadEffect m) => H.HalogenM AppState GraphAction () o m Unit
+combineAny = do
+  st <- H.get
+  case st.selected of
+    SelTrans _ -> handleAction VertAtSelected
+    SelSlice _ -> handleAction MergeAtSelected
+    _ -> pure unit
+
+removeAny :: forall o m. (MonadEffect m) => H.HalogenM AppState GraphAction () o m Unit
+removeAny = do
+  st <- H.get
+  case st.selected of
+    SelTrans _ -> handleAction UnMergeAtSelected
+    SelSlice _ -> handleAction UnVertAtSelected
+    _ -> pure unit
+
+handleAction :: forall o m. (MonadEffect m) => GraphAction -> H.HalogenM AppState GraphAction () o m Unit
+handleAction = case _ of
+  NoOp -> log "NoOp"
+  Init -> do
+    doc <- H.liftEffect $ document =<< window
+    H.subscribe' \sid ->
+      eventListener KET.keyup (toEventTarget doc) (KE.fromEvent >>> map HandleKey)
+  HandleKey ev -> case KE.key ev of
+    "m" -> pr ev *> handleAction MergeAtSelected
+    "M" -> pr ev *> handleAction UnMergeAtSelected
+    "v" -> pr ev *> handleAction VertAtSelected
+    "V" -> pr ev *> handleAction UnVertAtSelected
+    "Enter" -> do
+      pr ev
+      combineAny
+    "Backspace" -> do
+      pr ev
+      removeAny
+    _ -> pure unit
+  Select s -> H.modify_ \st -> st { selected = s }
+  LoadPiece piece -> H.modify_ \st -> st { model = Just $ loadPiece piece, selected = SelNone }
+  MergeAtSelected -> tryModelAction getSelSlice mergeAtSlice
+  VertAtSelected -> tryModelAction getSelTrans vertAtMid
+  UnMergeAtSelected -> tryModelAction getSelTrans undoMergeAtTrans
+  UnVertAtSelected -> tryModelAction getSelSlice undoVertAtSlice
+  CombineAny -> combineAny
+  RemoveAny -> removeAny
+  SetNoteExplanation ne ->
+    tryModelAction
+      (const $ Just ne)
+      (\{ noteId, expl } -> noteSetExplanation noteId expl)
+  where
+  pr ev = H.liftEffect $ E.preventDefault $ KE.toEvent ev
+
 appComponent :: forall query input output m. (MonadEffect m) => H.Component query input output m
 appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultEval { handleAction = handleAction, initialize = Just Init } }
   where
@@ -73,17 +123,11 @@ appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultE
       [ HH.h1_ [ HH.text "Proto-Voice Annotation" ]
       , HH.button [ HE.onClick $ \_ -> LoadPiece examplePieceLong ] [ HH.text "Load Example Piece" ]
       , HH.button
-          [ HE.onClick $ \_ -> MergeAtSelected, HP.enabled (sliceSelected st.selected) ]
-          [ HH.text "Merge Selected" ]
+          [ HE.onClick $ \_ -> CombineAny, HP.enabled (outerSelected st.selected) ]
+          [ HH.text "Combine (Enter)" ]
       , HH.button
-          [ HE.onClick $ \_ -> VertAtSelected, HP.enabled (transSelected st.selected) ]
-          [ HH.text "Vert Selected" ]
-      , HH.button
-          [ HE.onClick $ \_ -> UnMergeAtSelected, HP.enabled (transSelected st.selected) ]
-          [ HH.text "Unmerge Selected" ]
-      , HH.button
-          [ HE.onClick $ \_ -> UnVertAtSelected, HP.enabled (sliceSelected st.selected) ]
-          [ HH.text "Unvert Selected" ]
+          [ HE.onClick $ \_ -> RemoveAny, HP.enabled (outerSelected st.selected) ]
+          [ HH.text "Remove (Backspace)" ]
       , case st.model of
           Nothing -> HH.text ""
           Just model -> do
@@ -100,42 +144,3 @@ appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultE
           ]
       , HH.pre_ [ HH.text $ maybe "No Piece Loaded" (_.reduction >>> showReduction) st.model ]
       ]
-
-  handleAction = case _ of
-    NoOp -> log "NoOp"
-    Init -> do
-      doc <- H.liftEffect $ document =<< window
-      H.subscribe' \sid ->
-        eventListener KET.keyup (toEventTarget doc) (KE.fromEvent >>> map HandleKey)
-    HandleKey ev -> case KE.key ev of
-      "m" -> pr ev *> handleAction MergeAtSelected
-      "M" -> pr ev *> handleAction UnMergeAtSelected
-      "v" -> pr ev *> handleAction VertAtSelected
-      "V" -> pr ev *> handleAction UnVertAtSelected
-      "Enter" -> do
-        pr ev
-        st <- H.get
-        case st.selected of
-          SelTrans _ -> handleAction VertAtSelected
-          SelSlice _ -> handleAction MergeAtSelected
-          _ -> pure unit
-      "Backspace" -> do
-        pr ev
-        st <- H.get
-        case st.selected of
-          SelTrans _ -> handleAction UnMergeAtSelected
-          SelSlice _ -> handleAction UnVertAtSelected
-          _ -> pure unit
-      _ -> pure unit
-    Select s -> H.modify_ \st -> st { selected = s }
-    LoadPiece piece -> H.modify_ \st -> st { model = Just $ loadPiece piece, selected = SelNone }
-    MergeAtSelected -> tryModelAction getSelSlice mergeAtSlice
-    VertAtSelected -> tryModelAction getSelTrans vertAtMid
-    UnMergeAtSelected -> tryModelAction getSelTrans undoMergeAtTrans
-    UnVertAtSelected -> tryModelAction getSelSlice undoVertAtSlice
-    SetNoteExplanation ne ->
-      tryModelAction
-        (const $ Just ne)
-        (\{ noteId, expl } -> noteSetExplanation noteId expl)
-    where
-    pr ev = H.liftEffect $ E.preventDefault $ KE.toEvent ev
