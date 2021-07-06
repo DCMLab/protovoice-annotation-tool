@@ -1,6 +1,7 @@
 module Model where
 
 import Prelude
+import Common (MBS)
 import Data.Array as A
 import Data.Either (Either(..))
 import Data.Foldable (find, foldl, for_, intercalate)
@@ -22,7 +23,7 @@ import SimplePitch (SimplePitch)
 -- -----
 --
 type Piece
-  = Array (Array { note :: Note, hold :: Boolean })
+  = Array { time :: MBS, notes :: Array { hold :: Boolean, note :: Note } }
 
 data RightOrnament
   = RightRepeat
@@ -347,16 +348,16 @@ thawPiece piece =
   , nextTransId: TransId $ imax + 1
   }
   where
-  thaw st slice = { seg, ties, i: st.i + 1 }
+  thaw st { notes } = { seg, ties, i: st.i + 1 }
     where
     seg =
       Just
-        { trans: thawTrans st.ties st.i slice
-        , rslice: thawSlice slice (st.i + 1)
+        { trans: thawTrans st.ties st.i notes
+        , rslice: thawSlice notes (st.i + 1)
         , op: Freeze
         }
 
-    ties = map _.note $ A.filter _.hold slice
+    ties = map _.note $ A.filter _.hold notes
 
   init = { seg: Nothing, ties: [], i: 0 }
 

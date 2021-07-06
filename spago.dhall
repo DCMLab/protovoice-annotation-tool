@@ -19,6 +19,7 @@ You can edit this file as you like.
   , "partial"
   , "prelude"
   , "psci-support"
+  , "rationals"
   , "string-parsers"
   , "strings"
   , "transformers"

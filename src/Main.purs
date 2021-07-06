@@ -1,7 +1,7 @@
 module Main where
 
 import Prelude
-import Common (GraphAction(..), Selection(..), getSelSlice, getSelTrans, outerSelected, sliceSelected, transSelected)
+import CommonApp (GraphAction(..), Selection(..), getSelSlice, getSelTrans, outerSelected)
 import Control.Monad.State (class MonadState)
 import Data.Either (Either(..))
 import Data.Foldable (for_)
@@ -17,7 +17,7 @@ import Halogen.HTML.Properties as HP
 import Halogen.Query.Event (eventListener)
 import Halogen.VDom.Driver (runUI)
 import Model (Model, loadPiece, mergeAtSlice, noteSetExplanation, showReduction, undoMergeAtTrans, undoVertAtSlice, vertAtMid)
-import Render (renderLeftmost, renderNoteExplanation, renderReduction)
+import Render (renderNoteExplanation, renderReduction)
 import Unfold (evalGraph)
 import Utils (examplePieceLong)
 import Web.DOM.ParentNode (QuerySelector(..))
@@ -135,7 +135,7 @@ appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultE
               graph = evalGraph model.reduction
             HH.div_
               [ HH.p_ [ renderNoteExplanation graph st.selected ]
-              , renderReduction graph st.selected
+              , renderReduction model.piece graph st.selected
               --, renderLeftmost model.reduction
               ]
       , HH.p_

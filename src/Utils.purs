@@ -1,38 +1,45 @@
 module Utils where
 
 import Prelude
+import Common (MBS, parseMBS)
 import Data.Array (mapWithIndex)
 import Data.Maybe (Maybe, fromJust)
 import Data.Traversable (for)
-import Model (Note)
+import Model (Note, Piece)
 import Partial.Unsafe (unsafePartial)
 import SimplePitch (parseSimplePitch)
 
-foreign import examplePieceJSON :: Array (Array { pitch :: String, hold :: Boolean })
+type JSONPiece n
+  = Array { time :: String, notes :: Array { pitch :: String, hold :: Boolean | n } }
 
-foreign import examplePieceJSONLong :: Array (Array { pitch :: String, hold :: Boolean })
+foreign import examplePieceJSON :: JSONPiece ()
 
-examplePieceJSONWithIds :: Array (Array { hold :: Boolean, id :: String, pitch :: String })
+foreign import examplePieceJSONLong :: JSONPiece ()
+
+examplePieceJSONWithIds :: JSONPiece ( id :: String )
 examplePieceJSONWithIds = addJSONIds examplePieceJSON
 
-examplePieceJSONLongWithIds :: Array (Array { hold :: Boolean, id :: String, pitch :: String })
+examplePieceJSONLongWithIds :: JSONPiece ( id :: String )
 examplePieceJSONLongWithIds = addJSONIds examplePieceJSONLong
 
-addJSONIds ::
-  Array (Array { pitch :: String, hold :: Boolean }) ->
-  Array (Array { pitch :: String, hold :: Boolean, id :: String })
-addJSONIds piece = mapWithIndex (\s slice -> mapWithIndex (\n note -> { id: "note" <> show s <> "." <> show n, pitch: note.pitch, hold: note.hold }) slice) piece
+addJSONIds :: JSONPiece () -> JSONPiece ( id :: String )
+addJSONIds piece = mapWithIndex (\s slice -> slice { notes = addids s slice.notes }) piece
+  where
+  addids s = mapWithIndex (\n note -> { id: "note" <> show s <> "." <> show n, pitch: note.pitch, hold: note.hold })
 
 pieceFromJSON ::
-  Array (Array { pitch :: String, hold :: Boolean, id :: String }) ->
-  Maybe (Array (Array { note :: Note, hold :: Boolean }))
+  JSONPiece ( id :: String ) ->
+  Maybe Piece
 pieceFromJSON piece =
-  for piece \slice ->
-    for slice \note ->
-      (\p -> { hold: note.hold, note: { pitch: p, id: note.id } }) <$> parseSimplePitch note.pitch
+  for piece \slice -> do
+    time <- parseMBS slice.time
+    notes <-
+      for slice.notes \note ->
+        (\p -> { hold: note.hold, note: { pitch: p, id: note.id } }) <$> parseSimplePitch note.pitch
+    pure { time, notes }
 
-examplePiece :: Array (Array { hold :: Boolean, note :: Note })
+examplePiece :: Array { time :: MBS, notes :: Array { hold :: Boolean, note :: Note } }
 examplePiece = unsafePartial $ fromJust $ pieceFromJSON examplePieceJSONWithIds
 
-examplePieceLong :: Array (Array { hold :: Boolean, note :: Note })
+examplePieceLong :: Array { time :: MBS, notes :: Array { hold :: Boolean, note :: Note } }
 examplePieceLong = unsafePartial $ fromJust $ pieceFromJSON examplePieceJSONLongWithIds

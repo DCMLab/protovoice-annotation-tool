@@ -97,6 +97,7 @@ type GraphTransition
 type Graph
   = { slices :: M.Map SliceId GraphSlice
     , transitions :: M.Map TransId GraphTransition
+    , horis :: List { child :: SliceId, parent :: SliceId }
     , maxd :: Number
     , maxx :: Number
     , currentDepth :: Number
@@ -123,6 +124,9 @@ addGraphTrans { id, edges } ir = ST.modify_ add
   trans il = { left: il, right: ir, id, edges }
 
   add st = st { transitions = M.insert id (trans st.leftId) st.transitions }
+
+addHoriEdge :: Slice -> Slice -> ST.State Graph Unit
+addHoriEdge { id: child } { id: parent } = ST.modify_ \st -> st { horis = { child, parent } : st.horis }
 
 withLeftId :: forall a. SliceId -> ST.State Graph a -> ST.State Graph a
 withLeftId id action = do
@@ -176,6 +180,8 @@ graphAlg =
     currentDepth <- ST.gets _.currentDepth
     addGraphTrans left.seg.trans left.seg.rslice.id
     addGraphSlice left.seg.rslice left.more.rdepth
+    addHoriEdge childl.rslice left.seg.rslice
+    addHoriEdge childm.rslice left.seg.rslice
     withLeftId left.seg.rslice.id
       $ addGraphTrans right.seg.trans right.seg.rslice.id
     let
@@ -196,6 +202,7 @@ evalGraph reduction =
   initState =
     { slices: M.empty
     , transitions: M.empty
+    , horis: Nil
     , maxd: 0.0
     , maxx: 0.0
     , currentDepth: 0.0

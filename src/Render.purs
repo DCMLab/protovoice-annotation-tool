@@ -1,19 +1,21 @@
 module Render where
 
 import Prelude
-import Common (GraphAction(..), Selection(..), addParentToNote, noteIsSelected)
+import Common (MBS)
+import CommonApp (GraphAction(..), Selection(..), addParentToNote, noteIsSelected)
 import Data.Array (elem, findIndex, fromFoldable, length, mapWithIndex)
 import Data.Int (toNumber)
 import Data.Map as M
 import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Ratio ((%))
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Halogen.Svg.Attributes as SA
 import Halogen.Svg.Elements as SE
-import Model (Edge, Note, NoteExplanation, Reduction, SliceId, StartStop(..), getParents)
-import Unfold (Graph, GraphSlice, GraphTransition, reductionToLeftmost)
-import Web.UIEvent.MouseEvent (ctrlKey, shiftKey)
+import Model (Edge, Note, NoteExplanation, Reduction, SliceId, StartStop(..), Piece, getParents)
+import Unfold (Graph, GraphTransition, GraphSlice, reductionToLeftmost)
+import Web.UIEvent.MouseEvent (ctrlKey)
 
 scalex :: Number -> Number
 scalex x = x * 60.0
@@ -201,8 +203,44 @@ renderTrans selection slices { id, left, right, edges } =
 
   findPitchIndex _ _ = 0
 
-renderReduction :: forall p. Graph -> Selection -> HH.HTML p GraphAction
-renderReduction graph selection =
+renderHori ::
+  forall p.
+  M.Map SliceId GraphSlice ->
+  { child :: SliceId, parent :: SliceId } ->
+  HH.HTML p GraphAction
+renderHori slices { child, parent } =
+  fromMaybe (HH.text "")
+    $ do
+        { depth: yc, slice: { x: xc, notes: nc } } <- M.lookup child slices
+        { depth: yp, slice: { x: xp, notes: np } } <- M.lookup parent slices
+        let
+          bar =
+            [ SE.line
+                $ [ SA.x1 $ scalex xp
+                  , SA.y1 $ scaley yp
+                  , SA.x2 $ scalex xc
+                  , SA.y2 $ scaley yc
+                  , SA.stroke lightgray
+                  , SA.strokeWidth 3.0
+                  , SA.attr (HH.AttrName "stroke-dasharray") "10,5"
+                  ]
+            ]
+        pure $ SE.g [] bar
+
+renderTime :: forall r p. Int -> { time :: MBS | r } -> HH.HTML p GraphAction
+renderTime i { time }
+  | time.s == 0 % 1 =
+    SE.text
+      [ SA.x $ scalex $ toNumber (i + 1)
+      , SA.y $ scaley (-0.5)
+      , SA.text_anchor SA.AnchorMiddle
+      , SA.dominant_baseline SA.BaselineMiddle
+      ]
+      [ HH.text $ show time.m <> "." <> show time.b ]
+  | otherwise = HH.text ""
+
+renderReduction :: forall p. Piece -> Graph -> Selection -> HH.HTML p GraphAction
+renderReduction piece graph selection =
   HH.div
     [ HP.style "overflow-x: scroll;" ]
     [ SE.svg
@@ -210,10 +248,10 @@ renderReduction graph selection =
         , SA.height height
         , SA.viewBox (negate $ scalex 1.0) (negate $ scaley 1.0) width height
         ]
-        (svgTranss <> svgSlices)
+        (svgTranss <> svgHoris <> svgSlices <> svgAxis)
     ]
   where
-  { slices, transitions, maxx, maxd } = graph
+  { slices, transitions, horis, maxx, maxd } = graph
 
   width = scalex (maxx + 2.0)
 
@@ -222,6 +260,10 @@ renderReduction graph selection =
   svgSlices = map (renderSlice selection) $ fromFoldable $ M.values slices
 
   svgTranss = map (renderTrans selection slices) $ fromFoldable $ M.values transitions
+
+  svgHoris = map (renderHori slices) $ fromFoldable horis
+
+  svgAxis = mapWithIndex renderTime piece
 
 renderLeftmost :: forall p. Reduction -> HH.HTML p GraphAction
 renderLeftmost red = HH.ol_ $ map (\step -> HH.li_ [ HH.text $ show step ]) steps

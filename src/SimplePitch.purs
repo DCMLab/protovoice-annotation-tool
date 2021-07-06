@@ -1,11 +1,12 @@
 module SimplePitch where
 
-import Data.Tuple (Tuple(..))
 import Prelude
+import Common (parseInt)
+import Data.Tuple (Tuple(..))
 import Control.Alt ((<|>))
 import Data.Char as C
 import Data.Either (Either(..))
-import Data.Foldable (length, foldl)
+import Data.Foldable (length)
 import Data.Maybe (fromMaybe, Maybe(..))
 import Data.Monoid (power)
 import Data.Ord (abs)
@@ -29,9 +30,6 @@ instance simplePitchOrd :: Ord SimplePitch where
 asciiA :: Int
 asciiA = C.toCharCode 'A'
 
-ascii0 :: Int
-ascii0 = C.toCharCode '0'
-
 instance simplePitchShow :: Show SimplePitch where
   show (SimplePitch { step, acc, oct }) = n <> a <> o
     where
@@ -46,17 +44,6 @@ instance simplePitchShow :: Show SimplePitch where
     a = power (if acc > 0 then "♯" else "♭") (abs acc)
 
     o = show oct
-
-digit :: Char -> Int
-digit d = C.toCharCode d - ascii0
-
-parseInt :: P.Parser Int
-parseInt = do
-  signChar <- P.option '+' $ P.char '-'
-  let
-    sign = if signChar == '-' then -1 else 1
-  dgts <- P.many1 P.anyDigit
-  pure $ sign * foldl (\acc d -> 10 * acc + digit d) 0 dgts
 
 parseAccs :: P.Parser Int
 parseAccs = P.option 0 $ sharps <|> flats
