@@ -5272,7 +5272,7 @@ var PS = {};
           if (v instanceof Inner) {
               return Data_Show.show(dictShow)(v.value0);
           };
-          throw new Error("Failed pattern match at Model (line 144, column 1 - line 147, column 26): " + [ v.constructor.name ]);
+          throw new Error("Failed pattern match at Model (line 152, column 1 - line 155, column 26): " + [ v.constructor.name ]);
       });
   };
   var showSliceId = new Data_Show.Show(function (v) {
@@ -5399,7 +5399,7 @@ var PS = {};
       if (v instanceof MergeParents) {
           return [ v.value0.left, v.value0.right ];
       };
-      throw new Error("Failed pattern match at Model (line 207, column 14 - line 210, column 50): " + [ v.constructor.name ]);
+      throw new Error("Failed pattern match at Model (line 215, column 14 - line 218, column 50): " + [ v.constructor.name ]);
   };
   var getInnerNotes = function (slice) {
       if (slice.notes instanceof Start) {
@@ -5411,7 +5411,7 @@ var PS = {};
       if (slice.notes instanceof Inner) {
           return slice.notes.value0;
       };
-      throw new Error("Failed pattern match at Model (line 220, column 23 - line 223, column 23): " + [ slice.notes.constructor.name ]);
+      throw new Error("Failed pattern match at Model (line 228, column 23 - line 231, column 23): " + [ slice.notes.constructor.name ]);
   };
   var genericRightOrnament = new Data_Generic_Rep.Generic(function (x) {
       if (x instanceof RightRepeat) {
@@ -5447,7 +5447,7 @@ var PS = {};
       if (x instanceof MergeParents) {
           return new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inr(x.value0));
       };
-      throw new Error("Failed pattern match at Model (line 201, column 1 - line 201, column 52): " + [ x.constructor.name ]);
+      throw new Error("Failed pattern match at Model (line 209, column 1 - line 209, column 52): " + [ x.constructor.name ]);
   }, function (x) {
       if (x instanceof Data_Generic_Rep.Inl) {
           return NoParents.value;
@@ -5458,7 +5458,7 @@ var PS = {};
       if (x instanceof Data_Generic_Rep.Inr && x.value0 instanceof Data_Generic_Rep.Inr) {
           return new MergeParents(x.value0.value0);
       };
-      throw new Error("Failed pattern match at Model (line 201, column 1 - line 201, column 52): " + [ x.constructor.name ]);
+      throw new Error("Failed pattern match at Model (line 209, column 1 - line 209, column 52): " + [ x.constructor.name ]);
   });
   var showParents = new Data_Show.Show(function (p) {
       return Data_Show_Generic.genericShow(genericParents)(Data_Show_Generic.genericShowSum(Data_Show_Generic.genericShowConstructor(Data_Show_Generic.genericShowArgsNoArguments)(new Data_Symbol.IsSymbol(function () {
@@ -5757,7 +5757,7 @@ var PS = {};
               if (v1 instanceof Hori) {
                   return "Hori\x0a" + (showSegment(indent + 1 | 0)(v1.value0.childl) + ("\x0a" + (showSegment(indent + 1 | 0)(v1.value0.childm) + ("\x0a" + showSegment$prime(indent + 1 | 0)(v1.value0.childr)))));
               };
-              throw new Error("Failed pattern match at Model (line 284, column 25 - line 297, column 44): " + [ v1.constructor.name ]);
+              throw new Error("Failed pattern match at Model (line 292, column 25 - line 305, column 44): " + [ v1.constructor.name ]);
           };
       };
       return Data_Foldable.intercalate(Data_List_Types.foldableList)(Data_Monoid.monoidString)("\x0a")(Data_Functor.map(Data_List_Types.functorList)(showSegment(0))(v.segments));
@@ -5773,7 +5773,7 @@ var PS = {};
           if (m instanceof Stop) {
               return Stop.value;
           };
-          throw new Error("Failed pattern match at Model (line 142, column 1 - line 142, column 54): " + [ m.constructor.name ]);
+          throw new Error("Failed pattern match at Model (line 150, column 1 - line 150, column 54): " + [ m.constructor.name ]);
       };
   });
   var explIsSplit = function (v) {
@@ -5790,6 +5790,26 @@ var PS = {};
           return true;
       };
       return false;
+  };
+  var explHasParent = function (id) {
+      return function (v) {
+          if (v instanceof NoExpl) {
+              return false;
+          };
+          if (v instanceof HoriExpl) {
+              return v.value0.id === id;
+          };
+          if (v instanceof RightExpl) {
+              return v.value0.leftParent.id === id;
+          };
+          if (v instanceof LeftExpl) {
+              return v.value0.rightParent.id === id;
+          };
+          if (v instanceof DoubleExpl) {
+              return v.value0.leftParent.id === id || v.value0.rightParent.id === id;
+          };
+          throw new Error("Failed pattern match at Model (line 128, column 20 - line 133, column 88): " + [ v.constructor.name ]);
+      };
   };
   var eqTransId = new Data_Eq.Eq(function (x) {
       return function (y) {
@@ -5953,7 +5973,7 @@ var PS = {};
                           if (Data_Boolean.otherwise) {
                               return new Data_Either.Left("The current reduction is invalid: Trying to vert a Start or Stop slice.");
                           };
-                          throw new Error("Failed pattern match at Model (line 531, column 1 - line 531, column 80): " + [ edges.constructor.name, slice.constructor.name ]);
+                          throw new Error("Failed pattern match at Model (line 539, column 1 - line 539, column 80): " + [ edges.constructor.name, slice.constructor.name ]);
                       };
                       if (slice.notes instanceof Inner) {
                           var replaceLeft = function (v1) {
@@ -5961,16 +5981,16 @@ var PS = {};
                                   if (Data_Boolean.otherwise) {
                                       return [  ];
                                   };
-                                  throw new Error("Failed pattern match at Model (line 531, column 1 - line 531, column 80): " + [ v1.constructor.name ]);
+                                  throw new Error("Failed pattern match at Model (line 539, column 1 - line 539, column 80): " + [ v1.constructor.name ]);
                               };
                               if (v1.left instanceof Inner) {
-                                  var $351 = Data_Array.find(function (n) {
+                                  var $361 = Data_Array.find(function (n) {
                                       return n.note.id === v1.left.value0.id;
                                   })(slice.notes.value0);
-                                  if ($351 instanceof Data_Maybe.Just) {
-                                      if ($351.value0.expl instanceof HoriExpl) {
+                                  if ($361 instanceof Data_Maybe.Just) {
+                                      if ($361.value0.expl instanceof HoriExpl) {
                                           return [ {
-                                              left: new Inner($351.value0.expl.value0),
+                                              left: new Inner($361.value0.expl.value0),
                                               right: v1.right
                                           } ];
                                       };
@@ -5994,7 +6014,7 @@ var PS = {};
                           if (Data_Boolean.otherwise) {
                               return new Data_Either.Left("The current reduction is invalid: Trying to vert a Start or Stop slice.");
                           };
-                          throw new Error("Failed pattern match at Model (line 531, column 1 - line 531, column 80): " + [ edges.constructor.name, slice.constructor.name ]);
+                          throw new Error("Failed pattern match at Model (line 539, column 1 - line 539, column 80): " + [ edges.constructor.name, slice.constructor.name ]);
                       };
                       if (slice.notes instanceof Inner) {
                           var replaceRight = function (v1) {
@@ -6002,17 +6022,17 @@ var PS = {};
                                   if (Data_Boolean.otherwise) {
                                       return [  ];
                                   };
-                                  throw new Error("Failed pattern match at Model (line 531, column 1 - line 531, column 80): " + [ v1.constructor.name ]);
+                                  throw new Error("Failed pattern match at Model (line 539, column 1 - line 539, column 80): " + [ v1.constructor.name ]);
                               };
                               if (v1.right instanceof Inner) {
-                                  var $369 = Data_Array.find(function (n) {
+                                  var $379 = Data_Array.find(function (n) {
                                       return n.note.id === v1.right.value0.id;
                                   })(slice.notes.value0);
-                                  if ($369 instanceof Data_Maybe.Just) {
-                                      if ($369.value0.expl instanceof HoriExpl) {
+                                  if ($379 instanceof Data_Maybe.Just) {
+                                      if ($379.value0.expl instanceof HoriExpl) {
                                           return [ {
                                               left: v1.left,
-                                              right: new Inner($369.value0.expl.value0)
+                                              right: new Inner($379.value0.expl.value0)
                                           } ];
                                       };
                                       return v2(true);
@@ -6033,8 +6053,8 @@ var PS = {};
                   return {
                       id: slice.id,
                       notes: Data_Functor.map(functorStartStop)(Data_Functor.map(Data_Functor.functorArray)(function (n) {
-                          var $377 = n.note.id === noteId;
-                          if ($377) {
+                          var $387 = n.note.id === noteId;
+                          if ($387) {
                               return {
                                   expl: expl,
                                   note: n.note
@@ -6086,58 +6106,58 @@ var PS = {};
                           if (upFromLeft instanceof Data_List_Types.Cons) {
                               return Data_Either.Right.create({
                                   "seg'": (function () {
-                                      var $383 = {};
-                                      for (var $384 in seg) {
-                                          if ({}.hasOwnProperty.call(seg, $384)) {
-                                              $383[$384] = seg[$384];
+                                      var $393 = {};
+                                      for (var $394 in seg) {
+                                          if ({}.hasOwnProperty.call(seg, $394)) {
+                                              $393[$394] = seg[$394];
                                           };
                                       };
-                                      $383.trans = {
+                                      $393.trans = {
                                           edges: upFromLeft.value0,
                                           id: seg.trans.id,
                                           is2nd: seg.trans.is2nd
                                       };
-                                      return $383;
+                                      return $393;
                                   })(),
                                   rUp: upFromLeft.value1
                               });
                           };
-                          throw new Error("Failed pattern match at Model (line 596, column 15 - line 598, column 86): " + [ upFromLeft.constructor.name ]);
+                          throw new Error("Failed pattern match at Model (line 604, column 15 - line 606, column 86): " + [ upFromLeft.constructor.name ]);
                       };
                       if (seg.op instanceof Split) {
                           return Control_Bind.bind(Data_Either.bindEither)(doSegment(upFromLeft)(seg.op.value0.childl))(function (v) {
                               return Control_Bind.bind(Data_Either.bindEither)(doSegment$prime(v.rUp)(seg.op.value0.childr))(function (v1) {
                                   var segNewOp = (function () {
-                                      var $390 = {};
-                                      for (var $391 in seg) {
-                                          if ({}.hasOwnProperty.call(seg, $391)) {
-                                              $390[$391] = seg[$391];
+                                      var $400 = {};
+                                      for (var $401 in seg) {
+                                          if ({}.hasOwnProperty.call(seg, $401)) {
+                                              $400[$401] = seg[$401];
                                           };
                                       };
-                                      $390.op = new Split({
+                                      $400.op = new Split({
                                           childl: v["seg'"],
                                           childr: v1["seg'"]
                                       });
-                                      return $390;
+                                      return $400;
                                   })();
                                   return Control_Bind.bind(Data_Either.bindEither)((function () {
-                                      var $393 = noteInSlice(seg.op.value0.childl.rslice);
-                                      if ($393) {
-                                          var $394 = explIsSplit(expl);
-                                          if ($394) {
+                                      var $403 = noteInSlice(seg.op.value0.childl.rslice);
+                                      if ($403) {
+                                          var $404 = explIsSplit(expl);
+                                          if ($404) {
                                               return Control_Applicative.pure(Data_Either.applicativeEither)((function () {
-                                                  var $395 = {};
-                                                  for (var $396 in segNewOp) {
-                                                      if ({}.hasOwnProperty.call(segNewOp, $396)) {
-                                                          $395[$396] = segNewOp[$396];
+                                                  var $405 = {};
+                                                  for (var $406 in segNewOp) {
+                                                      if ({}.hasOwnProperty.call(segNewOp, $406)) {
+                                                          $405[$406] = segNewOp[$406];
                                                       };
                                                   };
-                                                  $395.trans = {
+                                                  $405.trans = {
                                                       edges: parentEdges(v["seg'"].rslice),
                                                       id: segNewOp.trans.id,
                                                       is2nd: segNewOp.trans.is2nd
                                                   };
-                                                  return $395;
+                                                  return $405;
                                               })());
                                           };
                                           return new Data_Either.Left("Cannot explain a split note with a hori.");
@@ -6159,8 +6179,8 @@ var PS = {};
                                       return Control_Bind.bind(Data_Either.bindEither)(vertEdgesLeft(v["seg'"].trans.edges)(v["seg'"].rslice))(function (leftParentEdges) {
                                           return Control_Bind.bind(Data_Either.bindEither)(vertEdgesRight(v2["seg'"].trans.edges)(v1["seg'"].rslice))(function (rightParentEdges) {
                                               return Control_Bind.discard(Control_Bind.discardUnit)(Data_Either.bindEither)((function () {
-                                                  var $408 = (noteInSlice(seg.op.value0.childl.rslice) || noteInSlice(seg.op.value0.childm.rslice)) && !explIsHori(expl);
-                                                  if ($408) {
+                                                  var $418 = (noteInSlice(seg.op.value0.childl.rslice) || noteInSlice(seg.op.value0.childm.rslice)) && !explIsHori(expl);
+                                                  if ($418) {
                                                       return Data_Either.Left.create("Cannot explain a hori note with a split. noteId = " + (Data_Show.show(Data_Show.showString)(noteId) + (", childl.rslice = " + (Data_Show.show(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
                                                           return "id";
                                                       }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
@@ -6199,23 +6219,23 @@ var PS = {};
                                               })())(function () {
                                                   return Control_Applicative.pure(Data_Either.applicativeEither)({
                                                       "seg'": (function () {
-                                                          var $409 = {};
-                                                          for (var $410 in seg) {
-                                                              if ({}.hasOwnProperty.call(seg, $410)) {
-                                                                  $409[$410] = seg[$410];
+                                                          var $419 = {};
+                                                          for (var $420 in seg) {
+                                                              if ({}.hasOwnProperty.call(seg, $420)) {
+                                                                  $419[$420] = seg[$420];
                                                               };
                                                           };
-                                                          $409.op = new Hori({
+                                                          $419.op = new Hori({
                                                               childl: v["seg'"],
                                                               childm: v1["seg'"],
                                                               childr: v2["seg'"]
                                                           });
-                                                          $409.trans = {
+                                                          $419.trans = {
                                                               edges: leftParentEdges,
                                                               id: seg.trans.id,
                                                               is2nd: seg.trans.is2nd
                                                           };
-                                                          return $409;
+                                                          return $419;
                                                       })(),
                                                       rUp: new Data_List_Types.Cons(rightParentEdges, v2.rUp)
                                                   });
@@ -6226,14 +6246,14 @@ var PS = {};
                               });
                           });
                       };
-                      throw new Error("Failed pattern match at Model (line 595, column 31 - line 636, column 12): " + [ seg.op.constructor.name ]);
+                      throw new Error("Failed pattern match at Model (line 603, column 31 - line 644, column 12): " + [ seg.op.constructor.name ]);
                   };
               };
               var doSegment = function (upFromLeft) {
                   return function (seg) {
                       var rslice$prime = (function () {
-                          var $422 = noteInSlice(seg.rslice);
-                          if ($422) {
+                          var $432 = noteInSlice(seg.rslice);
+                          if ($432) {
                               return setNoteExplInSlice(seg.rslice);
                           };
                           return seg.rslice;
@@ -6262,7 +6282,7 @@ var PS = {};
                               });
                           });
                       };
-                      throw new Error("Failed pattern match at Model (line 582, column 28 - line 587, column 29): " + [ v.constructor.name ]);
+                      throw new Error("Failed pattern match at Model (line 590, column 28 - line 595, column 29): " + [ v.constructor.name ]);
                   };
               };
               var v = traverseTop(Data_List_Types.Nil.value)(model.reduction.segments);
@@ -6280,7 +6300,7 @@ var PS = {};
               if (v instanceof Data_Either.Left) {
                   return new Data_Either.Left(v.value0);
               };
-              throw new Error("Failed pattern match at Model (line 532, column 40 - line 534, column 23): " + [ v.constructor.name ]);
+              throw new Error("Failed pattern match at Model (line 540, column 40 - line 542, column 23): " + [ v.constructor.name ]);
           };
       };
   };
@@ -6302,9 +6322,9 @@ var PS = {};
                           if (v2 instanceof Data_Maybe.Nothing) {
                               return Data_Functor.map(Data_Either.functorEither)(Data_List_Types.Cons.create(v1.value0))(go(v1.value0.rslice.id)(v1.value1));
                           };
-                          throw new Error("Failed pattern match at Model (line 397, column 36 - line 399, column 50): " + [ v2.constructor.name ]);
+                          throw new Error("Failed pattern match at Model (line 405, column 36 - line 407, column 50): " + [ v2.constructor.name ]);
                       };
-                      throw new Error("Failed pattern match at Model (line 394, column 3 - line 394, column 64): " + [ v.constructor.name, v1.constructor.name ]);
+                      throw new Error("Failed pattern match at Model (line 402, column 3 - line 402, column 64): " + [ v.constructor.name, v1.constructor.name ]);
                   };
               };
               return go(red.start.id)(red.segments);
@@ -6347,8 +6367,8 @@ var PS = {};
           };
           var matchSlice = function (v) {
               if (v instanceof Data_List_Types.Cons && v.value1 instanceof Data_List_Types.Cons) {
-                  var $448 = Data_Eq.eq(eqSliceId)(v.value0.rslice.id)(sliceId);
-                  if ($448) {
+                  var $458 = Data_Eq.eq(eqSliceId)(v.value0.rslice.id)(sliceId);
+                  if ($458) {
                       return new Data_Maybe.Just(new Data_Tuple.Tuple({
                           seg1: v.value0,
                           seg2: v.value1.value0
@@ -6373,7 +6393,7 @@ var PS = {};
           if (v instanceof Data_Either.Left) {
               return new Data_Either.Left(v.value0);
           };
-          throw new Error("Failed pattern match at Model (line 418, column 30 - line 420, column 23): " + [ v.constructor.name ]);
+          throw new Error("Failed pattern match at Model (line 426, column 30 - line 428, column 23): " + [ v.constructor.name ]);
       };
   };
   var mkVert = function (v) {
@@ -6451,8 +6471,8 @@ var PS = {};
           };
           var matchMid = function (v) {
               if (v instanceof Data_List_Types.Cons && (v.value1 instanceof Data_List_Types.Cons && v.value1.value1 instanceof Data_List_Types.Cons)) {
-                  var $476 = Data_Eq.eq(eqTransId)(v.value1.value0.trans.id)(transId);
-                  if ($476) {
+                  var $486 = Data_Eq.eq(eqTransId)(v.value1.value0.trans.id)(transId);
+                  if ($486) {
                       return new Data_Maybe.Just(new Data_Tuple.Tuple({
                           l: v.value0,
                           m: v.value1.value0,
@@ -6478,7 +6498,7 @@ var PS = {};
           if (v instanceof Data_Either.Left) {
               return new Data_Either.Left(v.value0);
           };
-          throw new Error("Failed pattern match at Model (line 472, column 27 - line 482, column 23): " + [ v.constructor.name ]);
+          throw new Error("Failed pattern match at Model (line 480, column 27 - line 490, column 23): " + [ v.constructor.name ]);
       };
   };
   var attachSegment = function (v) {
@@ -6502,8 +6522,8 @@ var PS = {};
           };
           var matchTrans = function (v) {
               if (v instanceof Data_List_Types.Cons) {
-                  var $495 = Data_Eq.eq(eqTransId)(v.value0.trans.id)(transId);
-                  if ($495) {
+                  var $505 = Data_Eq.eq(eqTransId)(v.value0.trans.id)(transId);
+                  if ($505) {
                       return new Data_Maybe.Just(new Data_Tuple.Tuple(v.value0, v.value1));
                   };
                   return Data_Maybe.Nothing.value;
@@ -6525,7 +6545,7 @@ var PS = {};
           if (v instanceof Data_Either.Left) {
               return new Data_Either.Left(v.value0);
           };
-          throw new Error("Failed pattern match at Model (line 496, column 34 - line 498, column 23): " + [ v.constructor.name ]);
+          throw new Error("Failed pattern match at Model (line 504, column 34 - line 506, column 23): " + [ v.constructor.name ]);
       };
   };
   var undoVertAtSlice = function (sliceId) {
@@ -6540,8 +6560,8 @@ var PS = {};
           };
           var matchSlice = function (v) {
               if (v instanceof Data_List_Types.Cons && v.value1 instanceof Data_List_Types.Cons) {
-                  var $511 = Data_Eq.eq(eqSliceId)(v.value0.rslice.id)(sliceId);
-                  if ($511) {
+                  var $521 = Data_Eq.eq(eqSliceId)(v.value0.rslice.id)(sliceId);
+                  if ($521) {
                       return new Data_Maybe.Just(new Data_Tuple.Tuple({
                           pl: v.value0,
                           pr: v.value1.value0
@@ -6566,17 +6586,36 @@ var PS = {};
           if (v instanceof Data_Either.Left) {
               return new Data_Either.Left(v.value0);
           };
-          throw new Error("Failed pattern match at Model (line 514, column 33 - line 516, column 23): " + [ v.constructor.name ]);
+          throw new Error("Failed pattern match at Model (line 522, column 33 - line 524, column 23): " + [ v.constructor.name ]);
       };
   };
+  exports["RightRepeat"] = RightRepeat;
+  exports["RightNeighbor"] = RightNeighbor;
+  exports["LeftRepeat"] = LeftRepeat;
+  exports["LeftNeighbor"] = LeftNeighbor;
+  exports["RootNote"] = RootNote;
+  exports["FullNeighbor"] = FullNeighbor;
+  exports["FullRepeat"] = FullRepeat;
+  exports["LeftRepeatOfRight"] = LeftRepeatOfRight;
+  exports["RightRepeatOfLeft"] = RightRepeatOfLeft;
+  exports["PassingMid"] = PassingMid;
+  exports["PassingLeft"] = PassingLeft;
+  exports["PassingRight"] = PassingRight;
+  exports["NoExpl"] = NoExpl;
+  exports["HoriExpl"] = HoriExpl;
+  exports["RightExpl"] = RightExpl;
+  exports["LeftExpl"] = LeftExpl;
+  exports["DoubleExpl"] = DoubleExpl;
   exports["setLeftExplParent"] = setLeftExplParent;
   exports["setRightExplParent"] = setRightExplParent;
   exports["setHoriExplParent"] = setHoriExplParent;
+  exports["explHasParent"] = explHasParent;
   exports["Inner"] = Inner;
   exports["NoParents"] = NoParents;
   exports["VertParent"] = VertParent;
   exports["MergeParents"] = MergeParents;
   exports["getParents"] = getParents;
+  exports["getInnerNotes"] = getInnerNotes;
   exports["Freeze"] = Freeze;
   exports["Split"] = Split;
   exports["Hori"] = Hori;
@@ -6588,6 +6627,12 @@ var PS = {};
   exports["undoMergeAtTrans"] = undoMergeAtTrans;
   exports["undoVertAtSlice"] = undoVertAtSlice;
   exports["noteSetExplanation"] = noteSetExplanation;
+  exports["eqRightOrnament"] = eqRightOrnament;
+  exports["showRightOrnament"] = showRightOrnament;
+  exports["eqLeftOrnament"] = eqLeftOrnament;
+  exports["showLeftOrnament"] = showLeftOrnament;
+  exports["eqDoubleOrnament"] = eqDoubleOrnament;
+  exports["showDoubleOrnament"] = showDoubleOrnament;
   exports["eqNoteExplanation"] = eqNoteExplanation;
   exports["showNoteExplanation"] = showNoteExplanation;
   exports["showStartStop"] = showStartStop;
@@ -11537,11 +11582,14 @@ var PS = {};
   var Halogen_HTML_Core = $PS["Halogen.HTML.Core"];
   var element = Halogen_HTML_Core.element(Data_Maybe.Nothing.value);
   var h1 = element("h1");
-  var h1_ = h1([  ]);        
+  var h1_ = h1([  ]);            
+  var option = element("option");
   var p = element("p");
   var p_ = p([  ]);
   var pre = element("pre");
-  var pre_ = pre([  ]);
+  var pre_ = pre([  ]);        
+  var select = element("select");
+  var select_ = select([  ]);
   var div = element("div");
   var div_ = div([  ]);
   var button = element("button");
@@ -11549,8 +11597,10 @@ var PS = {};
   exports["div"] = div;
   exports["div_"] = div_;
   exports["h1_"] = h1_;
+  exports["option"] = option;
   exports["p_"] = p_;
   exports["pre_"] = pre_;
+  exports["select_"] = select_;
 })(PS);
 (function($PS) {
   // Generated by purs version 0.14.1
@@ -11593,10 +11643,12 @@ var PS = {};
   var exports = $PS["Halogen.HTML.Properties"];
   var Data_HeytingAlgebra = $PS["Data.HeytingAlgebra"];
   var Data_Maybe = $PS["Data.Maybe"];
+  var Data_Newtype = $PS["Data.Newtype"];
   var Halogen_HTML_Core = $PS["Halogen.HTML.Core"];
   var prop = function (dictIsProp) {
       return Halogen_HTML_Core.prop(dictIsProp);
-  };
+  };                                                            
+  var selected = prop(Halogen_HTML_Core.isPropBoolean)("selected");
   var value = prop(Halogen_HTML_Core.isPropString)("value");      
   var disabled = prop(Halogen_HTML_Core.isPropBoolean)("disabled");
   var enabled = (function () {
@@ -11605,10 +11657,20 @@ var PS = {};
           return disabled($10($11));
       };
   })();
+  var class_ = (function () {
+      var $16 = prop(Halogen_HTML_Core.isPropString)("className");
+      var $17 = Data_Newtype.unwrap();
+      return function ($18) {
+          return $16($17($18));
+      };
+  })();
   var attr = Halogen_HTML_Core.attr(Data_Maybe.Nothing.value);
   var style = attr("style");
+  exports["class_"] = class_;
   exports["style"] = style;
+  exports["value"] = value;
   exports["enabled"] = enabled;
+  exports["selected"] = selected;
 })(PS);
 (function($PS) {
   // Generated by purs version 0.14.1
@@ -12625,6 +12687,27 @@ var PS = {};
   var Model = $PS["Model"];
   var SimplePitch = $PS["SimplePitch"];
   var Web_UIEvent_MouseEvent = $PS["Web.UIEvent.MouseEvent"];                
+  var NotSelected = (function () {
+      function NotSelected() {
+
+      };
+      NotSelected.value = new NotSelected();
+      return NotSelected;
+  })();
+  var Selected = (function () {
+      function Selected() {
+
+      };
+      Selected.value = new Selected();
+      return Selected;
+  })();
+  var Related = (function () {
+      function Related() {
+
+      };
+      Related.value = new Related();
+      return Related;
+  })();
   var white = Data_Maybe.Just.create(new Halogen_Svg_Attributes.RGB(255, 255, 255));
   var selColor$prime = Data_Maybe.Just.create(new Halogen_Svg_Attributes.RGB(135, 206, 250));
   var selColor = Data_Maybe.Just.create(new Halogen_Svg_Attributes.RGB(30, 144, 255));
@@ -12642,37 +12725,187 @@ var PS = {};
           if (Data_Boolean.otherwise) {
               return Halogen_HTML_Core.text("");
           };
-          throw new Error("Failed pattern match at Render (line 230, column 1 - line 230, column 78): " + [ i.constructor.name, v.constructor.name ]);
-      };
-  };
-  var renderNoteExplanation = function (v) {
-      return function (v1) {
-          if (v1 instanceof CommonApp.SelNote) {
-              return Halogen_HTML_Core.text(Data_Show.show(SimplePitch.simplePitchShow)(v1.value0.note.pitch) + (" (" + (v1.value0.note.id + ")")));
-          };
-          return Halogen_HTML_Core.text("No note selected.");
+          throw new Error("Failed pattern match at Render (line 274, column 1 - line 274, column 78): " + [ i.constructor.name, v.constructor.name ]);
       };
   };
   var parentColor = selColor$prime;
   var offset = function (i) {
       return Data_Int.toNumber(i) * 20.0;
   };
-  var lightgray = Data_Maybe.Just.create(new Halogen_Svg_Attributes.RGB(211, 211, 211));
-  var renderHori = function (slices) {
+  var mkOption = function (updateAction) {
       return function (v) {
-          return Data_Maybe.fromMaybe(Halogen_HTML_Core.text(""))(Control_Bind.bind(Data_Maybe.bindMaybe)(Data_Map_Internal.lookup(Model.ordSliceId)(v.child)(slices))(function (v1) {
-              return Control_Bind.bind(Data_Maybe.bindMaybe)(Data_Map_Internal.lookup(Model.ordSliceId)(v.parent)(slices))(function (v2) {
-                  var bar = [ Halogen_Svg_Elements.line([ Halogen_Svg_Attributes.x1(scalex(v2.slice.x)), Halogen_Svg_Attributes.y1(scaley(v2.depth)), Halogen_Svg_Attributes.x2(scalex(v1.slice.x)), Halogen_Svg_Attributes.y2(scaley(v1.depth)), Halogen_Svg_Attributes.stroke(lightgray), Halogen_Svg_Attributes.strokeWidth(3.0), Halogen_Svg_Attributes.attr("stroke-dasharray")("10,5") ]) ];
-                  return Control_Applicative.pure(Data_Maybe.applicativeMaybe)(Halogen_Svg_Elements.g([  ])(bar));
-              });
-          }));
+          return Halogen_HTML_Elements.option([ Halogen_HTML_Properties.value(v.v), Halogen_HTML_Properties.selected(v.s), Halogen_HTML_Events.onClick(function (v2) {
+              return updateAction(v.k);
+          }) ])([ Halogen_HTML_Core.text(v.v) ]);
+      };
+  };
+  var mkSelect = function (dictShow) {
+      return function (dictEq) {
+          return function (updateAction) {
+              return function (orn) {
+                  return function (opts) {
+                      var options = Data_Functor.map(Data_Functor.functorArray)(mkOption(updateAction))(Data_Semigroup.append(Data_Semigroup.semigroupArray)([ {
+                          k: Data_Maybe.Nothing.value,
+                          v: "Nothing",
+                          s: false
+                      } ])(Data_Functor.map(Data_Functor.functorArray)(function (o) {
+                          return {
+                              k: new Data_Maybe.Just(o),
+                              v: Data_Show.show(dictShow)(o),
+                              s: Data_Eq.eq(Data_Maybe.eqMaybe(dictEq))(new Data_Maybe.Just(o))(orn)
+                          };
+                      })(opts)));
+                      return Halogen_HTML_Elements.select_(options);
+                  };
+              };
+          };
+      };
+  };
+  var lightgray = Data_Maybe.Just.create(new Halogen_Svg_Attributes.RGB(211, 211, 211));
+  var gridDiv = function (classes) {
+      return Halogen_HTML_Elements.div([ Halogen_HTML_Properties.class_(classes) ]);
+  };
+  var findPitchIndex = function (v) {
+      return function (v1) {
+          if (v instanceof Model.Inner && v1 instanceof Model.Inner) {
+              return Data_Maybe.fromMaybe(0)(Data_Array.findIndex(function (n) {
+                  return Data_Eq.eq(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(SimplePitch.simplePitchEq))()(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Data_Eq.eqString)))(n.note)(v.value0);
+              })(v1.value0));
+          };
+          return 0;
       };
   };                                         
+  var doubleOrnaments = [ Model.RootNote.value, Model.FullNeighbor.value, Model.FullRepeat.value, Model.LeftRepeatOfRight.value, Model.RightRepeatOfLeft.value, Model.PassingMid.value, Model.PassingLeft.value, Model.PassingRight.value ];
+  var renderNoteExplanation = function (graph) {
+      return function (sel) {
+          return Halogen_HTML_Elements.div([ Halogen_HTML_Properties.style("height:30px;"), Halogen_HTML_Properties.class_("pure-g") ])((function () {
+              if (sel instanceof CommonApp.SelNote) {
+                  return Data_Semigroup.append(Data_Semigroup.semigroupArray)([ gridDiv("pure-u-1-4")([ Halogen_HTML_Core.text(Data_Show.show(SimplePitch.simplePitchShow)(sel.value0.note.pitch) + (" (" + (sel.value0.note.id + ") "))) ]) ])((function () {
+                      if (sel.value0.expl instanceof Model.NoExpl) {
+                          return [ gridDiv("pure-u-1-4")([ Halogen_HTML_Core.text("(no parents)") ]) ];
+                      };
+                      if (sel.value0.expl instanceof Model.HoriExpl) {
+                          return [ gridDiv("pure-u-1-4")([ Halogen_HTML_Core.text("parent: " + (Data_Show.show(SimplePitch.simplePitchShow)(sel.value0.expl.value0.pitch) + (" (" + (sel.value0.expl.value0.id + ")")))), Halogen_HTML_Elements.button([ Halogen_HTML_Events.onClick(function (v) {
+                              return new CommonApp.SetNoteExplanation({
+                                  noteId: sel.value0.note.id,
+                                  expl: Model.NoExpl.value
+                              });
+                          }) ])([ Halogen_HTML_Core.text("x") ]) ]) ];
+                      };
+                      if (sel.value0.expl instanceof Model.LeftExpl) {
+                          return [ gridDiv("pure-u-1-4")([  ]), gridDiv("pure-u-1-4")([ mkSelect(Model.showLeftOrnament)(Model.eqLeftOrnament)(function (orn$prime) {
+                              return new CommonApp.SetNoteExplanation({
+                                  noteId: sel.value0.note.id,
+                                  expl: new Model.LeftExpl({
+                                      orn: orn$prime,
+                                      rightParent: sel.value0.expl.value0.rightParent
+                                  })
+                              });
+                          })(sel.value0.expl.value0.orn)([ Model.LeftRepeat.value, Model.LeftNeighbor.value ]) ]), gridDiv("pure-u-1-4")([ Halogen_HTML_Core.text("right parent: " + (Data_Show.show(SimplePitch.simplePitchShow)(sel.value0.expl.value0.rightParent.pitch) + (" (" + (sel.value0.expl.value0.rightParent.id + ")")))), Halogen_HTML_Elements.button([ Halogen_HTML_Events.onClick(function (v) {
+                              return new CommonApp.SetNoteExplanation({
+                                  noteId: sel.value0.note.id,
+                                  expl: Model.NoExpl.value
+                              });
+                          }) ])([ Halogen_HTML_Core.text("x") ]) ]) ];
+                      };
+                      if (sel.value0.expl instanceof Model.RightExpl) {
+                          return [ gridDiv("pure-u-1-4")([ Halogen_HTML_Core.text("left parent: " + (Data_Show.show(SimplePitch.simplePitchShow)(sel.value0.expl.value0.leftParent.pitch) + (" (" + (sel.value0.expl.value0.leftParent.id + ")")))), Halogen_HTML_Elements.button([ Halogen_HTML_Events.onClick(function (v) {
+                              return new CommonApp.SetNoteExplanation({
+                                  noteId: sel.value0.note.id,
+                                  expl: Model.NoExpl.value
+                              });
+                          }) ])([ Halogen_HTML_Core.text("x") ]) ]), gridDiv("pure-u-1-4")([ mkSelect(Model.showRightOrnament)(Model.eqRightOrnament)(function (orn$prime) {
+                              return new CommonApp.SetNoteExplanation({
+                                  noteId: sel.value0.note.id,
+                                  expl: new Model.RightExpl({
+                                      orn: orn$prime,
+                                      leftParent: sel.value0.expl.value0.leftParent
+                                  })
+                              });
+                          })(sel.value0.expl.value0.orn)([ Model.RightRepeat.value, Model.RightNeighbor.value ]) ]) ];
+                      };
+                      if (sel.value0.expl instanceof Model.DoubleExpl) {
+                          return [ gridDiv("pure-u-1-4")([ Halogen_HTML_Core.text("left parent: " + (Data_Show.show(SimplePitch.simplePitchShow)(sel.value0.expl.value0.leftParent.pitch) + (" (" + (sel.value0.expl.value0.leftParent.id + ")")))), Halogen_HTML_Elements.button([ Halogen_HTML_Events.onClick(function (v) {
+                              return new CommonApp.SetNoteExplanation({
+                                  noteId: sel.value0.note.id,
+                                  expl: new Model.LeftExpl({
+                                      orn: Data_Maybe.Nothing.value,
+                                      rightParent: sel.value0.expl.value0.rightParent
+                                  })
+                              });
+                          }) ])([ Halogen_HTML_Core.text("x") ]) ]), gridDiv("pure-u-1-4")([ mkSelect(Model.showDoubleOrnament)(Model.eqDoubleOrnament)(function (orn$prime) {
+                              return new CommonApp.SetNoteExplanation({
+                                  noteId: sel.value0.note.id,
+                                  expl: new Model.DoubleExpl({
+                                      orn: orn$prime,
+                                      leftParent: sel.value0.expl.value0.leftParent,
+                                      rightParent: sel.value0.expl.value0.rightParent
+                                  })
+                              });
+                          })(sel.value0.expl.value0.orn)(doubleOrnaments) ]), gridDiv("pure-u-1-4")([ Halogen_HTML_Core.text("right parent: " + (Data_Show.show(SimplePitch.simplePitchShow)(sel.value0.expl.value0.rightParent.pitch) + (" (" + (sel.value0.expl.value0.rightParent.id + ")")))), Halogen_HTML_Elements.button([ Halogen_HTML_Events.onClick(function (v) {
+                              return new CommonApp.SetNoteExplanation({
+                                  noteId: sel.value0.note.id,
+                                  expl: new Model.RightExpl({
+                                      orn: Data_Maybe.Nothing.value,
+                                      leftParent: sel.value0.expl.value0.leftParent
+                                  })
+                              });
+                          }) ])([ Halogen_HTML_Core.text("x") ]) ]) ];
+                      };
+                      throw new Error("Failed pattern match at Render (line 346, column 12 - line 407, column 16): " + [ sel.value0.expl.constructor.name ]);
+                  })());
+              };
+              return [ gridDiv("pure-u-1")([ Halogen_HTML_Core.text("No note selected.") ]) ];
+          })());
+      };
+  };
   var cursor = Halogen_Svg_Attributes.attr("cursor");
+  var black = Data_Maybe.Just.create(new Halogen_Svg_Attributes.RGB(0, 0, 0));
+  var renderHori = function (selection) {
+      return function (slices) {
+          return function (v) {
+              var explToHori = function (note) {
+                  if (note.expl instanceof Model.HoriExpl) {
+                      return new Data_Maybe.Just({
+                          childNote: note.note,
+                          parentNote: note.expl.value0
+                      });
+                  };
+                  return Data_Maybe.Nothing.value;
+              };
+              return Data_Maybe.fromMaybe(Halogen_HTML_Core.text(""))(Control_Bind.bind(Data_Maybe.bindMaybe)(Data_Map_Internal.lookup(Model.ordSliceId)(v.child)(slices))(function (v1) {
+                  return Control_Bind.bind(Data_Maybe.bindMaybe)(Data_Map_Internal.lookup(Model.ordSliceId)(v.parent)(slices))(function (v2) {
+                      var mkedge = function (v3) {
+                          var offp = findPitchIndex(new Model.Inner(v3.parentNote))(v2.slice.notes);
+                          var offc = findPitchIndex(new Model.Inner(v3.childNote))(v1.slice.notes);
+                          var edgeSelected = CommonApp.noteIsSelected(selection)(new Model.Inner(v3.parentNote)) || CommonApp.noteIsSelected(selection)(new Model.Inner(v3.childNote));
+                          return Halogen_Svg_Elements.line([ Halogen_Svg_Attributes.x1(scalex(v2.slice.x)), Halogen_Svg_Attributes.y1(scaley(v2.depth) + offset(offp)), Halogen_Svg_Attributes.x2(scalex(v1.slice.x)), Halogen_Svg_Attributes.y2(scaley(v1.depth) + offset(offc)), Halogen_Svg_Attributes.stroke((function () {
+                              if (edgeSelected) {
+                                  return selColor;
+                              };
+                              return black;
+                          })()), Halogen_Svg_Attributes.strokeWidth(1.0) ]);
+                      };
+                      var edges = Data_Functor.map(Data_Functor.functorArray)(mkedge)(Data_Array.catMaybes(Data_Functor.map(Data_Functor.functorArray)(explToHori)(Model.getInnerNotes(v1.slice))));
+                      var bar = [ Halogen_Svg_Elements.line([ Halogen_Svg_Attributes.x1(scalex(v2.slice.x)), Halogen_Svg_Attributes.y1(scaley(v2.depth)), Halogen_Svg_Attributes.x2(scalex(v1.slice.x)), Halogen_Svg_Attributes.y2(scaley(v1.depth)), Halogen_Svg_Attributes.stroke(lightgray), Halogen_Svg_Attributes.strokeWidth(3.0), Halogen_Svg_Attributes.attr("stroke-dasharray")("10,5") ]) ];
+                      return Control_Applicative.pure(Data_Maybe.applicativeMaybe)(Halogen_Svg_Elements.g([  ])(Data_Semigroup.append(Data_Semigroup.semigroupArray)(bar)(edges)));
+                  });
+              }));
+          };
+      };
+  };
   var renderSlice = function (selection) {
       return function (v) {
           var selected = Data_Eq.eq(CommonApp.eqOuterSelection)(selection)(new CommonApp.SelSlice(v.slice.id));
-          var selectionAttr = [ cursor("pointer"), Halogen_HTML_Events.onClick(function (v1) {
+          var selectionAttr = [ cursor("pointer"), Halogen_HTML_Events.onClick(function (ev) {
+              var $78 = Web_UIEvent_MouseEvent.ctrlKey(ev);
+              if ($78) {
+                  return CommonApp.NoOp.value;
+              };
               return new CommonApp.Select((function () {
                   if (selected) {
                       return CommonApp.SelNone.value;
@@ -12684,23 +12917,27 @@ var PS = {};
           var mknode = function (text) {
               return function (xcoord) {
                   return function (ycoord) {
-                      return function (sel) {
-                          return function (drawBg) {
-                              return function (attr) {
-                                  var label = Halogen_Svg_Elements.text([ Halogen_Svg_Attributes.x(xcoord), Halogen_Svg_Attributes.y(ycoord), Halogen_Svg_Attributes.text_anchor(Halogen_Svg_Attributes.AnchorMiddle.value), Halogen_Svg_Attributes.dominant_baseline(Halogen_Svg_Attributes.BaselineMiddle.value) ])(text);
-                                  var bg = Halogen_Svg_Elements.rect([ Halogen_Svg_Attributes.x(xcoord - scalex(0.24)), Halogen_Svg_Attributes.y(ycoord - 0.5 * offset(1)), Halogen_Svg_Attributes.width(scalex(0.48)), Halogen_Svg_Attributes.height(offset(1)), Halogen_Svg_Attributes.fill((function () {
-                                      if (sel) {
-                                          return selColor;
-                                      };
+                      return function (selStatus) {
+                          return function (attr) {
+                              var label = Halogen_Svg_Elements.text([ Halogen_Svg_Attributes.x(xcoord), Halogen_Svg_Attributes.y(ycoord), Halogen_Svg_Attributes.text_anchor(Halogen_Svg_Attributes.AnchorMiddle.value), Halogen_Svg_Attributes.dominant_baseline(Halogen_Svg_Attributes.BaselineMiddle.value), Halogen_Svg_Attributes.fill((function () {
+                                  if (selStatus instanceof Selected) {
                                       return white;
-                                  })()) ]);
-                                  return Halogen_Svg_Elements.g(attr)(Data_Semigroup.append(Data_Semigroup.semigroupArray)((function () {
-                                      if (drawBg) {
-                                          return [ bg ];
-                                      };
-                                      return [  ];
-                                  })())([ label ]));
-                              };
+                                  };
+                                  return black;
+                              })()) ])(text);
+                              var bg = Halogen_Svg_Elements.rect([ Halogen_Svg_Attributes.x(xcoord - scalex(0.24)), Halogen_Svg_Attributes.y(ycoord - 0.5 * offset(1)), Halogen_Svg_Attributes.width(scalex(0.48)), Halogen_Svg_Attributes.height(offset(1)), Halogen_Svg_Attributes.fill((function () {
+                                  if (selStatus instanceof NotSelected) {
+                                      return white;
+                                  };
+                                  if (selStatus instanceof Selected) {
+                                      return selColor;
+                                  };
+                                  if (selStatus instanceof Related) {
+                                      return selColor$prime;
+                                  };
+                                  throw new Error("Failed pattern match at Render (line 118, column 15 - line 121, column 37): " + [ selStatus.constructor.name ]);
+                              })()) ]);
+                              return Halogen_Svg_Elements.g(attr)([ bg, label ]);
                           };
                       };
                   };
@@ -12714,13 +12951,28 @@ var PS = {};
           })();
           var mknote = function (i) {
               return function (v1) {
+                  var nselectedParent = (function () {
+                      if (selection instanceof CommonApp.SelNote) {
+                          return Model.explHasParent(v1.note.id)(selection.value0.expl);
+                      };
+                      return false;
+                  })();
                   var nselected = CommonApp.noteIsSelected(selection)(new Model.Inner(v1.note));
                   var nselectable = v.depth !== 0.0;
+                  var nodeselected = (function () {
+                      if (nselected) {
+                          return Selected.value;
+                      };
+                      if (nselectedParent) {
+                          return Related.value;
+                      };
+                      return NotSelected.value;
+                  })();
                   var label = [ Halogen_HTML_Core.text(Data_Show.show(SimplePitch.simplePitchShow)(v1.note.pitch)), Halogen_Svg_Elements.title([  ])([ Halogen_HTML_Core.text(v1.note.id) ]) ];
                   var clickable = nselectable || activeParent;
                   var attrsSel = [ cursor("pointer"), Halogen_HTML_Events.onClick(function (ev) {
-                      var $48 = Web_UIEvent_MouseEvent.ctrlKey(ev);
-                      if ($48) {
+                      var $92 = Web_UIEvent_MouseEvent.ctrlKey(ev);
+                      if ($92) {
                           if (activeParent) {
                               return CommonApp.addParentToNote(selection)(v.slice.id)(v1.note);
                           };
@@ -12740,7 +12992,7 @@ var PS = {};
                       };
                       return CommonApp.NoOp.value;
                   }) ];
-                  return mknode(label)(scalex(v.slice.x))(scaley(v.depth) + offset(i))(nselected)(nselectable)((function () {
+                  return mknode(label)(scalex(v.slice.x))(scaley(v.depth) + offset(i))(nodeselected)((function () {
                       if (clickable) {
                           return attrsSel;
                       };
@@ -12754,7 +13006,7 @@ var PS = {};
                       return selectionAttr;
                   };
                   return [  ];
-              })())(Data_Semigroup.append(Data_Semigroup.semigroupArray)([ Halogen_Svg_Elements.rect([ Halogen_Svg_Attributes.x(scalex(v.slice.x) - scalex(0.24)), Halogen_Svg_Attributes.y(scaley(v.depth) - scaley(0.24)), Halogen_Svg_Attributes.width(scalex(0.48)), Halogen_Svg_Attributes.height(offset(Data_Array.length(v.slice.notes.value0) - 1 | 0) + scaley(0.48)), Halogen_Svg_Attributes.fill((function () {
+              })())(Data_Semigroup.append(Data_Semigroup.semigroupArray)([ Halogen_Svg_Elements.rect([ Halogen_Svg_Attributes.x(scalex(v.slice.x) - scalex(0.24)), Halogen_Svg_Attributes.y(scaley(v.depth) - scaley(0.24)), Halogen_Svg_Attributes.width(scalex(0.48)), Halogen_Svg_Attributes.height(offset(Data_Array.length(v.slice.notes.value0) - 1 | 0) + scaley(0.48)), Halogen_Svg_Attributes.fill(white), Halogen_Svg_Attributes.stroke((function () {
                   if (selected) {
                       return selColor;
                   };
@@ -12772,10 +13024,9 @@ var PS = {};
               return "id";
           }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
               return "pitch";
-          }))(Data_Show.showRecordFieldsNil)(SimplePitch.simplePitchShow))(Data_Show.showString))))(Model.showNoteExplanation)))))(v.slice.notes)) ])(scalex(v.slice.x))(scaley(v.depth))(false)(true)([  ]);
+          }))(Data_Show.showRecordFieldsNil)(SimplePitch.simplePitchShow))(Data_Show.showString))))(Model.showNoteExplanation)))))(v.slice.notes)) ])(scalex(v.slice.x))(scaley(v.depth))(NotSelected.value)([  ]);
       };
   };
-  var black = Data_Maybe.Just.create(new Halogen_Svg_Attributes.RGB(0, 0, 0));
   var renderTrans = function (selection) {
       return function (slices) {
           return function (v) {
@@ -12788,20 +13039,6 @@ var PS = {};
                       return new CommonApp.SelTrans(v.id);
                   })());
               }) ];
-              var findPitchIndex = function (v1) {
-                  return function (v2) {
-                      if (v1 instanceof Model.Inner && v2 instanceof Model.Inner) {
-                          return Data_Maybe.fromMaybe(0)(Data_Array.findIndex(function (n) {
-                              return Data_Eq.eq(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
-                                  return "pitch";
-                              }))(SimplePitch.simplePitchEq))()(new Data_Symbol.IsSymbol(function () {
-                                  return "id";
-                              }))(Data_Eq.eqString)))(n.note)(v1.value0);
-                          })(v2.value0));
-                      };
-                      return 0;
-                  };
-              };
               return Data_Maybe.fromMaybe(Halogen_HTML_Core.text(""))(Control_Bind.bind(Data_Maybe.bindMaybe)(Data_Map_Internal.lookup(Model.ordSliceId)(v.left)(slices))(function (v1) {
                   return Control_Bind.bind(Data_Maybe.bindMaybe)(Data_Map_Internal.lookup(Model.ordSliceId)(v.right)(slices))(function (v2) {
                       var selectable = v1.depth === 0.0 && v2.depth === 0.0;
@@ -12840,7 +13077,7 @@ var PS = {};
               var width = scalex(graph.maxx + 2.0);
               var svgTranss = Data_Functor.map(Data_Functor.functorArray)(renderTrans(selection)(graph.slices))(Data_Array.fromFoldable(Data_List_Types.foldableList)(Data_Map_Internal.values(graph.transitions)));
               var svgSlices = Data_Functor.map(Data_Functor.functorArray)(renderSlice(selection))(Data_Array.fromFoldable(Data_List_Types.foldableList)(Data_Map_Internal.values(graph.slices)));
-              var svgHoris = Data_Functor.map(Data_Functor.functorArray)(renderHori(graph.slices))(Data_Array.fromFoldable(Data_List_Types.foldableList)(graph.horis));
+              var svgHoris = Data_Functor.map(Data_Functor.functorArray)(renderHori(selection)(graph.slices))(Data_Array.fromFoldable(Data_List_Types.foldableList)(graph.horis));
               var svgAxis = Data_Array.mapWithIndex(renderTime)(piece);
               var height = scaley(graph.maxd + 4.0);
               return Halogen_HTML_Elements.div([ Halogen_HTML_Properties.style("overflow-x: scroll;") ])([ Halogen_Svg_Elements.svg([ Halogen_Svg_Attributes.width(width), Halogen_Svg_Attributes.height(height), Halogen_Svg_Attributes.viewBox(-scalex(1.0))(-scaley(1.0))(width)(height) ])(Data_Semigroup.append(Data_Semigroup.semigroupArray)(svgTranss)(Data_Semigroup.append(Data_Semigroup.semigroupArray)(svgHoris)(Data_Semigroup.append(Data_Semigroup.semigroupArray)(svgSlices)(svgAxis)))) ]);
@@ -13424,6 +13661,7 @@ var PS = {};
   var Control_Apply = $PS["Control.Apply"];
   var Control_Bind = $PS["Control.Bind"];
   var Control_Monad_State_Class = $PS["Control.Monad.State.Class"];
+  var Data_Boolean = $PS["Data.Boolean"];
   var Data_Either = $PS["Data.Either"];
   var Data_Foldable = $PS["Data.Foldable"];
   var Data_Function = $PS["Data.Function"];
@@ -13458,40 +13696,47 @@ var PS = {};
       return function (dictMonadEffect) {
           return function (selector) {
               return function (action) {
-                  return Control_Bind.bind((dictMonadEffect.Monad0()).Bind1())(Control_Monad_State_Class.get(dictMonadState))(function (st) {
-                      var modelAndSel = Control_Bind.bind(Data_Maybe.bindMaybe)(selector(st.selected))(function (sel) {
-                          return Control_Bind.bind(Data_Maybe.bindMaybe)(st.model)(function (model) {
-                              return Control_Applicative.pure(Data_Maybe.applicativeMaybe)({
-                                  sel: sel,
-                                  model: model
+                  return function (clearSel) {
+                      return Control_Bind.bind((dictMonadEffect.Monad0()).Bind1())(Control_Monad_State_Class.get(dictMonadState))(function (st) {
+                          var modelAndSel = Control_Bind.bind(Data_Maybe.bindMaybe)(selector(st.selected))(function (sel) {
+                              return Control_Bind.bind(Data_Maybe.bindMaybe)(st.model)(function (model) {
+                                  return Control_Applicative.pure(Data_Maybe.applicativeMaybe)({
+                                      sel: sel,
+                                      model: model
+                                  });
                               });
                           });
-                      });
-                      if (modelAndSel instanceof Data_Maybe.Nothing) {
-                          return Control_Applicative.pure((dictMonadEffect.Monad0()).Applicative0())(Data_Unit.unit);
-                      };
-                      if (modelAndSel instanceof Data_Maybe.Just) {
-                          var v = action(modelAndSel.value0.sel)(modelAndSel.value0.model);
-                          if (v instanceof Data_Either.Left) {
-                              return Effect_Class_Console.log(dictMonadEffect)(v.value0);
+                          if (modelAndSel instanceof Data_Maybe.Nothing) {
+                              return Control_Applicative.pure((dictMonadEffect.Monad0()).Applicative0())(Data_Unit.unit);
                           };
-                          if (v instanceof Data_Either.Right) {
-                              return Control_Monad_State_Class.put(dictMonadState)((function () {
-                                  var $22 = {};
-                                  for (var $23 in st) {
-                                      if ({}.hasOwnProperty.call(st, $23)) {
-                                          $22[$23] = st[$23];
+                          if (modelAndSel instanceof Data_Maybe.Just) {
+                              var v = action(modelAndSel.value0.sel)(modelAndSel.value0.model);
+                              if (v instanceof Data_Either.Left) {
+                                  return Effect_Class_Console.log(dictMonadEffect)(v.value0);
+                              };
+                              if (v instanceof Data_Either.Right) {
+                                  return Control_Monad_State_Class.put(dictMonadState)((function () {
+                                      var $28 = {};
+                                      for (var $29 in st) {
+                                          if ({}.hasOwnProperty.call(st, $29)) {
+                                              $28[$29] = st[$29];
+                                          };
                                       };
-                                  };
-                                  $22.model = new Data_Maybe.Just(v.value0);
-                                  $22.selected = CommonApp.SelNone.value;
-                                  return $22;
-                              })());
+                                      $28.model = new Data_Maybe.Just(v.value0);
+                                      $28.selected = (function () {
+                                          if (clearSel) {
+                                              return CommonApp.SelNone.value;
+                                          };
+                                          return st.selected;
+                                      })();
+                                      return $28;
+                                  })());
+                              };
+                              throw new Error("Failed pattern match at Main (line 61, column 28 - line 63, column 111): " + [ v.constructor.name ]);
                           };
-                          throw new Error("Failed pattern match at Main (line 60, column 28 - line 62, column 75): " + [ v.constructor.name ]);
-                      };
-                      throw new Error("Failed pattern match at Main (line 58, column 3 - line 62, column 75): " + [ modelAndSel.constructor.name ]);
-                  });
+                          throw new Error("Failed pattern match at Main (line 59, column 3 - line 63, column 111): " + [ modelAndSel.constructor.name ]);
+                      });
+                  };
               };
           };
       };
@@ -13508,6 +13753,28 @@ var PS = {};
       });
   };
   var handleAction = function (dictMonadEffect) {
+      var updateSelection = function (v) {
+          return function (sel) {
+              var v1 = function (v2) {
+                  if (Data_Boolean.otherwise) {
+                      return sel;
+                  };
+                  throw new Error("Failed pattern match at Main (line 73, column 1 - line 73, column 88): " + [ v.constructor.name, sel.constructor.name ]);
+              };
+              if (sel instanceof CommonApp.SelNote) {
+                  var $45 = sel.value0.note.id === v.noteId;
+                  if ($45) {
+                      return CommonApp.SelNote.create({
+                          note: sel.value0.note,
+                          expl: v.expl,
+                          parents: sel.value0.parents
+                      });
+                  };
+                  return v1(true);
+              };
+              return v1(true);
+          };
+      };
       var pr = function (ev) {
           return Effect_Class.liftEffect(Halogen_Query_HalogenM.monadEffectHalogenM(dictMonadEffect))(Web_Event_Event.preventDefault(Web_UIEvent_KeyboardEvent.toEvent(ev)));
       };
@@ -13519,9 +13786,9 @@ var PS = {};
               return Control_Bind.bind(Halogen_Query_HalogenM.bindHalogenM)(Effect_Class.liftEffect(Halogen_Query_HalogenM.monadEffectHalogenM(dictMonadEffect))(Control_Bind.bindFlipped(Effect.bindEffect)(Web_HTML_Window.document)(Web_HTML.window)))(function (doc) {
                   return Halogen_Query_HalogenM["subscribe'"](function (sid) {
                       return Halogen_Query_Event.eventListener(Web_UIEvent_KeyboardEvent_EventTypes.keyup)(Web_HTML_HTMLDocument.toEventTarget(doc))((function () {
-                          var $52 = Data_Functor.map(Data_Maybe.functorMaybe)(CommonApp.HandleKey.create);
-                          return function ($53) {
-                              return $52(Web_UIEvent_KeyboardEvent.fromEvent($53));
+                          var $72 = Data_Functor.map(Data_Maybe.functorMaybe)(CommonApp.HandleKey.create);
+                          return function ($73) {
+                              return $72(Web_UIEvent_KeyboardEvent.fromEvent($73));
                           };
                       })());
                   });
@@ -13555,40 +13822,40 @@ var PS = {};
           };
           if (v instanceof CommonApp.Select) {
               return Control_Monad_State_Class.modify_(Halogen_Query_HalogenM.monadStateHalogenM)(function (st) {
-                  var $35 = {};
-                  for (var $36 in st) {
-                      if ({}.hasOwnProperty.call(st, $36)) {
-                          $35[$36] = st[$36];
+                  var $52 = {};
+                  for (var $53 in st) {
+                      if ({}.hasOwnProperty.call(st, $53)) {
+                          $52[$53] = st[$53];
                       };
                   };
-                  $35.selected = v.value0;
-                  return $35;
+                  $52.selected = v.value0;
+                  return $52;
               });
           };
           if (v instanceof CommonApp.LoadPiece) {
               return Control_Monad_State_Class.modify_(Halogen_Query_HalogenM.monadStateHalogenM)(function (st) {
-                  var $39 = {};
-                  for (var $40 in st) {
-                      if ({}.hasOwnProperty.call(st, $40)) {
-                          $39[$40] = st[$40];
+                  var $56 = {};
+                  for (var $57 in st) {
+                      if ({}.hasOwnProperty.call(st, $57)) {
+                          $56[$57] = st[$57];
                       };
                   };
-                  $39.model = Data_Maybe.Just.create(Model.loadPiece(v.value0));
-                  $39.selected = CommonApp.SelNone.value;
-                  return $39;
+                  $56.model = Data_Maybe.Just.create(Model.loadPiece(v.value0));
+                  $56.selected = CommonApp.SelNone.value;
+                  return $56;
               });
           };
           if (v instanceof CommonApp.MergeAtSelected) {
-              return tryModelAction(Halogen_Query_HalogenM.monadStateHalogenM)(Halogen_Query_HalogenM.monadEffectHalogenM(dictMonadEffect))(CommonApp.getSelSlice)(Model.mergeAtSlice);
+              return tryModelAction(Halogen_Query_HalogenM.monadStateHalogenM)(Halogen_Query_HalogenM.monadEffectHalogenM(dictMonadEffect))(CommonApp.getSelSlice)(Model.mergeAtSlice)(true);
           };
           if (v instanceof CommonApp.VertAtSelected) {
-              return tryModelAction(Halogen_Query_HalogenM.monadStateHalogenM)(Halogen_Query_HalogenM.monadEffectHalogenM(dictMonadEffect))(CommonApp.getSelTrans)(Model.vertAtMid);
+              return tryModelAction(Halogen_Query_HalogenM.monadStateHalogenM)(Halogen_Query_HalogenM.monadEffectHalogenM(dictMonadEffect))(CommonApp.getSelTrans)(Model.vertAtMid)(true);
           };
           if (v instanceof CommonApp.UnMergeAtSelected) {
-              return tryModelAction(Halogen_Query_HalogenM.monadStateHalogenM)(Halogen_Query_HalogenM.monadEffectHalogenM(dictMonadEffect))(CommonApp.getSelTrans)(Model.undoMergeAtTrans);
+              return tryModelAction(Halogen_Query_HalogenM.monadStateHalogenM)(Halogen_Query_HalogenM.monadEffectHalogenM(dictMonadEffect))(CommonApp.getSelTrans)(Model.undoMergeAtTrans)(true);
           };
           if (v instanceof CommonApp.UnVertAtSelected) {
-              return tryModelAction(Halogen_Query_HalogenM.monadStateHalogenM)(Halogen_Query_HalogenM.monadEffectHalogenM(dictMonadEffect))(CommonApp.getSelSlice)(Model.undoVertAtSlice);
+              return tryModelAction(Halogen_Query_HalogenM.monadStateHalogenM)(Halogen_Query_HalogenM.monadEffectHalogenM(dictMonadEffect))(CommonApp.getSelSlice)(Model.undoVertAtSlice)(true);
           };
           if (v instanceof CommonApp.CombineAny) {
               return combineAny(dictMonadEffect);
@@ -13597,11 +13864,22 @@ var PS = {};
               return removeAny(dictMonadEffect);
           };
           if (v instanceof CommonApp.SetNoteExplanation) {
-              return tryModelAction(Halogen_Query_HalogenM.monadStateHalogenM)(Halogen_Query_HalogenM.monadEffectHalogenM(dictMonadEffect))(Data_Function["const"](new Data_Maybe.Just(v.value0)))(function (v1) {
+              return Control_Bind.discard(Control_Bind.discardUnit)(Halogen_Query_HalogenM.bindHalogenM)(tryModelAction(Halogen_Query_HalogenM.monadStateHalogenM)(Halogen_Query_HalogenM.monadEffectHalogenM(dictMonadEffect))(Data_Function["const"](new Data_Maybe.Just(v.value0)))(function (v1) {
                   return Model.noteSetExplanation(v1.noteId)(v1.expl);
+              })(false))(function () {
+                  return Control_Monad_State_Class.modify_(Halogen_Query_HalogenM.monadStateHalogenM)(function (st) {
+                      var $63 = {};
+                      for (var $64 in st) {
+                          if ({}.hasOwnProperty.call(st, $64)) {
+                              $63[$64] = st[$64];
+                          };
+                      };
+                      $63.selected = updateSelection(v.value0)(st.selected);
+                      return $63;
+                  });
               });
           };
-          throw new Error("Failed pattern match at Main (line 81, column 16 - line 110, column 60): " + [ v.constructor.name ]);
+          throw new Error("Failed pattern match at Main (line 82, column 16 - line 113, column 70): " + [ v.constructor.name ]);
       };
   };
   var combineAny = function (dictMonadEffect) {
@@ -13631,11 +13909,11 @@ var PS = {};
                   var graph = Unfold.evalGraph(st.model.value0.reduction);
                   return Halogen_HTML_Elements.div_([ Halogen_HTML_Elements.p_([ Render.renderNoteExplanation(graph)(st.selected) ]), Render.renderReduction(st.model.value0.piece)(graph)(st.selected) ]);
               };
-              throw new Error("Failed pattern match at Main (line 131, column 9 - line 140, column 16): " + [ st.model.constructor.name ]);
-          })(), Halogen_HTML_Elements.p_([ Halogen_HTML_Core.text("Selection: "), Halogen_HTML_Core.text(Data_Show.show(CommonApp.showOuterSelection)(st.selected)) ]), Halogen_HTML_Elements.pre_([ Halogen_HTML_Core.text(Data_Maybe.maybe("No Piece Loaded")(function ($54) {
+              throw new Error("Failed pattern match at Main (line 139, column 9 - line 148, column 16): " + [ st.model.constructor.name ]);
+          })(), Halogen_HTML_Elements.p_([ Halogen_HTML_Core.text("Selection: "), Halogen_HTML_Core.text(Data_Show.show(CommonApp.showOuterSelection)(st.selected)) ]), Halogen_HTML_Elements.pre_([ Halogen_HTML_Core.text(Data_Maybe.maybe("No Piece Loaded")(function ($74) {
               return Model.showReduction((function (v) {
                   return v.reduction;
-              })($54));
+              })($74));
           })(st.model)) ]) ]);
       };
       var initialState = function (v) {
