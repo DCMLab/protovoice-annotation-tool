@@ -124,6 +124,14 @@ setHoriExplParent parent = case _ of
   HoriExpl _ -> Just $ HoriExpl parent
   _ -> Nothing
 
+explHasParent :: String -> NoteExplanation -> Boolean
+explHasParent id = case _ of
+  NoExpl -> false
+  HoriExpl n -> n.id == id
+  RightExpl { leftParent } -> leftParent.id == id
+  LeftExpl { rightParent } -> rightParent.id == id
+  DoubleExpl { leftParent, rightParent } -> leftParent.id == id || rightParent.id == id
+
 type Note
   = { pitch :: SimplePitch, id :: String }
 

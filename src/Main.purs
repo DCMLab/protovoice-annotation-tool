@@ -47,8 +47,9 @@ tryModelAction ::
   (MonadEffect m) =>
   (Selection -> Maybe a) ->
   (a -> Model -> Either String Model) ->
+  Boolean ->
   m Unit
-tryModelAction selector action = do
+tryModelAction selector action clearSel = do
   st <- H.get
   let
     modelAndSel = do
@@ -59,7 +60,7 @@ tryModelAction selector action = do
     Nothing -> pure unit
     Just { sel, model } -> case action sel model of
       Left err -> log err
-      Right model' -> H.put st { model = Just model', selected = SelNone }
+      Right model' -> H.put st { model = Just model', selected = (if clearSel then SelNone else st.selected) }
 
 combineAny :: forall o m. (MonadEffect m) => H.HalogenM AppState GraphAction () o m Unit
 combineAny = do
@@ -98,18 +99,25 @@ handleAction = case _ of
     _ -> pure unit
   Select s -> H.modify_ \st -> st { selected = s }
   LoadPiece piece -> H.modify_ \st -> st { model = Just $ loadPiece piece, selected = SelNone }
-  MergeAtSelected -> tryModelAction getSelSlice mergeAtSlice
-  VertAtSelected -> tryModelAction getSelTrans vertAtMid
-  UnMergeAtSelected -> tryModelAction getSelTrans undoMergeAtTrans
-  UnVertAtSelected -> tryModelAction getSelSlice undoVertAtSlice
+  MergeAtSelected -> tryModelAction getSelSlice mergeAtSlice true
+  VertAtSelected -> tryModelAction getSelTrans vertAtMid true
+  UnMergeAtSelected -> tryModelAction getSelTrans undoMergeAtTrans true
+  UnVertAtSelected -> tryModelAction getSelSlice undoVertAtSlice true
   CombineAny -> combineAny
   RemoveAny -> removeAny
-  SetNoteExplanation ne ->
+  SetNoteExplanation ne -> do
     tryModelAction
       (const $ Just ne)
       (\{ noteId, expl } -> noteSetExplanation noteId expl)
+      false
+    H.modify_ \st -> st { selected = updateSelection ne st.selected }
   where
   pr ev = H.liftEffect $ E.preventDefault $ KE.toEvent ev
+
+  updateSelection { noteId, expl } sel
+    | SelNote selnote <- sel
+    , selnote.note.id == noteId = SelNote $ selnote { expl = expl }
+    | otherwise = sel
 
 appComponent :: forall query input output m. (MonadEffect m) => H.Component query input output m
 appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultEval { handleAction = handleAction, initialize = Just Init } }

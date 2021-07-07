@@ -3,17 +3,18 @@ module Render where
 import Prelude
 import Common (MBS)
 import CommonApp (GraphAction(..), Selection(..), addParentToNote, noteIsSelected)
-import Data.Array (elem, findIndex, fromFoldable, length, mapWithIndex)
+import Data.Array (catMaybes, elem, findIndex, fromFoldable, length, mapWithIndex)
 import Data.Int (toNumber)
 import Data.Map as M
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Ratio ((%))
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
+import Halogen.HTML.Properties as HA
 import Halogen.HTML.Properties as HP
 import Halogen.Svg.Attributes as SA
 import Halogen.Svg.Elements as SE
-import Model (Edge, Note, NoteExplanation, Reduction, SliceId, StartStop(..), Piece, getParents)
+import Model (LeftOrnament(..), RightOrnament(..), DoubleOrnament(..), Edge, Note, NoteExplanation(..), Notes, Piece, Reduction, SliceId, StartStop(..), explHasParent, getInnerNotes, getParents)
 import Unfold (Graph, GraphTransition, GraphSlice, reductionToLeftmost)
 import Web.UIEvent.MouseEvent (ctrlKey)
 
@@ -25,6 +26,15 @@ scaley y = y * 60.0
 
 offset :: Int -> Number
 offset i = toNumber i * 20.0
+
+findPitchIndex :: StartStop Note -> StartStop Notes -> Int
+findPitchIndex (Inner note) (Inner notes) =
+  fromMaybe 0
+    $ findIndex
+        (\n -> n.note == note)
+        notes
+
+findPitchIndex _ _ = 0
 
 -- custom elements and attributes
 cursor :: forall r i. String -> HH.IProp r i
@@ -59,6 +69,11 @@ black = Just $ SA.RGB 0 0 0
 lightgray :: Maybe SA.Color
 lightgray = Just $ SA.RGB 211 211 211
 
+data SelectionStatus
+  = NotSelected
+  | Selected
+  | Related
+
 renderSlice :: forall p. Selection -> GraphSlice -> HH.HTML p GraphAction
 renderSlice selection { slice: { id, notes, x, parents }, depth: d } = case notes of
   Inner inotes ->
@@ -68,12 +83,13 @@ renderSlice selection { slice: { id, notes, x, parents }, depth: d } = case note
             , SA.y $ scaley d - scaley 0.24
             , SA.width $ scalex 0.48
             , SA.height $ offset (length inotes - 1) + scaley 0.48
-            , SA.fill $ if selected then selColor else if activeParent then parentColor else white
+            , SA.fill white
+            , SA.stroke $ if selected then selColor else if activeParent then parentColor else white
             ]
         ]
           <> mapWithIndex mknote inotes
       )
-  startstop -> mknode [ HH.text $ show startstop ] (scalex x) (scaley d) false true []
+  startstop -> mknode [ HH.text $ show startstop ] (scalex x) (scaley d) NotSelected []
   where
   selected = selection == SelSlice id
 
@@ -85,13 +101,12 @@ renderSlice selection { slice: { id, notes, x, parents }, depth: d } = case note
 
   selectionAttr =
     [ cursor "pointer"
-    , HE.onClick $ \_ -> Select (if selected then SelNone else SelSlice id)
+    , HE.onClick $ \ev -> if ctrlKey ev then NoOp else Select (if selected then SelNone else SelSlice id)
     ]
 
-  mknode text xcoord ycoord sel drawBg attr =
+  mknode text xcoord ycoord selStatus attr =
     SE.g attr
-      $ (if drawBg then [ bg ] else [])
-      <> [ label ]
+      $ [ bg, label ]
     where
     bg =
       SE.rect
@@ -99,7 +114,11 @@ renderSlice selection { slice: { id, notes, x, parents }, depth: d } = case note
         , SA.y $ ycoord - (0.5 * offset 1)
         , SA.width $ scalex 0.48
         , SA.height $ offset 1
-        , SA.fill $ if sel then selColor else white
+        , SA.fill
+            $ case selStatus of
+                NotSelected -> white
+                Selected -> selColor
+                Related -> selColor'
         ]
 
     label =
@@ -108,6 +127,10 @@ renderSlice selection { slice: { id, notes, x, parents }, depth: d } = case note
         , SA.y ycoord
         , SA.text_anchor SA.AnchorMiddle
         , SA.dominant_baseline SA.BaselineMiddle
+        , SA.fill
+            $ case selStatus of
+                Selected -> white
+                _ -> black
         ]
         text
 
@@ -117,11 +140,16 @@ renderSlice selection { slice: { id, notes, x, parents }, depth: d } = case note
       label
       (scalex x)
       (scaley d + offset i)
-      nselected
-      nselectable
+      nodeselected
       (if clickable then attrsSel else [])
     where
     nselected = noteIsSelected selection (Inner note)
+
+    nselectedParent = case selection of
+      SelNote { expl: selExpl } -> explHasParent note.id selExpl
+      _ -> false
+
+    nodeselected = if nselected then Selected else if nselectedParent then Related else NotSelected
 
     nselectable = d /= 0.0
 
@@ -195,24 +223,17 @@ renderTrans selection slices { id, left, right, edges } =
     , HE.onClick $ \_ -> Select (if transSelected then SelNone else SelTrans id)
     ]
 
-  findPitchIndex (Inner note) (Inner notes) =
-    fromMaybe 0
-      $ findIndex
-          (\n -> n.note == note)
-          notes
-
-  findPitchIndex _ _ = 0
-
 renderHori ::
   forall p.
+  Selection ->
   M.Map SliceId GraphSlice ->
   { child :: SliceId, parent :: SliceId } ->
   HH.HTML p GraphAction
-renderHori slices { child, parent } =
+renderHori selection slices { child, parent } =
   fromMaybe (HH.text "")
     $ do
-        { depth: yc, slice: { x: xc, notes: nc } } <- M.lookup child slices
-        { depth: yp, slice: { x: xp, notes: np } } <- M.lookup parent slices
+        { depth: yc, slice: slicec@{ x: xc, notes: notesc } } <- M.lookup child slices
+        { depth: yp, slice: { x: xp, notes: notesp } } <- M.lookup parent slices
         let
           bar =
             [ SE.line
@@ -225,7 +246,30 @@ renderHori slices { child, parent } =
                   , SA.attr (HH.AttrName "stroke-dasharray") "10,5"
                   ]
             ]
-        pure $ SE.g [] bar
+
+          mkedge :: { parentNote :: Note, childNote :: Note } -> HH.HTML p GraphAction
+          mkedge { parentNote, childNote } =
+            SE.line
+              [ SA.x1 $ scalex xp
+              , SA.y1 $ scaley yp + offset offp
+              , SA.x2 $ scalex xc
+              , SA.y2 $ scaley yc + offset offc
+              , SA.stroke if edgeSelected then selColor else black
+              , SA.strokeWidth 1.0
+              ]
+            where
+            offp = findPitchIndex (Inner parentNote) notesp
+
+            offc = findPitchIndex (Inner childNote) notesc
+
+            edgeSelected = noteIsSelected selection (Inner parentNote) || noteIsSelected selection (Inner childNote)
+
+          edges = map mkedge $ catMaybes $ map explToHori $ getInnerNotes slicec
+        pure $ SE.g [] $ bar <> edges
+  where
+  explToHori note = case note.expl of
+    HoriExpl parentNote -> Just { childNote: note.note, parentNote }
+    _ -> Nothing
 
 renderTime :: forall r p. Int -> { time :: MBS | r } -> HH.HTML p GraphAction
 renderTime i { time }
@@ -261,7 +305,7 @@ renderReduction piece graph selection =
 
   svgTranss = map (renderTrans selection slices) $ fromFoldable $ M.values transitions
 
-  svgHoris = map (renderHori slices) $ fromFoldable horis
+  svgHoris = map (renderHori selection slices) $ fromFoldable horis
 
   svgAxis = mapWithIndex renderTime piece
 
@@ -270,7 +314,95 @@ renderLeftmost red = HH.ol_ $ map (\step -> HH.li_ [ HH.text $ show step ]) step
   where
   steps = reductionToLeftmost red
 
-renderNoteExplanation :: forall p. Graph -> Selection -> HH.HTML p GraphAction
-renderNoteExplanation graph (SelNote { note, parents }) = HH.text $ show note.pitch <> " (" <> note.id <> ")"
+gridDiv :: forall p. String -> Array (HH.HTML p GraphAction) -> HH.HTML p GraphAction
+gridDiv classes = HH.div [ HA.class_ $ HH.ClassName classes ]
 
-renderNoteExplanation _ _ = HH.text "No note selected."
+mkOption :: forall o p. (Maybe o -> GraphAction) -> { k :: Maybe o, v :: String, s :: Boolean } -> HH.HTML p GraphAction
+mkOption updateAction { k, v, s } = HH.option [ HA.value v, HA.selected s, HE.onClick \_ -> updateAction k ] [ HH.text v ]
+
+mkSelect :: forall o p. Show o => Eq o => (Maybe o -> GraphAction) -> Maybe o -> Array o -> HH.HTML p GraphAction
+mkSelect updateAction orn opts = HH.select_ options
+  where
+  options = mkOption updateAction <$> [ { k: Nothing, v: "Nothing", s: false } ] <> map (\o -> { k: Just o, v: show o, s: Just o == orn }) opts
+
+doubleOrnaments :: Array DoubleOrnament
+doubleOrnaments =
+  [ RootNote
+  , FullNeighbor
+  , FullRepeat
+  , LeftRepeatOfRight
+  , RightRepeatOfLeft
+  , PassingMid
+  , PassingLeft
+  , PassingRight
+  ]
+
+renderNoteExplanation :: forall p. Graph -> Selection -> HH.HTML p GraphAction
+renderNoteExplanation graph sel =
+  HH.div
+    [ HA.style "height:30px;", HA.class_ $ HH.ClassName "pure-g" ] case sel of
+    SelNote { note, parents, expl } ->
+      [ gridDiv "pure-u-1-4" [ HH.text $ show note.pitch <> " (" <> note.id <> ") " ] ]
+        <> case expl of
+            NoExpl -> [ gridDiv "pure-u-1-4" [ HH.text "(no parents)" ] ]
+            HoriExpl n ->
+              [ gridDiv "pure-u-1-4"
+                  [ HH.text $ "parent: " <> show n.pitch <> " (" <> n.id <> ")"
+                  , HH.button [ HE.onClick $ \_ -> SetNoteExplanation { noteId: note.id, expl: NoExpl } ] [ HH.text "x" ]
+                  ]
+              ]
+            LeftExpl lxpl@{ orn, rightParent } ->
+              [ gridDiv "pure-u-1-4" []
+              , gridDiv "pure-u-1-4"
+                  [ mkSelect (\orn' -> SetNoteExplanation { noteId: note.id, expl: LeftExpl lxpl { orn = orn' } })
+                      orn
+                      [ LeftRepeat, LeftNeighbor ]
+                  ]
+              , gridDiv "pure-u-1-4"
+                  [ HH.text $ "right parent: " <> show rightParent.pitch <> " (" <> rightParent.id <> ")"
+                  , HH.button [ HE.onClick $ \_ -> SetNoteExplanation { noteId: note.id, expl: NoExpl } ] [ HH.text "x" ]
+                  ]
+              ]
+            RightExpl rxpl@{ orn, leftParent } ->
+              [ gridDiv "pure-u-1-4"
+                  [ HH.text $ "left parent: " <> show leftParent.pitch <> " (" <> leftParent.id <> ")"
+                  , HH.button [ HE.onClick $ \_ -> SetNoteExplanation { noteId: note.id, expl: NoExpl } ] [ HH.text "x" ]
+                  ]
+              , gridDiv "pure-u-1-4"
+                  [ mkSelect (\orn' -> SetNoteExplanation { noteId: note.id, expl: RightExpl rxpl { orn = orn' } })
+                      orn
+                      [ RightRepeat, RightNeighbor ]
+                  ]
+              ]
+            DoubleExpl dxpl@{ orn, rightParent, leftParent } ->
+              [ gridDiv "pure-u-1-4"
+                  [ HH.text $ "left parent: " <> show leftParent.pitch <> " (" <> leftParent.id <> ")"
+                  , HH.button
+                      [ HE.onClick
+                          $ \_ ->
+                              SetNoteExplanation
+                                { noteId: note.id
+                                , expl: LeftExpl { orn: Nothing, rightParent }
+                                }
+                      ]
+                      [ HH.text "x" ]
+                  ]
+              , gridDiv "pure-u-1-4"
+                  [ mkSelect (\orn' -> SetNoteExplanation { noteId: note.id, expl: DoubleExpl dxpl { orn = orn' } })
+                      orn
+                      doubleOrnaments
+                  ]
+              , gridDiv "pure-u-1-4"
+                  [ HH.text $ "right parent: " <> show rightParent.pitch <> " (" <> rightParent.id <> ")"
+                  , HH.button
+                      [ HE.onClick
+                          $ \_ ->
+                              SetNoteExplanation
+                                { noteId: note.id
+                                , expl: RightExpl { orn: Nothing, leftParent }
+                                }
+                      ]
+                      [ HH.text "x" ]
+                  ]
+              ]
+    _ -> [ gridDiv "pure-u-1" [ HH.text "No note selected." ] ]
