@@ -1,4 +1,4 @@
-module Unfold where
+module Folding where
 
 import Prelude
 import Control.Monad.State as ST

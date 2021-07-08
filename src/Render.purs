@@ -8,6 +8,7 @@ import Data.Int (toNumber)
 import Data.Map as M
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Ratio ((%))
+import Folding (Graph, GraphTransition, GraphSlice, reductionToLeftmost)
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HA
@@ -15,7 +16,7 @@ import Halogen.HTML.Properties as HP
 import Halogen.Svg.Attributes as SA
 import Halogen.Svg.Elements as SE
 import Model (LeftOrnament(..), RightOrnament(..), DoubleOrnament(..), Edge, Note, NoteExplanation(..), Notes, Piece, Reduction, SliceId, StartStop(..), explHasParent, getInnerNotes, getParents)
-import Unfold (Graph, GraphTransition, GraphSlice, reductionToLeftmost)
+import Validation (EdgeStatus(..), NoteStatus(..), SliceStatus(..), Validation)
 import Web.UIEvent.MouseEvent (ctrlKey)
 
 scalex :: Number -> Number
@@ -58,6 +59,12 @@ selColor' = Just $ SA.RGB 135 206 250
 parentColor :: Maybe SA.Color
 parentColor = selColor'
 
+warnColor :: Maybe SA.Color
+warnColor = Just $ SA.RGB 255 165 0
+
+errColor :: Maybe SA.Color
+errColor = Just $ SA.RGB 255 0 0
+
 -- noteSelColor :: SA.Color
 -- noteSelColor = SA.RGB 255 0 0
 white :: Maybe SA.Color
@@ -74,8 +81,8 @@ data SelectionStatus
   | Selected
   | Related
 
-renderSlice :: forall p. Selection -> GraphSlice -> HH.HTML p GraphAction
-renderSlice selection { slice: { id, notes, x, parents }, depth: d } = case notes of
+renderSlice :: forall p. Selection -> Validation -> GraphSlice -> HH.HTML p GraphAction
+renderSlice selection validation { slice: { id, notes, x, parents }, depth: d } = case notes of
   Inner inotes ->
     SE.g (if selectable then selectionAttr else [])
       ( [ SE.rect
@@ -84,18 +91,20 @@ renderSlice selection { slice: { id, notes, x, parents }, depth: d } = case note
             , SA.width $ scalex 0.48
             , SA.height $ offset (length inotes - 1) + scaley 0.48
             , SA.fill white
-            , SA.stroke $ if selected then selColor else if activeParent then parentColor else white
+            , SA.stroke $ if selected then selColor else if activeParent then parentColor else if sliceInvalid then errColor else white
             ]
         ]
           <> mapWithIndex mknote inotes
       )
-  startstop -> mknode [ HH.text $ show startstop ] (scalex x) (scaley d) NotSelected []
+  startstop -> mknode [ HH.text $ show startstop ] (scalex x) (scaley d) NotSelected NSOk []
   where
   selected = selection == SelSlice id
 
   activeParent = case selection of
     SelNote { parents: noteParents } -> elem id $ getParents noteParents
     _ -> false
+
+  sliceInvalid = M.lookup id validation.slices == Just SSInvalidReduction
 
   selectable = d == 0.0
 
@@ -104,7 +113,7 @@ renderSlice selection { slice: { id, notes, x, parents }, depth: d } = case note
     , HE.onClick $ \ev -> if ctrlKey ev then NoOp else Select (if selected then SelNone else SelSlice id)
     ]
 
-  mknode text xcoord ycoord selStatus attr =
+  mknode text xcoord ycoord selStatus valid attr =
     SE.g attr
       $ [ bg, label ]
     where
@@ -127,10 +136,12 @@ renderSlice selection { slice: { id, notes, x, parents }, depth: d } = case note
         , SA.y ycoord
         , SA.text_anchor SA.AnchorMiddle
         , SA.dominant_baseline SA.BaselineMiddle
-        , SA.fill
-            $ case selStatus of
-                Selected -> white
-                _ -> black
+        , SA.fill case valid of
+            NSOk -> lightgray
+            NSNoExpl -> case selStatus of
+              Selected -> white
+              _ -> black
+            NSInvalidExplanation -> warnColor
         ]
         text
 
@@ -141,6 +152,7 @@ renderSlice selection { slice: { id, notes, x, parents }, depth: d } = case note
       (scalex x)
       (scaley d + offset i)
       nodeselected
+      (fromMaybe NSOk $ M.lookup note.id validation.notes)
       (if clickable then attrsSel else [])
     where
     nselected = noteIsSelected selection (Inner note)
@@ -175,8 +187,8 @@ renderSlice selection { slice: { id, notes, x, parents }, depth: d } = case note
                 NoOp
       ]
 
-renderTrans :: forall p. Selection -> M.Map SliceId GraphSlice -> GraphTransition -> HH.HTML p GraphAction
-renderTrans selection slices { id, left, right, edges } =
+renderTrans :: forall p. Selection -> Validation -> M.Map SliceId GraphSlice -> GraphTransition -> HH.HTML p GraphAction
+renderTrans selection validation slices { id, left, right, edges } =
   fromMaybe (HH.text "")
     $ do
         { depth: yl, slice: { x: xl, notes: nl } } <- M.lookup left slices
@@ -196,15 +208,23 @@ renderTrans selection slices { id, left, right, edges } =
                 <> if selectable then selectionAttr else []
             ]
 
-          mkedge :: Edge -> HH.HTML p GraphAction
-          mkedge { left: p1, right: p2 } =
+          mkedge :: Boolean -> Edge -> HH.HTML p GraphAction
+          mkedge isPassing edge@{ left: p1, right: p2 } =
             SE.line
               [ SA.x1 $ scalex xl
               , SA.y1 $ scaley yl + offset offl
               , SA.x2 $ scalex xr
               , SA.y2 $ scaley yr + offset offr
-              , SA.stroke if edgeSelected then selColor else black
+              , SA.stroke
+                  if edgeSelected then
+                    selColor
+                  else case M.lookup edge validation.edges of
+                    Just ESNotUsed -> warnColor
+                    Just ESNotStepwise -> errColor
+                    Just ESNotRepetition -> errColor
+                    _ -> black
               , SA.strokeWidth 1.0
+              , SA.attr (HH.AttrName "stroke-dasharray") (if isPassing then "6,3" else "")
               ]
             where
             offl = findPitchIndex p1 nl
@@ -213,7 +233,7 @@ renderTrans selection slices { id, left, right, edges } =
 
             edgeSelected = noteIsSelected selection p1 || noteIsSelected selection p2
 
-          edgeLines = map mkedge (edges.regular <> edges.passing) -- TODO
+          edgeLines = map (mkedge false) edges.regular <> map (mkedge true) edges.passing
         pure $ SE.g [] (bar <> edgeLines)
   where
   transSelected = selection == SelTrans id
@@ -283,8 +303,8 @@ renderTime i { time }
       [ HH.text $ show time.m <> "." <> show time.b ]
   | otherwise = HH.text ""
 
-renderReduction :: forall p. Piece -> Graph -> Selection -> HH.HTML p GraphAction
-renderReduction piece graph selection =
+renderReduction :: forall p. Piece -> Graph -> Validation -> Selection -> HH.HTML p GraphAction
+renderReduction piece graph validation selection =
   HH.div
     [ HP.style "overflow-x: scroll;" ]
     [ SE.svg
@@ -301,9 +321,9 @@ renderReduction piece graph selection =
 
   height = scaley (maxd + 4.0)
 
-  svgSlices = map (renderSlice selection) $ fromFoldable $ M.values slices
+  svgSlices = map (renderSlice selection validation) $ fromFoldable $ M.values slices
 
-  svgTranss = map (renderTrans selection slices) $ fromFoldable $ M.values transitions
+  svgTranss = map (renderTrans selection validation slices) $ fromFoldable $ M.values transitions
 
   svgHoris = map (renderHori selection slices) $ fromFoldable horis
 

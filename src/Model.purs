@@ -149,6 +149,8 @@ derive instance eqStartStop :: (Eq a) => Eq (StartStop a)
 
 derive instance functorStartStop :: Functor StartStop
 
+derive instance ordStartStop :: (Ord a) => Ord (StartStop a)
+
 instance showStartStop :: (Show a) => Show (StartStop a) where
   show Start = "⋊"
   show Stop = "⋉"
@@ -238,6 +240,9 @@ type Transition
 
 emptyTrans :: TransId -> Boolean -> Transition
 emptyTrans id is2nd = { id, is2nd, edges: emptyEdges }
+
+transEdges :: Transition -> Array Edge
+transEdges trans = trans.edges.regular <> trans.edges.passing
 
 data Op
   = Freeze

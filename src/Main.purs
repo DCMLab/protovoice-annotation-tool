@@ -9,6 +9,7 @@ import Data.Maybe (Maybe(..), maybe)
 import Effect (Effect)
 import Effect.Class (class MonadEffect)
 import Effect.Class.Console (log)
+import Folding (evalGraph)
 import Halogen as H
 import Halogen.Aff as HA
 import Halogen.HTML as HH
@@ -18,8 +19,8 @@ import Halogen.Query.Event (eventListener)
 import Halogen.VDom.Driver (runUI)
 import Model (Model, loadPiece, mergeAtSlice, noteSetExplanation, showReduction, undoMergeAtTrans, undoVertAtSlice, vertAtMid)
 import Render (renderNoteExplanation, renderReduction)
-import Unfold (evalGraph)
 import Utils (examplePieceLong)
+import Validation (validateReduction)
 import Web.DOM.ParentNode (QuerySelector(..))
 import Web.Event.Event as E
 import Web.HTML (window)
@@ -141,9 +142,12 @@ appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultE
           Just model -> do
             let
               graph = evalGraph model.reduction
+
+              valid = validateReduction model.reduction
             HH.div_
               [ HH.p_ [ renderNoteExplanation graph st.selected ]
-              , renderReduction model.piece graph st.selected
+              , renderReduction model.piece graph valid st.selected
+              , HH.text $ show valid
               --, renderLeftmost model.reduction
               ]
       , HH.p_
