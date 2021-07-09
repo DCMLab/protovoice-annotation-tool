@@ -260,6 +260,9 @@ type Segment
     , op :: Op
     }
 
+resetExpls :: Segment -> Segment
+resetExpls seg = seg { rslice { notes = map (\note -> note { expl = NoExpl }) <$> seg.rslice.notes } }
+
 type EndSegment
   = { trans :: Transition
     , op :: Op
@@ -517,7 +520,7 @@ undoMergeAtTrans transId model = case doAt matchTrans tryUnmerge model.reduction
   tryUnmerge _ seg = case seg.op of
     Split { childl, childr } ->
       Right
-        $ (setParents NoParents childl)
+        $ resetExpls (setParents NoParents childl)
         : attachSegment childr seg.rslice
         : Nil
     _ -> Left "Operation is not a split!"
@@ -535,8 +538,8 @@ undoVertAtSlice sliceId model = case doAt matchSlice tryUnvert model.reduction o
   tryUnvert _ { pl, pr } = case pl.op of
     Hori { childl, childm, childr } ->
       Right
-        $ (setParents NoParents childl)
-        : (setParents NoParents childm)
+        $ resetExpls (setParents NoParents childl)
+        : resetExpls (setParents NoParents childm)
         : attachSegment childr pr.rslice
         : Nil
     _ -> Left "Operation is not a hori!"

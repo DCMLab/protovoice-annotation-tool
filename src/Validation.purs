@@ -15,72 +15,71 @@ import Data.Traversable (for_)
 import Folding (AgendaAlg, nothingMore, walkGraph)
 import Model (Edge, Note, NoteExplanation(..), Reduction, Slice, SliceId, StartStop(..), attachSegment, getInnerNotes, isRepeatingEdge, transEdges)
 
-data NoteStatus
-  = NSOk
-  | NSNoExpl
+data NoteError
+  = NSNoExpl
   | NSInvalidExplanation
 
-data EdgeStatus
-  = ESOk
-  | ESNotUsed
+data EdgeError
+  = ESNotUsed
   | ESNotStepwise
   | ESNotRepetition
 
--- data HoriStatus
+-- data HoriError
 --   = HSOk
 --   | HSNotSamePitch
-data SliceStatus
-  = SSOk
-  | SSInvalidReduction
+data SliceError
+  = SSInvalidReduction
 
 type Validation
-  = { notes :: M.Map String NoteStatus
-    , edges :: M.Map Edge EdgeStatus
-    -- , horis :: M.Map { parent :: Note, child :: Note } HoriStatus
-    , slices :: M.Map SliceId SliceStatus
+  = { notes :: M.Map String NoteError
+    , edges :: M.Map Edge EdgeError
+    -- , horis :: M.Map { parent :: Note, child :: Note } HoriError
+    , slices :: M.Map SliceId SliceError
     }
 
 validateSlice :: Slice -> Validation -> Validation
 validateSlice slice st =
   st
     { notes = notes'
-    , slices = M.insert slice.id SSOk st.slices
     }
   where
   notes' = case slice.notes of
-    Inner slicenotes -> foldl (\mp { id, stat } -> M.insert id stat mp) st.notes $ validateNote <$> slicenotes
+    Inner slicenotes -> foldl (\mp { id, stat } -> M.insert id stat mp) st.notes $ catMaybes $ validateNote <$> slicenotes
     _ -> st.notes
 
-validateNote :: { note :: Note, expl :: NoteExplanation } -> { id :: String, stat :: NoteStatus }
-validateNote note = { id: note.note.id, stat }
+validateNote :: { note :: Note, expl :: NoteExplanation } -> Maybe { id :: String, stat :: NoteError }
+validateNote note = do
+  stat <- err
+  pure { id: note.note.id, stat }
   where
-  stat = case note.expl of
-    NoExpl -> NSNoExpl
+  err = case note.expl of
+    NoExpl -> Just NSNoExpl
     -- TODO: check ornament type correctness
-    HoriExpl parent -> if note.note.pitch == parent.pitch then NSOk else NSInvalidExplanation
+    HoriExpl parent -> if note.note.pitch == parent.pitch then Nothing else Just NSInvalidExplanation
     LeftExpl expl -> case expl.orn of
-      Nothing -> NSInvalidExplanation
-      _ -> NSOk
+      Nothing -> Just NSInvalidExplanation
+      _ -> Nothing
     RightExpl expl -> case expl.orn of
-      Nothing -> NSInvalidExplanation
-      _ -> NSOk
+      Nothing -> Just NSInvalidExplanation
+      _ -> Nothing
     DoubleExpl expl -> case expl.orn of
-      Nothing -> NSInvalidExplanation
-      _ -> NSOk
+      Nothing -> Just NSInvalidExplanation
+      _ -> Nothing
 
 validationAlg :: AgendaAlg Unit Validation
 validationAlg = { init, freezeLeft, freezeOnly, splitLeft, splitOnly, splitRight, hori }
   where
-  init start = ST.modify_ \st -> st { slices = M.insert start.id SSOk st.slices }
+  init start = pure unit
 
-  freezeLeft { seg } = ST.modify_ (validateSlice seg.rslice)
+  freezeLeft { seg } = do
+    ST.modify_ $ validateSlice seg.rslice
 
   freezeOnly = freezeLeft
 
   splitLeft { seg } { childl, childr } = do
     -- check if mandatory edges are used
     -- TODO: check for invalid (e.g. non-stepwise) edges too
-    ST.modify_ \st -> st { edges = foldl (\mp { edge, stat } -> M.insert edge stat mp) st.edges (leftChildren <> rightChildren) }
+    ST.modify_ \st -> st { edges = foldl (\mp { edge, stat } -> M.insert edge stat mp) st.edges (catMaybes $ leftChildren <> rightChildren) }
     pure $ nothingMore <$> childl : attachSegment childr seg.rslice : Nil
     where
     explainedEdges =
@@ -97,9 +96,9 @@ validationAlg = { init, freezeLeft, freezeOnly, splitLeft, splitOnly, splitRight
           )
         <$> getInnerNotes childl.rslice
 
-    leftChildren = map (\edge -> { edge, stat: if S.member edge explainedEdges.ls then ESOk else ESNotUsed }) $ transEdges childl.trans
+    leftChildren = map (\edge -> if S.member edge explainedEdges.ls then Nothing else Just { edge, stat: ESNotUsed }) $ transEdges childl.trans
 
-    rightChildren = map (\edge -> { edge, stat: if S.member edge explainedEdges.rs then ESOk else ESNotUsed }) $ transEdges childr.trans
+    rightChildren = map (\edge -> if S.member edge explainedEdges.rs then Nothing else Just { edge, stat: ESNotUsed }) $ transEdges childr.trans
 
   splitOnly = splitLeft
 
@@ -114,11 +113,8 @@ validationAlg = { init, freezeLeft, freezeOnly, splitLeft, splitOnly, splitRight
     -- check edges in middle transition
     for_ childm.trans.edges.regular
       $ \edge ->
-          ST.modify_ \st -> st { edges = M.insert edge (if isRepeatingEdge edge then ESOk else ESNotRepetition) st.edges }
-    -- pass edges in the outer transitions
-    let
-      otherEdges = childm.trans.edges.passing <> transEdges childl.trans <> transEdges childr.trans
-    ST.modify_ \st -> st { edges = foldl (\mp edge -> M.insert edge ESOk mp) st.edges otherEdges }
+          when (not $ isRepeatingEdge edge)
+            $ ST.modify_ \st -> st { edges = M.insert edge ESNotRepetition st.edges }
     -- return new agenda items
     pure $ nothingMore <$> childl : childm : attachSegment childr seg2.rslice : Nil
 
@@ -131,31 +127,31 @@ validateReduction red = flip ST.execState emptyVal $ walkGraph validationAlg red
 
 -- instances
 -- ---------
--- NoteStatus
-derive instance eqNoteStatus :: Eq NoteStatus
+-- NoteError
+derive instance eqNoteError :: Eq NoteError
 
-derive instance genericNoteStatus :: Generic NoteStatus _
+derive instance genericNoteError :: Generic NoteError _
 
-instance showNoteStatus :: Show NoteStatus where
+instance showNoteError :: Show NoteError where
   show ns = genericShow ns
 
--- EdgeStatus
-derive instance eqEdgeStatus :: Eq EdgeStatus
+-- EdgeError
+derive instance eqEdgeError :: Eq EdgeError
 
-derive instance genericEdgeStatus :: Generic EdgeStatus _
+derive instance genericEdgeError :: Generic EdgeError _
 
-instance showEdgeStatus :: Show EdgeStatus where
+instance showEdgeError :: Show EdgeError where
   show ns = genericShow ns
 
--- HoriStatus
--- derive instance eqHoriStatus :: Eq HoriStatus
--- derive instance genericHoriStatus :: Generic HoriStatus _
--- instance showHoriStatus :: Show HoriStatus where
+-- HoriError
+-- derive instance eqHoriError :: Eq HoriError
+-- derive instance genericHoriError :: Generic HoriError _
+-- instance showHoriError :: Show HoriError where
 --   show ns = genericShow ns
--- SliceStatus
-derive instance eqSliceStatus :: Eq SliceStatus
+-- SliceError
+derive instance eqSliceError :: Eq SliceError
 
-derive instance genericSliceStatus :: Generic SliceStatus _
+derive instance genericSliceError :: Generic SliceError _
 
-instance showSliceStatus :: Show SliceStatus where
+instance showSliceError :: Show SliceError where
   show ns = genericShow ns

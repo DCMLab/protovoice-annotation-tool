@@ -147,7 +147,6 @@ appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultE
             HH.div_
               [ HH.p_ [ renderNoteExplanation graph st.selected ]
               , renderReduction model.piece graph valid st.selected
-              , HH.text $ show valid
               --, renderLeftmost model.reduction
               ]
       , HH.p_

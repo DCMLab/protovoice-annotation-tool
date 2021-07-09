@@ -16,7 +16,7 @@ import Halogen.HTML.Properties as HP
 import Halogen.Svg.Attributes as SA
 import Halogen.Svg.Elements as SE
 import Model (LeftOrnament(..), RightOrnament(..), DoubleOrnament(..), Edge, Note, NoteExplanation(..), Notes, Piece, Reduction, SliceId, StartStop(..), explHasParent, getInnerNotes, getParents)
-import Validation (EdgeStatus(..), NoteStatus(..), SliceStatus(..), Validation)
+import Validation (EdgeError(..), NoteError(..), SliceError(..), Validation)
 import Web.UIEvent.MouseEvent (ctrlKey)
 
 scalex :: Number -> Number
@@ -96,7 +96,7 @@ renderSlice selection validation { slice: { id, notes, x, parents }, depth: d } 
         ]
           <> mapWithIndex mknote inotes
       )
-  startstop -> mknode [ HH.text $ show startstop ] (scalex x) (scaley d) NotSelected NSOk []
+  startstop -> mknode [ HH.text $ show startstop ] (scalex x) (scaley d) NotSelected Nothing []
   where
   selected = selection == SelSlice id
 
@@ -137,11 +137,11 @@ renderSlice selection validation { slice: { id, notes, x, parents }, depth: d } 
         , SA.text_anchor SA.AnchorMiddle
         , SA.dominant_baseline SA.BaselineMiddle
         , SA.fill case valid of
-            NSOk -> lightgray
-            NSNoExpl -> case selStatus of
+            Nothing -> lightgray
+            Just NSNoExpl -> case selStatus of
               Selected -> white
               _ -> black
-            NSInvalidExplanation -> warnColor
+            Just NSInvalidExplanation -> warnColor
         ]
         text
 
@@ -152,7 +152,7 @@ renderSlice selection validation { slice: { id, notes, x, parents }, depth: d } 
       (scalex x)
       (scaley d + offset i)
       nodeselected
-      (fromMaybe NSOk $ M.lookup note.id validation.notes)
+      (M.lookup note.id validation.notes)
       (if clickable then attrsSel else [])
     where
     nselected = noteIsSelected selection (Inner note)
