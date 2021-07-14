@@ -6,6 +6,10 @@ exports.examplePieceJSON = [
         { pitch: "D5", hold: false },
         { pitch: "D3", hold: true },
     ]},
+  {time: "1,1,1/4", notes: [
+    { pitch: "A4", hold: false },
+    { pitch: "D3", hold: true },
+  ]},
 ];
 
 exports.examplePieceJSONLong = [

@@ -249,6 +249,8 @@ data Op
   | Split { childl :: Segment, childr :: EndSegment }
   | Hori { childl :: Segment, childm :: Segment, childr :: EndSegment }
 
+derive instance eqOp :: Eq Op
+
 derive instance genericOp :: Generic Op _
 
 instance showOp :: Show Op where
@@ -447,11 +449,10 @@ mergeAtSlice sliceId model = case doAt matchSlice tryMerge model.reduction of
 
 -- | Verticalizes three segments into two new segments,
 -- the first of witch gets a 'Hori' operation.
-mkVert :: TransId -> SliceId -> Segment -> Segment -> Segment -> Either String (List Segment)
+mkVert :: TransId -> SliceId -> Segment -> Segment -> Segment -> Either String { mkLeftParent :: EndSegment -> EndSegment, rightParent :: Segment, topSlice :: Slice }
 mkVert tid sid l@{ rslice: { notes: Inner notesl } } m@{ rslice: { notes: Inner notesr } } r
-  | l.trans.is2nd = Left "Cannot vert right of a vert (not a leftmost derivation)!"
   | not $ A.all isRepeatingEdge m.trans.edges.regular = Left "Middle transition of a vert must only contain repetition and passing edges!"
-  | otherwise = Right $ pleft : pright : Nil
+  | otherwise = Right { mkLeftParent, rightParent, topSlice }
     where
     countPitches notes = foldl (\counts n -> M.insertWith (+) n.note.pitch 1 counts) M.empty notes
 
@@ -468,44 +469,128 @@ mkVert tid sid l@{ rslice: { notes: Inner notesl } } m@{ rslice: { notes: Inner 
       , parents: NoParents
       }
 
-    pleft =
+    mkLeftParent lchild =
       { trans: emptyTrans tid false
-      , rslice: topSlice
       , op:
           Hori
-            { childl: setParents (VertParent sid) l
+            { childl: setParents (VertParent sid) (attachSegment lchild l.rslice)
             , childm: setParents (VertParent sid) m
             , childr: detachSegment r
             }
       }
 
-    pright = { trans: emptyTrans (incT tid) true, rslice: r.rslice, op: Freeze }
+    rightParent = { trans: emptyTrans (incT tid) true, rslice: r.rslice, op: Freeze }
 
 mkVert _ _ _ _ _ = Left "Cannot vert an outer slice!"
 
 -- | Applies a verticalization at transition 'transId', if it exists on the reduction surface.
 vertAtMid :: TransId -> Model -> Either String Model
-vertAtMid transId model = case doAt matchMid tryVert model.reduction of
-  Right segments' ->
-    Right
-      model
-        { reduction
-          { segments = segments'
-          , nextTransId = incT $ incT nextTId
-          , nextSliceId = incS nextSId
+vertAtMid transId model = case doVert model.reduction.segments of
+  Right { tail': segments', dangling } -> case dangling of
+    Nothing ->
+      Right
+        model
+          { reduction
+            { segments = segments'
+            , nextTransId = incT $ incT nextTId
+            , nextSliceId = incS nextSId
+            }
           }
-        }
+    Just dang -> Left "Failed to insert hori!"
   Left err -> Left err
   where
   nextTId = model.reduction.nextTransId
 
   nextSId = model.reduction.nextSliceId
 
-  matchMid = case _ of
-    Cons l (Cons m (Cons r rest)) -> if m.trans.id == transId then Just (Tuple { l, m, r } rest) else Nothing
-    _ -> Nothing
+  -- Walk through the top-level segments and try to find the matching ID.
+  -- Create the hori and try to insert is,
+  -- alternatively passing it to the front if it can't be inserted directly
+  doVert ::
+    List Segment ->
+    Either String { tail' :: List Segment, dangling :: Maybe { dist :: Int, mkLeftParent :: EndSegment -> EndSegment, topSlice :: Slice } }
+  doVert (Cons l tail@(Cons m (Cons r rest)))
+    | m.trans.id == transId = do
+      { mkLeftParent, rightParent, topSlice } <- mkVert nextTId nextSId l m r
+      tryInsert 0 (l { rslice = topSlice }) mkLeftParent topSlice $ Cons rightParent rest
+    | otherwise = do
+      { tail', dangling } <- doVert tail
+      case dangling of
+        Nothing -> Right { tail': Cons l tail', dangling: Nothing }
+        Just { dist, mkLeftParent, topSlice } -> tryInsert dist l mkLeftParent topSlice tail'
 
-  tryVert _ { l, m, r } = mkVert nextTId nextSId l m r
+  doVert _ = Left $ "Cannot hori at " <> show transId
+
+  -- Try to insert the operation starting from a given top-level segment.
+  -- If the insertion is not completed (leftover == Just n), increase distance by n+1.
+  tryInsert ::
+    Int ->
+    Segment ->
+    (EndSegment -> EndSegment) ->
+    Slice ->
+    List Segment ->
+    Either String { tail' :: List Segment, dangling :: Maybe { dist :: Int, mkLeftParent :: EndSegment -> EndSegment, topSlice :: Slice } }
+  tryInsert dist l mkLeftParent topSlice t' = do
+    { seg': l', leftover } <- insertDangling dist topSlice mkLeftParent (detachSegment l)
+    let
+      tail' = Cons (attachSegment l' l.rslice) t'
+    pure case leftover of
+      Nothing -> { tail', dangling: Nothing }
+      Just n -> { tail', dangling: Just { dist: dist + 1 + n, mkLeftParent, topSlice } }
+
+  -- Insert the operation as deep as possible into the graph, until a suitable place is found.
+  -- If the place is not found, return the leftovers,
+  -- i.e. the number of additional segments that need to be traversed
+  -- to reach the point of failure from a previous top-level segment.
+  insertDangling ::
+    Int ->
+    Slice ->
+    (EndSegment -> EndSegment) ->
+    EndSegment ->
+    Either String { seg' :: EndSegment, leftover :: Maybe Int }
+  insertDangling dist topSlice mkLeftParent seg
+    -- can be inserted here: return update segment (no leftovers)
+    | dist == 0, not seg.trans.is2nd = Right $ { seg': mkLeftParent seg, leftover: Nothing }
+    -- cannot be inserted here: descend and return updated segment + leftovers
+    | otherwise = case seg.op of
+      -- freeze: cannot descend -> introduce leftovers
+      Freeze -> Right { seg': seg, leftover: Just 0 }
+      -- split: first try to descend on childr, then on childl; pass on remaining leftovers
+      Split { childl, childr } -> do
+        { seg': childr', leftover: lor } <- insertDangling dist topSlice mkLeftParent childr
+        childlFixed <-
+          if dist == 0 then case childl.rslice.parents of
+            MergeParents { left } -> Right $ resetExpls $ setParents (MergeParents { left, right: topSlice.id }) childl
+            _ -> Left "invalid derivation structure: non-merge parents on merge slice"
+          else
+            pure childl
+        case lor of
+          Nothing -> pure $ { seg': seg { op = Split { childl: childlFixed, childr: childr' } }, leftover: Nothing }
+          Just nlor -> do
+            { seg': childl'End, leftover: lol } <- insertDangling (dist + nlor + 1) topSlice mkLeftParent (detachSegment childlFixed)
+            let
+              childl' = attachSegment childl'End childlFixed.rslice
+
+              seg' = seg { op = Split { childl: childl', childr: childr' } }
+            pure $ { seg', leftover: (_ + 1) <$> lol }
+      -- hori: first try to descend on childr, then childm, then childl; pass on remaining leftovers
+      Hori { childl, childm, childr } -> do
+        { seg': childr', leftover: lor } <- insertDangling (dist - 1) topSlice mkLeftParent childr
+        case lor of
+          Nothing -> pure { seg': seg { op = Hori { childl, childm, childr: childr' } }, leftover: Nothing }
+          Just nlor -> do
+            { seg': childm'End, leftover: lom } <- insertDangling (dist + nlor) topSlice mkLeftParent (detachSegment childm)
+            let
+              childm' = attachSegment childm'End childm.rslice
+            case lom of
+              Nothing -> pure { seg': seg { op = Hori { childl, childm: childm', childr: childr' } }, leftover: Nothing }
+              Just nlom -> do
+                { seg': childl'End, leftover: lol } <- insertDangling (dist + 1 + nlom) topSlice mkLeftParent (detachSegment childl)
+                let
+                  childl' = attachSegment childl'End childl.rslice
+
+                  seg' = seg { op = Hori { childl: childl', childm: childm', childr: childr' } }
+                pure { seg', leftover: (_ + 2) <$> lol }
 
 -- | Undoes a merge at transition 'transId', if it exists, restoring its children.
 undoMergeAtTrans :: TransId -> Model -> Either String Model

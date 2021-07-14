@@ -19,7 +19,7 @@ import Halogen.Query.Event (eventListener)
 import Halogen.VDom.Driver (runUI)
 import Model (Model, loadPiece, mergeAtSlice, noteSetExplanation, showReduction, undoMergeAtTrans, undoVertAtSlice, vertAtMid)
 import Render (renderNoteExplanation, renderReduction)
-import Utils (examplePieceLong)
+import Utils (examplePiece, examplePieceLong)
 import Validation (validateReduction)
 import Web.DOM.ParentNode (QuerySelector(..))
 import Web.Event.Event as E
@@ -130,7 +130,8 @@ appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultE
     HH.div
       []
       [ HH.h1_ [ HH.text "Proto-Voice Annotation" ]
-      , HH.button [ HE.onClick $ \_ -> LoadPiece examplePieceLong ] [ HH.text "Load Example Piece" ]
+      , HH.button [ HE.onClick $ \_ -> LoadPiece examplePiece ] [ HH.text "Load Example" ]
+      , HH.button [ HE.onClick $ \_ -> LoadPiece examplePieceLong ] [ HH.text "Load Example (Long)" ]
       , HH.button
           [ HE.onClick $ \_ -> CombineAny, HP.enabled (outerSelected st.selected) ]
           [ HH.text "Combine (Enter)" ]
