@@ -212,12 +212,18 @@ var PS = {};
               return Control_Apply.apply(dictApplicative.Apply0())(pure(dictApplicative)(f))(a);
           };
       };
-  };
+  }; 
+  var applicativeArray = new Applicative(function () {
+      return Control_Apply.applyArray;
+  }, function (x) {
+      return [ x ];
+  });
   exports["Applicative"] = Applicative;
   exports["pure"] = pure;
   exports["liftA1"] = liftA1;
   exports["unless"] = unless;
   exports["when"] = when;
+  exports["applicativeArray"] = applicativeArray;
 })(PS);
 (function(exports) {
   "use strict";
@@ -5715,6 +5721,88 @@ var PS = {};
       };
       return Hori;
   })();
+  var vertEdgesRight = function (edges) {
+      return function (slice) {
+          var v = function (v1) {
+              if (Data_Boolean.otherwise) {
+                  return new Data_Either.Left("The current reduction is invalid: Trying to vert a Start or Stop slice.");
+              };
+              throw new Error("Failed pattern match at Model (line 576, column 1 - line 576, column 56): " + [ edges.constructor.name, slice.constructor.name ]);
+          };
+          if (slice.notes instanceof Inner) {
+              var replaceLeft = function (v1) {
+                  var v2 = function (v3) {
+                      if (Data_Boolean.otherwise) {
+                          return [  ];
+                      };
+                      throw new Error("Failed pattern match at Model (line 576, column 1 - line 576, column 56): " + [ v1.constructor.name ]);
+                  };
+                  if (v1.left instanceof Inner) {
+                      var $218 = Data_Array.find(function (n) {
+                          return n.note.id === v1.left.value0.id;
+                      })(slice.notes.value0);
+                      if ($218 instanceof Data_Maybe.Just) {
+                          if ($218.value0.expl instanceof HoriExpl) {
+                              return [ {
+                                  left: new Inner($218.value0.expl.value0),
+                                  right: v1.right
+                              } ];
+                          };
+                          return v2(true);
+                      };
+                      return v2(true);
+                  };
+                  return v2(true);
+              };
+              return Data_Either.Right.create({
+                  regular: Data_Array.concatMap(replaceLeft)(edges.regular),
+                  passing: Data_Array.concatMap(replaceLeft)(edges.passing)
+              });
+          };
+          return v(true);
+      };
+  };
+  var vertEdgesLeft = function (edges) {
+      return function (slice) {
+          var v = function (v1) {
+              if (Data_Boolean.otherwise) {
+                  return new Data_Either.Left("The current reduction is invalid: Trying to vert a Start or Stop slice.");
+              };
+              throw new Error("Failed pattern match at Model (line 561, column 1 - line 561, column 55): " + [ edges.constructor.name, slice.constructor.name ]);
+          };
+          if (slice.notes instanceof Inner) {
+              var replaceRight = function (v1) {
+                  var v2 = function (v3) {
+                      if (Data_Boolean.otherwise) {
+                          return [  ];
+                      };
+                      throw new Error("Failed pattern match at Model (line 561, column 1 - line 561, column 55): " + [ v1.constructor.name ]);
+                  };
+                  if (v1.right instanceof Inner) {
+                      var $236 = Data_Array.find(function (n) {
+                          return n.note.id === v1.right.value0.id;
+                      })(slice.notes.value0);
+                      if ($236 instanceof Data_Maybe.Just) {
+                          if ($236.value0.expl instanceof HoriExpl) {
+                              return [ {
+                                  left: v1.left,
+                                  right: new Inner($236.value0.expl.value0)
+                              } ];
+                          };
+                          return v2(true);
+                      };
+                      return v2(true);
+                  };
+                  return v2(true);
+              };
+              return Data_Either.Right.create({
+                  regular: Data_Array.concatMap(replaceRight)(edges.regular),
+                  passing: Data_Array.concatMap(replaceRight)(edges.passing)
+              });
+          };
+          return v(true);
+      };
+  };
   var transEdges = function (trans) {
       return Data_Semigroup.append(Data_Semigroup.semigroupArray)(trans.edges.regular)(trans.edges.passing);
   };
@@ -5829,7 +5917,7 @@ var PS = {};
           if (v instanceof Inner) {
               return Data_Show.show(dictShow)(v.value0);
           };
-          throw new Error("Failed pattern match at Model (line 237, column 1 - line 240, column 26): " + [ v.constructor.name ]);
+          throw new Error("Failed pattern match at Model (line 238, column 1 - line 241, column 26): " + [ v.constructor.name ]);
       });
   };
   var showSliceId = new Data_Show.Show(function (v) {
@@ -5856,7 +5944,7 @@ var PS = {};
                   };
                   return Data_Maybe.Nothing.value;
               };
-              throw new Error("Failed pattern match at Model (line 199, column 44 - line 207, column 17): " + [ parentMaybe.constructor.name ]);
+              throw new Error("Failed pattern match at Model (line 200, column 44 - line 208, column 17): " + [ parentMaybe.constructor.name ]);
           };
       };
   };
@@ -5902,7 +5990,7 @@ var PS = {};
       if (v instanceof MergeParents) {
           return [ v.value0.left, v.value0.right ];
       };
-      throw new Error("Failed pattern match at Model (line 300, column 14 - line 303, column 50): " + [ v.constructor.name ]);
+      throw new Error("Failed pattern match at Model (line 301, column 14 - line 304, column 50): " + [ v.constructor.name ]);
   };
   var getInnerNotes = function (slice) {
       if (slice.notes instanceof Start) {
@@ -5914,7 +6002,7 @@ var PS = {};
       if (slice.notes instanceof Inner) {
           return slice.notes.value0;
       };
-      throw new Error("Failed pattern match at Model (line 313, column 23 - line 316, column 23): " + [ slice.notes.constructor.name ]);
+      throw new Error("Failed pattern match at Model (line 314, column 23 - line 317, column 23): " + [ slice.notes.constructor.name ]);
   };
   var genericRightOrnament = new Data_Generic_Rep.Generic(function (x) {
       if (x instanceof RightRepeat) {
@@ -5923,7 +6011,7 @@ var PS = {};
       if (x instanceof RightNeighbor) {
           return new Data_Generic_Rep.Inr(Data_Generic_Rep.NoArguments.value);
       };
-      throw new Error("Failed pattern match at Model (line 34, column 1 - line 34, column 64): " + [ x.constructor.name ]);
+      throw new Error("Failed pattern match at Model (line 35, column 1 - line 35, column 64): " + [ x.constructor.name ]);
   }, function (x) {
       if (x instanceof Data_Generic_Rep.Inl) {
           return RightRepeat.value;
@@ -5931,7 +6019,7 @@ var PS = {};
       if (x instanceof Data_Generic_Rep.Inr) {
           return RightNeighbor.value;
       };
-      throw new Error("Failed pattern match at Model (line 34, column 1 - line 34, column 64): " + [ x.constructor.name ]);
+      throw new Error("Failed pattern match at Model (line 35, column 1 - line 35, column 64): " + [ x.constructor.name ]);
   });
   var showRightOrnament = new Data_Show.Show(function (ro) {
       return Data_Show_Generic.genericShow(genericRightOrnament)(Data_Show_Generic.genericShowSum(Data_Show_Generic.genericShowConstructor(Data_Show_Generic.genericShowArgsNoArguments)(new Data_Symbol.IsSymbol(function () {
@@ -5950,7 +6038,7 @@ var PS = {};
       if (x instanceof MergeParents) {
           return new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inr(x.value0));
       };
-      throw new Error("Failed pattern match at Model (line 294, column 1 - line 294, column 56): " + [ x.constructor.name ]);
+      throw new Error("Failed pattern match at Model (line 295, column 1 - line 295, column 56): " + [ x.constructor.name ]);
   }, function (x) {
       if (x instanceof Data_Generic_Rep.Inl) {
           return NoParents.value;
@@ -5961,7 +6049,7 @@ var PS = {};
       if (x instanceof Data_Generic_Rep.Inr && x.value0 instanceof Data_Generic_Rep.Inr) {
           return new MergeParents(x.value0.value0);
       };
-      throw new Error("Failed pattern match at Model (line 294, column 1 - line 294, column 56): " + [ x.constructor.name ]);
+      throw new Error("Failed pattern match at Model (line 295, column 1 - line 295, column 56): " + [ x.constructor.name ]);
   });
   var showParents = function (dictShow) {
       return new Data_Show.Show(function (p) {
@@ -5997,7 +6085,7 @@ var PS = {};
       if (x instanceof DoubleExpl) {
           return new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inr(x.value0)))));
       };
-      throw new Error("Failed pattern match at Model (line 76, column 1 - line 76, column 68): " + [ x.constructor.name ]);
+      throw new Error("Failed pattern match at Model (line 77, column 1 - line 77, column 68): " + [ x.constructor.name ]);
   }, function (x) {
       if (x instanceof Data_Generic_Rep.Inl) {
           return NoExpl.value;
@@ -6017,7 +6105,7 @@ var PS = {};
       if (x instanceof Data_Generic_Rep.Inr && (x.value0 instanceof Data_Generic_Rep.Inr && (x.value0.value0 instanceof Data_Generic_Rep.Inr && (x.value0.value0.value0 instanceof Data_Generic_Rep.Inr && x.value0.value0.value0.value0 instanceof Data_Generic_Rep.Inr)))) {
           return new DoubleExpl(x.value0.value0.value0.value0.value0);
       };
-      throw new Error("Failed pattern match at Model (line 76, column 1 - line 76, column 68): " + [ x.constructor.name ]);
+      throw new Error("Failed pattern match at Model (line 77, column 1 - line 77, column 68): " + [ x.constructor.name ]);
   });
   var genericLeftOrnament = new Data_Generic_Rep.Generic(function (x) {
       if (x instanceof LeftRepeat) {
@@ -6026,7 +6114,7 @@ var PS = {};
       if (x instanceof LeftNeighbor) {
           return new Data_Generic_Rep.Inr(Data_Generic_Rep.NoArguments.value);
       };
-      throw new Error("Failed pattern match at Model (line 45, column 1 - line 45, column 62): " + [ x.constructor.name ]);
+      throw new Error("Failed pattern match at Model (line 46, column 1 - line 46, column 62): " + [ x.constructor.name ]);
   }, function (x) {
       if (x instanceof Data_Generic_Rep.Inl) {
           return LeftRepeat.value;
@@ -6034,7 +6122,7 @@ var PS = {};
       if (x instanceof Data_Generic_Rep.Inr) {
           return LeftNeighbor.value;
       };
-      throw new Error("Failed pattern match at Model (line 45, column 1 - line 45, column 62): " + [ x.constructor.name ]);
+      throw new Error("Failed pattern match at Model (line 46, column 1 - line 46, column 62): " + [ x.constructor.name ]);
   });
   var showLeftOrnament = new Data_Show.Show(function (lo) {
       return Data_Show_Generic.genericShow(genericLeftOrnament)(Data_Show_Generic.genericShowSum(Data_Show_Generic.genericShowConstructor(Data_Show_Generic.genericShowArgsNoArguments)(new Data_Symbol.IsSymbol(function () {
@@ -6065,7 +6153,7 @@ var PS = {};
       if (x instanceof PassingRight) {
           return new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inr(Data_Generic_Rep.NoArguments.value))))));
       };
-      throw new Error("Failed pattern match at Model (line 61, column 1 - line 61, column 66): " + [ x.constructor.name ]);
+      throw new Error("Failed pattern match at Model (line 62, column 1 - line 62, column 66): " + [ x.constructor.name ]);
   }, function (x) {
       if (x instanceof Data_Generic_Rep.Inl) {
           return FullNeighbor.value;
@@ -6088,7 +6176,7 @@ var PS = {};
       if (x instanceof Data_Generic_Rep.Inr && (x.value0 instanceof Data_Generic_Rep.Inr && (x.value0.value0 instanceof Data_Generic_Rep.Inr && (x.value0.value0.value0 instanceof Data_Generic_Rep.Inr && (x.value0.value0.value0.value0 instanceof Data_Generic_Rep.Inr && x.value0.value0.value0.value0.value0 instanceof Data_Generic_Rep.Inr))))) {
           return PassingRight.value;
       };
-      throw new Error("Failed pattern match at Model (line 61, column 1 - line 61, column 66): " + [ x.constructor.name ]);
+      throw new Error("Failed pattern match at Model (line 62, column 1 - line 62, column 66): " + [ x.constructor.name ]);
   });
   var showDoubleOrnament = new Data_Show.Show(function (o) {
       return Data_Show_Generic.genericShow(genericDoubleOrnament)(Data_Show_Generic.genericShowSum(Data_Show_Generic.genericShowConstructor(Data_Show_Generic.genericShowArgsNoArguments)(new Data_Symbol.IsSymbol(function () {
@@ -6262,7 +6350,7 @@ var PS = {};
               if (v1 instanceof Hori) {
                   return "Hori\x0a" + (showSegment(indent + 1 | 0)(v1.value0.childl) + ("\x0a" + (showSegment(indent + 1 | 0)(v1.value0.childm) + ("\x0a" + showSegment$prime(indent + 1 | 0)(v1.value0.childr)))));
               };
-              throw new Error("Failed pattern match at Model (line 385, column 25 - line 398, column 44): " + [ v1.constructor.name ]);
+              throw new Error("Failed pattern match at Model (line 386, column 25 - line 399, column 44): " + [ v1.constructor.name ]);
           };
       };
       return Data_Foldable.intercalate(Data_List_Types.foldableList)(Data_Monoid.monoidString)("\x0a")(Data_Functor.map(Data_List_Types.functorList)(showSegment(0))(v.segments));
@@ -6278,7 +6366,7 @@ var PS = {};
           if (m instanceof Stop) {
               return Stop.value;
           };
-          throw new Error("Failed pattern match at Model (line 233, column 1 - line 233, column 54): " + [ m.constructor.name ]);
+          throw new Error("Failed pattern match at Model (line 234, column 1 - line 234, column 54): " + [ m.constructor.name ]);
       };
   });
   var resetExpls = function (seg) {
@@ -6309,7 +6397,7 @@ var PS = {};
           if (Data_Boolean.otherwise) {
               return Data_Maybe.Nothing.value;
           };
-          throw new Error("Failed pattern match at Model (line 119, column 1 - line 119, column 54): " + [ child.constructor.name, v.constructor.name ]);
+          throw new Error("Failed pattern match at Model (line 120, column 1 - line 120, column 54): " + [ child.constructor.name, v.constructor.name ]);
       };
   };
   var findLeftOrn = function (child) {
@@ -6323,7 +6411,7 @@ var PS = {};
           if (Data_Boolean.otherwise) {
               return Data_Maybe.Nothing.value;
           };
-          throw new Error("Failed pattern match at Model (line 113, column 1 - line 113, column 52): " + [ child.constructor.name, v.constructor.name ]);
+          throw new Error("Failed pattern match at Model (line 114, column 1 - line 114, column 52): " + [ child.constructor.name, v.constructor.name ]);
       };
   };
   var findDoubleOrn = function (child) {
@@ -6334,16 +6422,16 @@ var PS = {};
                       var v6 = function (v7) {
                           var v8 = function (v9) {
                               if (pbetween(Data_Pitches_Spelled.intervalSIC)(Data_Pitches_Spelled.eqSIC)(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(v.pitch))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(child))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(v1.pitch))) {
-                                  var $335 = Data_Pitches_Class.isStep(Data_Pitches_Spelled.diatonicSIC)(Data_Pitches_Class.ic(Data_Pitches_Spelled.hasintervalclassSInterval)(Data_Pitches_Class.pto(Data_Pitches_Spelled.intervalSInterval)(child)(v.pitch)));
-                                  if ($335) {
-                                      var $336 = Data_Pitches_Class.isStep(Data_Pitches_Spelled.diatonicSIC)(Data_Pitches_Class.ic(Data_Pitches_Spelled.hasintervalclassSInterval)(Data_Pitches_Class.pto(Data_Pitches_Spelled.intervalSInterval)(child)(v1.pitch)));
-                                      if ($336) {
+                                  var $384 = Data_Pitches_Class.isStep(Data_Pitches_Spelled.diatonicSIC)(Data_Pitches_Class.ic(Data_Pitches_Spelled.hasintervalclassSInterval)(Data_Pitches_Class.pto(Data_Pitches_Spelled.intervalSInterval)(child)(v.pitch)));
+                                  if ($384) {
+                                      var $385 = Data_Pitches_Class.isStep(Data_Pitches_Spelled.diatonicSIC)(Data_Pitches_Class.ic(Data_Pitches_Spelled.hasintervalclassSInterval)(Data_Pitches_Class.pto(Data_Pitches_Spelled.intervalSInterval)(child)(v1.pitch)));
+                                      if ($385) {
                                           return new Data_Maybe.Just(PassingMid.value);
                                       };
                                       return new Data_Maybe.Just(PassingLeft.value);
                                   };
-                                  var $337 = Data_Pitches_Class.isStep(Data_Pitches_Spelled.diatonicSIC)(Data_Pitches_Class.ic(Data_Pitches_Spelled.hasintervalclassSInterval)(Data_Pitches_Class.pto(Data_Pitches_Spelled.intervalSInterval)(child)(v1.pitch)));
-                                  if ($337) {
+                                  var $386 = Data_Pitches_Class.isStep(Data_Pitches_Spelled.diatonicSIC)(Data_Pitches_Class.ic(Data_Pitches_Spelled.hasintervalclassSInterval)(Data_Pitches_Class.pto(Data_Pitches_Spelled.intervalSInterval)(child)(v1.pitch)));
+                                  if ($386) {
                                       return new Data_Maybe.Just(PassingRight.value);
                                   };
                                   return Data_Maybe.Nothing.value;
@@ -6351,42 +6439,42 @@ var PS = {};
                               if (Data_Boolean.otherwise) {
                                   return Data_Maybe.Nothing.value;
                               };
-                              throw new Error("Failed pattern match at Model (line 134, column 1 - line 134, column 64): " + [ child.constructor.name, v.constructor.name, v1.constructor.name ]);
+                              throw new Error("Failed pattern match at Model (line 135, column 1 - line 135, column 64): " + [ child.constructor.name, v.constructor.name, v1.constructor.name ]);
                           };
-                          var $343 = Data_Eq.eq(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSIC))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(v.pitch))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(v1.pitch));
-                          if ($343) {
-                              var $344 = Data_Pitches_Class.isStep(Data_Pitches_Spelled.diatonicSIC)(Data_Pitches_Class.ic(Data_Pitches_Spelled.hasintervalclassSInterval)(Data_Pitches_Class.pto(Data_Pitches_Spelled.intervalSInterval)(child)(v.pitch)));
-                              if ($344) {
+                          var $392 = Data_Eq.eq(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSIC))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(v.pitch))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(v1.pitch));
+                          if ($392) {
+                              var $393 = Data_Pitches_Class.isStep(Data_Pitches_Spelled.diatonicSIC)(Data_Pitches_Class.ic(Data_Pitches_Spelled.hasintervalclassSInterval)(Data_Pitches_Class.pto(Data_Pitches_Spelled.intervalSInterval)(child)(v.pitch)));
+                              if ($393) {
                                   return new Data_Maybe.Just(FullNeighbor.value);
                               };
                               return v8(true);
                           };
                           return v8(true);
                       };
-                      var $350 = Data_Eq.eq(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSIC))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(child))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(v1.pitch));
-                      if ($350) {
-                          var $351 = Data_Pitches_Class.isStep(Data_Pitches_Spelled.diatonicSIC)(Data_Pitches_Class.ic(Data_Pitches_Spelled.hasintervalclassSInterval)(Data_Pitches_Class.pto(Data_Pitches_Spelled.intervalSInterval)(child)(v.pitch)));
-                          if ($351) {
+                      var $399 = Data_Eq.eq(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSIC))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(child))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(v1.pitch));
+                      if ($399) {
+                          var $400 = Data_Pitches_Class.isStep(Data_Pitches_Spelled.diatonicSIC)(Data_Pitches_Class.ic(Data_Pitches_Spelled.hasintervalclassSInterval)(Data_Pitches_Class.pto(Data_Pitches_Spelled.intervalSInterval)(child)(v.pitch)));
+                          if ($400) {
                               return new Data_Maybe.Just(LeftRepeatOfRight.value);
                           };
                           return v6(true);
                       };
                       return v6(true);
                   };
-                  var $357 = Data_Eq.eq(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSIC))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(child))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(v.pitch));
-                  if ($357) {
-                      var $358 = Data_Pitches_Class.isStep(Data_Pitches_Spelled.diatonicSIC)(Data_Pitches_Class.ic(Data_Pitches_Spelled.hasintervalclassSInterval)(Data_Pitches_Class.pto(Data_Pitches_Spelled.intervalSInterval)(child)(v1.pitch)));
-                      if ($358) {
+                  var $406 = Data_Eq.eq(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSIC))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(child))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(v.pitch));
+                  if ($406) {
+                      var $407 = Data_Pitches_Class.isStep(Data_Pitches_Spelled.diatonicSIC)(Data_Pitches_Class.ic(Data_Pitches_Spelled.hasintervalclassSInterval)(Data_Pitches_Class.pto(Data_Pitches_Spelled.intervalSInterval)(child)(v1.pitch)));
+                      if ($407) {
                           return new Data_Maybe.Just(RightRepeatOfLeft.value);
                       };
                       return v4(true);
                   };
                   return v4(true);
               };
-              var $364 = Data_Eq.eq(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSIC))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(child))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(v.pitch));
-              if ($364) {
-                  var $365 = Data_Eq.eq(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSIC))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(child))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(v1.pitch));
-                  if ($365) {
+              var $413 = Data_Eq.eq(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSIC))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(child))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(v.pitch));
+              if ($413) {
+                  var $414 = Data_Eq.eq(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSIC))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(child))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(v1.pitch));
+                  if ($414) {
                       return new Data_Maybe.Just(FullRepeat.value);
                   };
                   return v2(true);
@@ -6442,7 +6530,7 @@ var PS = {};
                   };
                   return new Data_Maybe.Just(NoExpl.value);
               };
-              throw new Error("Failed pattern match at Model (line 147, column 48 - line 170, column 21): " + [ leftParentMaybe.constructor.name ]);
+              throw new Error("Failed pattern match at Model (line 148, column 48 - line 171, column 21): " + [ leftParentMaybe.constructor.name ]);
           };
       };
   };
@@ -6493,7 +6581,7 @@ var PS = {};
                   };
                   return new Data_Maybe.Just(NoExpl.value);
               };
-              throw new Error("Failed pattern match at Model (line 173, column 50 - line 196, column 21): " + [ rightParentMaybe.constructor.name ]);
+              throw new Error("Failed pattern match at Model (line 174, column 50 - line 197, column 21): " + [ rightParentMaybe.constructor.name ]);
           };
       };
   };
@@ -6532,7 +6620,7 @@ var PS = {};
           if (v instanceof DoubleExpl) {
               return v.value0.leftParent.id === id || v.value0.rightParent.id === id;
           };
-          throw new Error("Failed pattern match at Model (line 210, column 20 - line 216, column 88): " + [ v.constructor.name ]);
+          throw new Error("Failed pattern match at Model (line 211, column 20 - line 217, column 88): " + [ v.constructor.name ]);
       };
   };
   var eqTransId = new Data_Eq.Eq(function (x) {
@@ -6589,7 +6677,7 @@ var PS = {};
               if (x instanceof Stop && y instanceof Stop) {
                   return Data_Ordering.EQ.value;
               };
-              throw new Error("Failed pattern match at Model (line 235, column 1 - line 235, column 61): " + [ x.constructor.name, y.constructor.name ]);
+              throw new Error("Failed pattern match at Model (line 236, column 1 - line 236, column 61): " + [ x.constructor.name, y.constructor.name ]);
           };
       });
   };
@@ -6694,6 +6782,109 @@ var PS = {};
   });
   var setParents = function (p) {
       return function (seg) {
+          var findUniqueVertExpl = function (parentSlice) {
+              return function (child) {
+                  var v = Data_Array.filter(function (pnote) {
+                      return Data_Eq.eq(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval))(pnote.note.pitch)(child.note.pitch);
+                  })(getInnerNotes(parentSlice));
+                  if (v.length === 1) {
+                      return {
+                          expl: new HoriExpl(v[0].note),
+                          note: child.note
+                      };
+                  };
+                  return child;
+              };
+          };
+          var findUniqueMergeExpl = function (leftSlice) {
+              return function (rightSlice) {
+                  return function (child) {
+                      var v = function (v1) {
+                          var v2 = function (v3) {
+                              if (Data_Boolean.otherwise) {
+                                  return child;
+                              };
+                              throw new Error("Failed pattern match at Model (line 503, column 1 - line 503, column 50): " + [ leftSlice.constructor.name, rightSlice.constructor.name, child.constructor.name ]);
+                          };
+                          if (leftSlice.notes instanceof Inner) {
+                              if (rightSlice.notes instanceof Inner) {
+                                  var rightExpls = Data_Array.catMaybes(Control_Bind.bind(Control_Bind.bindArray)(leftSlice.notes.value0)(function (v3) {
+                                      return Control_Applicative.pure(Control_Applicative.applicativeArray)(Control_Bind.bind(Data_Maybe.bindMaybe)(findRightOrn(child.note.pitch)(v3.note))(function (orn) {
+                                          return Control_Applicative.pure(Data_Maybe.applicativeMaybe)(new RightExpl({
+                                              orn: new Data_Maybe.Just(orn),
+                                              leftParent: v3.note
+                                          }));
+                                      }));
+                                  }));
+                                  var leftExpls = Data_Array.catMaybes(Control_Bind.bind(Control_Bind.bindArray)(rightSlice.notes.value0)(function (v3) {
+                                      return Control_Applicative.pure(Control_Applicative.applicativeArray)(Control_Bind.bind(Data_Maybe.bindMaybe)(findLeftOrn(child.note.pitch)(v3.note))(function (orn) {
+                                          return Control_Applicative.pure(Data_Maybe.applicativeMaybe)(new LeftExpl({
+                                              orn: new Data_Maybe.Just(orn),
+                                              rightParent: v3.note
+                                          }));
+                                      }));
+                                  }));
+                                  var doubleExpls = Data_Array.catMaybes(Control_Bind.bind(Control_Bind.bindArray)(leftSlice.notes.value0)(function (v3) {
+                                      return Control_Bind.bind(Control_Bind.bindArray)(rightSlice.notes.value0)(function (v4) {
+                                          return Control_Applicative.pure(Control_Applicative.applicativeArray)(Control_Bind.bind(Data_Maybe.bindMaybe)(findDoubleOrn(child.note.pitch)(v3.note)(v4.note))(function (orn) {
+                                              return Control_Applicative.pure(Data_Maybe.applicativeMaybe)(new DoubleExpl({
+                                                  orn: new Data_Maybe.Just(orn),
+                                                  leftParent: v3.note,
+                                                  rightParent: v4.note
+                                              }));
+                                          }));
+                                      });
+                                  }));
+                                  if (doubleExpls.length === 1) {
+                                      return {
+                                          note: child.note,
+                                          expl: doubleExpls[0]
+                                      };
+                                  };
+                                  var v3 = Data_Semigroup.append(Data_Semigroup.semigroupArray)(leftExpls)(rightExpls);
+                                  if (v3.length === 1) {
+                                      return {
+                                          note: child.note,
+                                          expl: v3[0]
+                                      };
+                                  };
+                                  return child;
+                              };
+                              return v2(true);
+                          };
+                          return v2(true);
+                      };
+                      var $533 = Data_Eq.eq(eqStartStop(Data_Eq.eqArray(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                          return "note";
+                      }))(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Data_Eq.eqString))))()(new Data_Symbol.IsSymbol(function () {
+                          return "expl";
+                      }))(eqNoteExplanation)))))(leftSlice.notes)(Start.value);
+                      if ($533) {
+                          var $534 = Data_Eq.eq(eqStartStop(Data_Eq.eqArray(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                              return "note";
+                          }))(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                              return "pitch";
+                          }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Eq.eqString))))()(new Data_Symbol.IsSymbol(function () {
+                              return "expl";
+                          }))(eqNoteExplanation)))))(rightSlice.notes)(Stop.value);
+                          if ($534) {
+                              return {
+                                  note: child.note,
+                                  expl: RootExpl.value
+                              };
+                          };
+                          return v(true);
+                      };
+                      return v(true);
+                  };
+              };
+          };
           if (p instanceof NoParents) {
               return {
                   trans: seg.trans,
@@ -6711,7 +6902,7 @@ var PS = {};
                   trans: seg.trans,
                   rslice: {
                       id: seg.rslice.id,
-                      notes: seg.rslice.notes,
+                      notes: Data_Functor.map(functorStartStop)(Data_Functor.map(Data_Functor.functorArray)(findUniqueVertExpl(p.value0)))(seg.rslice.notes),
                       x: seg.rslice.x,
                       parents: new VertParent(p.value0.id)
                   },
@@ -6719,39 +6910,11 @@ var PS = {};
               };
           };
           if (p instanceof MergeParents) {
-              var notes$prime = (function () {
-                  var $459 = Data_Eq.eq(eqStartStop(Data_Eq.eqArray(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
-                      return "note";
-                  }))(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
-                      return "pitch";
-                  }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
-                      return "id";
-                  }))(Data_Eq.eqString))))()(new Data_Symbol.IsSymbol(function () {
-                      return "expl";
-                  }))(eqNoteExplanation)))))(p.value0.left.notes)(Start.value) && Data_Eq.eq(eqStartStop(Data_Eq.eqArray(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
-                      return "note";
-                  }))(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
-                      return "pitch";
-                  }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
-                      return "id";
-                  }))(Data_Eq.eqString))))()(new Data_Symbol.IsSymbol(function () {
-                      return "expl";
-                  }))(eqNoteExplanation)))))(p.value0.right.notes)(Stop.value);
-                  if ($459) {
-                      return Data_Functor.map(functorStartStop)(Data_Functor.map(Data_Functor.functorArray)(function (v) {
-                          return {
-                              expl: RootExpl.value,
-                              note: v.note
-                          };
-                      }))(seg.rslice.notes);
-                  };
-                  return seg.rslice.notes;
-              })();
               return {
                   trans: seg.trans,
                   rslice: {
                       id: seg.rslice.id,
-                      notes: notes$prime,
+                      notes: Data_Functor.map(functorStartStop)(Data_Functor.map(Data_Functor.functorArray)(findUniqueMergeExpl(p.value0.left)(p.value0.right)))(seg.rslice.notes),
                       x: seg.rslice.x,
                       parents: new MergeParents({
                           left: p.value0.left.id,
@@ -6761,21 +6924,12 @@ var PS = {};
                   op: seg.op
               };
           };
-          throw new Error("Failed pattern match at Model (line 504, column 20 - line 520, column 10): " + [ p.constructor.name ]);
+          throw new Error("Failed pattern match at Model (line 504, column 20 - line 519, column 8): " + [ p.constructor.name ]);
       };
   };
   var emptyEdges = {
       regular: [  ],
       passing: [  ]
-  };
-  var emptyTrans = function (id) {
-      return function (is2nd) {
-          return {
-              id: id,
-              is2nd: is2nd,
-              edges: emptyEdges
-          };
-      };
   };
   var explParentEdge = function (v) {
       if (v instanceof DoubleExpl) {
@@ -6842,94 +6996,12 @@ var PS = {};
   var noteSetExplanation = function (noteId) {
       return function (expl) {
           return function (model) {
-              var vertEdgesRight = function (edges) {
-                  return function (slice) {
-                      var v = function (v1) {
-                          if (Data_Boolean.otherwise) {
-                              return new Data_Either.Left("The current reduction is invalid: Trying to vert a Start or Stop slice.");
-                          };
-                          throw new Error("Failed pattern match at Model (line 737, column 1 - line 737, column 80): " + [ edges.constructor.name, slice.constructor.name ]);
-                      };
-                      if (slice.notes instanceof Inner) {
-                          var replaceLeft = function (v1) {
-                              var v2 = function (v3) {
-                                  if (Data_Boolean.otherwise) {
-                                      return [  ];
-                                  };
-                                  throw new Error("Failed pattern match at Model (line 737, column 1 - line 737, column 80): " + [ v1.constructor.name ]);
-                              };
-                              if (v1.left instanceof Inner) {
-                                  var $485 = Data_Array.find(function (n) {
-                                      return n.note.id === v1.left.value0.id;
-                                  })(slice.notes.value0);
-                                  if ($485 instanceof Data_Maybe.Just) {
-                                      if ($485.value0.expl instanceof HoriExpl) {
-                                          return [ {
-                                              left: new Inner($485.value0.expl.value0),
-                                              right: v1.right
-                                          } ];
-                                      };
-                                      return v2(true);
-                                  };
-                                  return v2(true);
-                              };
-                              return v2(true);
-                          };
-                          return Data_Either.Right.create({
-                              regular: Data_Array.concatMap(replaceLeft)(edges.regular),
-                              passing: Data_Array.concatMap(replaceLeft)(edges.passing)
-                          });
-                      };
-                      return v(true);
-                  };
-              };
-              var vertEdgesLeft = function (edges) {
-                  return function (slice) {
-                      var v = function (v1) {
-                          if (Data_Boolean.otherwise) {
-                              return new Data_Either.Left("The current reduction is invalid: Trying to vert a Start or Stop slice.");
-                          };
-                          throw new Error("Failed pattern match at Model (line 737, column 1 - line 737, column 80): " + [ edges.constructor.name, slice.constructor.name ]);
-                      };
-                      if (slice.notes instanceof Inner) {
-                          var replaceRight = function (v1) {
-                              var v2 = function (v3) {
-                                  if (Data_Boolean.otherwise) {
-                                      return [  ];
-                                  };
-                                  throw new Error("Failed pattern match at Model (line 737, column 1 - line 737, column 80): " + [ v1.constructor.name ]);
-                              };
-                              if (v1.right instanceof Inner) {
-                                  var $503 = Data_Array.find(function (n) {
-                                      return n.note.id === v1.right.value0.id;
-                                  })(slice.notes.value0);
-                                  if ($503 instanceof Data_Maybe.Just) {
-                                      if ($503.value0.expl instanceof HoriExpl) {
-                                          return [ {
-                                              left: v1.left,
-                                              right: new Inner($503.value0.expl.value0)
-                                          } ];
-                                      };
-                                      return v2(true);
-                                  };
-                                  return v2(true);
-                              };
-                              return v2(true);
-                          };
-                          return Data_Either.Right.create({
-                              regular: Data_Array.concatMap(replaceRight)(edges.regular),
-                              passing: Data_Array.concatMap(replaceRight)(edges.passing)
-                          });
-                      };
-                      return v(true);
-                  };
-              };
               var setNoteExplInSlice = function (slice) {
                   return {
                       id: slice.id,
                       notes: Data_Functor.map(functorStartStop)(Data_Functor.map(Data_Functor.functorArray)(function (n) {
-                          var $511 = n.note.id === noteId;
-                          if ($511) {
+                          var $552 = n.note.id === noteId;
+                          if ($552) {
                               return {
                                   expl: expl,
                                   note: n.note
@@ -6959,58 +7031,58 @@ var PS = {};
                           if (upFromLeft instanceof Data_List_Types.Cons) {
                               return Data_Either.Right.create({
                                   "seg'": (function () {
-                                      var $514 = {};
-                                      for (var $515 in seg) {
-                                          if ({}.hasOwnProperty.call(seg, $515)) {
-                                              $514[$515] = seg[$515];
+                                      var $555 = {};
+                                      for (var $556 in seg) {
+                                          if ({}.hasOwnProperty.call(seg, $556)) {
+                                              $555[$556] = seg[$556];
                                           };
                                       };
-                                      $514.trans = {
+                                      $555.trans = {
                                           edges: upFromLeft.value0,
                                           id: seg.trans.id,
                                           is2nd: seg.trans.is2nd
                                       };
-                                      return $514;
+                                      return $555;
                                   })(),
                                   rUp: upFromLeft.value1
                               });
                           };
-                          throw new Error("Failed pattern match at Model (line 795, column 15 - line 797, column 86): " + [ upFromLeft.constructor.name ]);
+                          throw new Error("Failed pattern match at Model (line 839, column 15 - line 841, column 86): " + [ upFromLeft.constructor.name ]);
                       };
                       if (seg.op instanceof Split) {
                           return Control_Bind.bind(Data_Either.bindEither)(doSegment(upFromLeft)(seg.op.value0.childl))(function (v) {
                               return Control_Bind.bind(Data_Either.bindEither)(doSegment$prime(v.rUp)(seg.op.value0.childr))(function (v1) {
                                   var segNewOp = (function () {
-                                      var $521 = {};
-                                      for (var $522 in seg) {
-                                          if ({}.hasOwnProperty.call(seg, $522)) {
-                                              $521[$522] = seg[$522];
+                                      var $562 = {};
+                                      for (var $563 in seg) {
+                                          if ({}.hasOwnProperty.call(seg, $563)) {
+                                              $562[$563] = seg[$563];
                                           };
                                       };
-                                      $521.op = new Split({
+                                      $562.op = new Split({
                                           childl: v["seg'"],
                                           childr: v1["seg'"]
                                       });
-                                      return $521;
+                                      return $562;
                                   })();
                                   return Control_Bind.bind(Data_Either.bindEither)((function () {
-                                      var $524 = noteInSlice(seg.op.value0.childl.rslice);
-                                      if ($524) {
-                                          var $525 = explIsSplit(expl);
-                                          if ($525) {
+                                      var $565 = noteInSlice(seg.op.value0.childl.rslice);
+                                      if ($565) {
+                                          var $566 = explIsSplit(expl);
+                                          if ($566) {
                                               return Control_Applicative.pure(Data_Either.applicativeEither)((function () {
-                                                  var $526 = {};
-                                                  for (var $527 in segNewOp) {
-                                                      if ({}.hasOwnProperty.call(segNewOp, $527)) {
-                                                          $526[$527] = segNewOp[$527];
+                                                  var $567 = {};
+                                                  for (var $568 in segNewOp) {
+                                                      if ({}.hasOwnProperty.call(segNewOp, $568)) {
+                                                          $567[$568] = segNewOp[$568];
                                                       };
                                                   };
-                                                  $526.trans = {
+                                                  $567.trans = {
                                                       edges: parentEdges(v["seg'"].rslice),
                                                       id: segNewOp.trans.id,
                                                       is2nd: segNewOp.trans.is2nd
                                                   };
-                                                  return $526;
+                                                  return $567;
                                               })());
                                           };
                                           return new Data_Either.Left("Cannot explain a split note with a hori.");
@@ -7032,8 +7104,8 @@ var PS = {};
                                       return Control_Bind.bind(Data_Either.bindEither)(vertEdgesLeft(v["seg'"].trans.edges)(v["seg'"].rslice))(function (leftParentEdges) {
                                           return Control_Bind.bind(Data_Either.bindEither)(vertEdgesRight(v2["seg'"].trans.edges)(v1["seg'"].rslice))(function (rightParentEdges) {
                                               return Control_Bind.discard(Control_Bind.discardUnit)(Data_Either.bindEither)((function () {
-                                                  var $539 = (noteInSlice(seg.op.value0.childl.rslice) || noteInSlice(seg.op.value0.childm.rslice)) && !explIsHori(expl);
-                                                  if ($539) {
+                                                  var $580 = (noteInSlice(seg.op.value0.childl.rslice) || noteInSlice(seg.op.value0.childm.rslice)) && !explIsHori(expl);
+                                                  if ($580) {
                                                       return Data_Either.Left.create("Cannot explain a hori note with a split. noteId = " + (Data_Show.show(Data_Show.showString)(noteId) + (", childl.rslice = " + (Data_Show.show(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
                                                           return "id";
                                                       }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
@@ -7072,23 +7144,23 @@ var PS = {};
                                               })())(function () {
                                                   return Control_Applicative.pure(Data_Either.applicativeEither)({
                                                       "seg'": (function () {
-                                                          var $540 = {};
-                                                          for (var $541 in seg) {
-                                                              if ({}.hasOwnProperty.call(seg, $541)) {
-                                                                  $540[$541] = seg[$541];
+                                                          var $581 = {};
+                                                          for (var $582 in seg) {
+                                                              if ({}.hasOwnProperty.call(seg, $582)) {
+                                                                  $581[$582] = seg[$582];
                                                               };
                                                           };
-                                                          $540.op = new Hori({
+                                                          $581.op = new Hori({
                                                               childl: v["seg'"],
                                                               childm: v1["seg'"],
                                                               childr: v2["seg'"]
                                                           });
-                                                          $540.trans = {
+                                                          $581.trans = {
                                                               edges: leftParentEdges,
                                                               id: seg.trans.id,
                                                               is2nd: seg.trans.is2nd
                                                           };
-                                                          return $540;
+                                                          return $581;
                                                       })(),
                                                       rUp: new Data_List_Types.Cons(rightParentEdges, v2.rUp)
                                                   });
@@ -7099,14 +7171,14 @@ var PS = {};
                               });
                           });
                       };
-                      throw new Error("Failed pattern match at Model (line 794, column 31 - line 835, column 12): " + [ seg.op.constructor.name ]);
+                      throw new Error("Failed pattern match at Model (line 838, column 31 - line 879, column 12): " + [ seg.op.constructor.name ]);
                   };
               };
               var doSegment = function (upFromLeft) {
                   return function (seg) {
                       var rslice$prime = (function () {
-                          var $553 = noteInSlice(seg.rslice);
-                          if ($553) {
+                          var $594 = noteInSlice(seg.rslice);
+                          if ($594) {
                               return setNoteExplInSlice(seg.rslice);
                           };
                           return seg.rslice;
@@ -7135,7 +7207,7 @@ var PS = {};
                               });
                           });
                       };
-                      throw new Error("Failed pattern match at Model (line 781, column 28 - line 786, column 29): " + [ v.constructor.name ]);
+                      throw new Error("Failed pattern match at Model (line 825, column 28 - line 830, column 29): " + [ v.constructor.name ]);
                   };
               };
               var v = traverseTop(Data_List_Types.Nil.value)(model.reduction.segments);
@@ -7153,7 +7225,7 @@ var PS = {};
               if (v instanceof Data_Either.Left) {
                   return new Data_Either.Left(v.value0);
               };
-              throw new Error("Failed pattern match at Model (line 738, column 40 - line 740, column 23): " + [ v.constructor.name ]);
+              throw new Error("Failed pattern match at Model (line 812, column 40 - line 814, column 23): " + [ v.constructor.name ]);
           };
       };
   };
@@ -7175,9 +7247,9 @@ var PS = {};
                           if (v2 instanceof Data_Maybe.Nothing) {
                               return Data_Functor.map(Data_Either.functorEither)(Data_List_Types.Cons.create(v1.value0))(go(v1.value0.rslice)(v1.value1));
                           };
-                          throw new Error("Failed pattern match at Model (line 498, column 39 - line 500, column 47): " + [ v2.constructor.name ]);
+                          throw new Error("Failed pattern match at Model (line 499, column 39 - line 501, column 47): " + [ v2.constructor.name ]);
                       };
-                      throw new Error("Failed pattern match at Model (line 495, column 3 - line 495, column 62): " + [ v.constructor.name, v1.constructor.name ]);
+                      throw new Error("Failed pattern match at Model (line 496, column 3 - line 496, column 62): " + [ v.constructor.name, v1.constructor.name ]);
                   };
               };
               return go(red.start)(red.segments);
@@ -7225,8 +7297,8 @@ var PS = {};
           };
           var matchSlice = function (v) {
               if (v instanceof Data_List_Types.Cons && v.value1 instanceof Data_List_Types.Cons) {
-                  var $579 = Data_Eq.eq(eqSliceId)(v.value0.rslice.id)(sliceId);
-                  if ($579) {
+                  var $620 = Data_Eq.eq(eqSliceId)(v.value0.rslice.id)(sliceId);
+                  if ($620) {
                       return new Data_Maybe.Just(new Data_Tuple.Tuple({
                           seg1: v.value0,
                           seg2: v.value1.value0
@@ -7251,7 +7323,7 @@ var PS = {};
           if (v instanceof Data_Either.Left) {
               return new Data_Either.Left(v.value0);
           };
-          throw new Error("Failed pattern match at Model (line 538, column 30 - line 540, column 23): " + [ v.constructor.name ]);
+          throw new Error("Failed pattern match at Model (line 607, column 30 - line 609, column 23): " + [ v.constructor.name ]);
       };
   };
   var attachSegment = function (v) {
@@ -7273,11 +7345,6 @@ var PS = {};
                               return new Data_Either.Left("Middle transition of a vert must only contain repetition and passing edges!");
                           };
                           if (Data_Boolean.otherwise) {
-                              var rightParent = {
-                                  trans: emptyTrans(incT(v))(true),
-                                  rslice: v4.rslice,
-                                  op: Freeze.value
-                              };
                               var newNotes = function (counts) {
                                   var pitches = Data_Array.reverse(Data_Array.concatMap(function (v5) {
                                       return Data_Array.replicate(v5.value1)(v5.value0);
@@ -7308,20 +7375,39 @@ var PS = {};
                                   x: (v2.rslice.x + v3.rslice.x) / 2.0,
                                   parents: NoParents.value
                               };
-                              var mkLeftParent = function (lchild) {
-                                  return {
-                                      trans: emptyTrans(v)(false),
-                                      op: new Hori({
-                                          childl: setParents(new VertParent(topSlice))(attachSegment(lchild)(v2.rslice)),
-                                          childm: setParents(new VertParent(topSlice))(v3),
-                                          childr: detachSegment(v4)
-                                      })
-                                  };
+                              var childm = setParents(new VertParent(topSlice))(v3);
+                              var mkLeftParent = function (lfound) {
+                                  var childl = setParents(new VertParent(topSlice))(attachSegment(lfound)(v2.rslice));
+                                  return Control_Bind.bind(Data_Either.bindEither)(vertEdgesLeft(lfound.trans.edges)(childl.rslice))(function (leftEdges) {
+                                      return Control_Applicative.pure(Data_Either.applicativeEither)({
+                                          trans: {
+                                              id: v,
+                                              is2nd: false,
+                                              edges: leftEdges
+                                          },
+                                          op: new Hori({
+                                              childl: childl,
+                                              childm: childm,
+                                              childr: detachSegment(v4)
+                                          })
+                                      });
+                                  });
                               };
-                              return new Data_Either.Right({
-                                  mkLeftParent: mkLeftParent,
-                                  rightParent: rightParent,
-                                  topSlice: topSlice
+                              return Control_Bind.bind(Data_Either.bindEither)(vertEdgesRight(v4.trans.edges)(childm.rslice))(function (rightEdges) {
+                                  var rightParent = {
+                                      trans: {
+                                          id: incT(v),
+                                          is2nd: true,
+                                          edges: rightEdges
+                                      },
+                                      rslice: v4.rslice,
+                                      op: Freeze.value
+                                  };
+                                  return Control_Applicative.pure(Data_Either.applicativeEither)({
+                                      mkLeftParent: mkLeftParent,
+                                      rightParent: rightParent,
+                                      topSlice: topSlice
+                                  });
                               });
                           };
                       };
@@ -7343,8 +7429,8 @@ var PS = {};
           };
           var matchTrans = function (v) {
               if (v instanceof Data_List_Types.Cons) {
-                  var $610 = Data_Eq.eq(eqTransId)(v.value0.trans.id)(transId);
-                  if ($610) {
+                  var $651 = Data_Eq.eq(eqTransId)(v.value0.trans.id)(transId);
+                  if ($651) {
                       return new Data_Maybe.Just(new Data_Tuple.Tuple(v.value0, v.value1));
                   };
                   return Data_Maybe.Nothing.value;
@@ -7366,7 +7452,7 @@ var PS = {};
           if (v instanceof Data_Either.Left) {
               return new Data_Either.Left(v.value0);
           };
-          throw new Error("Failed pattern match at Model (line 702, column 34 - line 704, column 23): " + [ v.constructor.name ]);
+          throw new Error("Failed pattern match at Model (line 776, column 34 - line 778, column 23): " + [ v.constructor.name ]);
       };
   };
   var undoVertAtSlice = function (sliceId) {
@@ -7381,8 +7467,8 @@ var PS = {};
           };
           var matchSlice = function (v) {
               if (v instanceof Data_List_Types.Cons && v.value1 instanceof Data_List_Types.Cons) {
-                  var $626 = Data_Eq.eq(eqSliceId)(v.value0.rslice.id)(sliceId);
-                  if ($626) {
+                  var $667 = Data_Eq.eq(eqSliceId)(v.value0.rslice.id)(sliceId);
+                  if ($667) {
                       return new Data_Maybe.Just(new Data_Tuple.Tuple({
                           pl: v.value0,
                           pr: v.value1.value0
@@ -7407,7 +7493,7 @@ var PS = {};
           if (v instanceof Data_Either.Left) {
               return new Data_Either.Left(v.value0);
           };
-          throw new Error("Failed pattern match at Model (line 720, column 33 - line 722, column 23): " + [ v.constructor.name ]);
+          throw new Error("Failed pattern match at Model (line 794, column 33 - line 796, column 23): " + [ v.constructor.name ]);
       };
   };
   var vertAtMid = function (transId) {
@@ -7428,8 +7514,8 @@ var PS = {};
                                       if (seg.op instanceof Split) {
                                           return Control_Bind.bind(Data_Either.bindEither)(insertDangling(dist)(topSlice)(mkLeftParent)(seg.op.value0.childl.rslice)(seg.op.value0.childr))(function (v2) {
                                               return Control_Bind.bind(Data_Either.bindEither)((function () {
-                                                  var $641 = dist === 0;
-                                                  if ($641) {
+                                                  var $682 = dist === 0;
+                                                  if ($682) {
                                                       if (seg.op.value0.childl.rslice.parents instanceof MergeParents) {
                                                           return Data_Either.Right.create(resetExpls(setParents(new MergeParents({
                                                               left: leftSlice,
@@ -7470,7 +7556,7 @@ var PS = {};
                                                           });
                                                       });
                                                   };
-                                                  throw new Error("Failed pattern match at Model (line 672, column 9 - line 680, column 55): " + [ v2.leftover.constructor.name ]);
+                                                  throw new Error("Failed pattern match at Model (line 746, column 9 - line 754, column 55): " + [ v2.leftover.constructor.name ]);
                                               });
                                           });
                                       };
@@ -7524,23 +7610,25 @@ var PS = {};
                                                               });
                                                           });
                                                       };
-                                                      throw new Error("Failed pattern match at Model (line 690, column 13 - line 698, column 57): " + [ v3.leftover.constructor.name ]);
+                                                      throw new Error("Failed pattern match at Model (line 764, column 13 - line 772, column 57): " + [ v3.leftover.constructor.name ]);
                                                   });
                                               };
-                                              throw new Error("Failed pattern match at Model (line 684, column 9 - line 698, column 57): " + [ v2.leftover.constructor.name ]);
+                                              throw new Error("Failed pattern match at Model (line 758, column 9 - line 772, column 57): " + [ v2.leftover.constructor.name ]);
                                           });
                                       };
-                                      throw new Error("Failed pattern match at Model (line 660, column 19 - line 698, column 57): " + [ seg.op.constructor.name ]);
+                                      throw new Error("Failed pattern match at Model (line 734, column 19 - line 772, column 57): " + [ seg.op.constructor.name ]);
                                   };
-                                  throw new Error("Failed pattern match at Model (line 589, column 1 - line 589, column 53): " + [ dist.constructor.name, topSlice.constructor.name, mkLeftParent.constructor.name, leftSlice.constructor.name, seg.constructor.name ]);
+                                  throw new Error("Failed pattern match at Model (line 661, column 1 - line 661, column 53): " + [ dist.constructor.name, topSlice.constructor.name, mkLeftParent.constructor.name, leftSlice.constructor.name, seg.constructor.name ]);
                               };
-                              var $677 = dist === 0;
-                              if ($677) {
-                                  var $678 = !seg.trans.is2nd;
-                                  if ($678) {
-                                      return Data_Either.Right.create({
-                                          "seg'": mkLeftParent(seg),
-                                          leftover: Data_Maybe.Nothing.value
+                              var $718 = dist === 0;
+                              if ($718) {
+                                  var $719 = !seg.trans.is2nd;
+                                  if ($719) {
+                                      return Control_Bind.bind(Data_Either.bindEither)(mkLeftParent(seg))(function (seg$prime) {
+                                          return Control_Applicative.pure(Data_Either.applicativeEither)({
+                                              "seg'": seg$prime,
+                                              leftover: Data_Maybe.Nothing.value
+                                          });
                                       });
                                   };
                                   return v(true);
@@ -7576,7 +7664,7 @@ var PS = {};
                                                   })
                                               };
                                           };
-                                          throw new Error("Failed pattern match at Model (line 641, column 10 - line 643, column 89): " + [ v.leftover.constructor.name ]);
+                                          throw new Error("Failed pattern match at Model (line 713, column 10 - line 715, column 89): " + [ v.leftover.constructor.name ]);
                                       })());
                                   });
                               };
@@ -7608,7 +7696,7 @@ var PS = {};
                               if (v2.dangling instanceof Data_Maybe.Just) {
                                   return tryInsert(v2.dangling.value0.dist)(v2.dangling.value0.topSlice)(v2.dangling.value0.mkLeftParent)(v)(v1.value0)(v2["tail'"]);
                               };
-                              throw new Error("Failed pattern match at Model (line 621, column 7 - line 623, column 104): " + [ v2.dangling.constructor.name ]);
+                              throw new Error("Failed pattern match at Model (line 693, column 7 - line 695, column 104): " + [ v2.dangling.constructor.name ]);
                           });
                       };
                   };
@@ -7631,12 +7719,12 @@ var PS = {};
               if (v.value0.dangling instanceof Data_Maybe.Just) {
                   return new Data_Either.Left("Failed to insert hori!");
               };
-              throw new Error("Failed pattern match at Model (line 591, column 43 - line 601, column 47): " + [ v.value0.dangling.constructor.name ]);
+              throw new Error("Failed pattern match at Model (line 663, column 43 - line 673, column 47): " + [ v.value0.dangling.constructor.name ]);
           };
           if (v instanceof Data_Either.Left) {
               return new Data_Either.Left(v.value0);
           };
-          throw new Error("Failed pattern match at Model (line 590, column 27 - line 602, column 23): " + [ v.constructor.name ]);
+          throw new Error("Failed pattern match at Model (line 662, column 27 - line 674, column 23): " + [ v.constructor.name ]);
       };
   };
   exports["RightRepeat"] = RightRepeat;
