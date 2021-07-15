@@ -17,6 +17,7 @@ You can edit this file as you like.
   , "maybe"
   , "ordered-collections"
   , "partial"
+  , "pitches"
   , "prelude"
   , "psci-support"
   , "rationals"

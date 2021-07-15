@@ -2,16 +2,17 @@ module CommonApp where
 
 import Prelude
 import Data.Generic.Rep (class Generic)
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), maybe)
+import Data.Pitches (SPitch)
 import Data.Show.Generic (genericShow)
-import Model (Note, NoteExplanation, Parents(..), Piece, SliceId, StartStop(..), TransId, setHoriExplParent, setLeftExplParent, setRightExplParent)
+import Model (Note, NoteExplanation(..), Parents(..), Piece, SliceId, StartStop(..), TransId, setHoriExplParent, setLeftExplParent, setRightExplParent)
 import Web.UIEvent.KeyboardEvent (KeyboardEvent)
 
 data Selection
   = SelNone
   | SelSlice SliceId
   | SelTrans TransId
-  | SelNote { note :: Note, expl :: NoteExplanation, parents :: Parents }
+  | SelNote { note :: Note, expl :: NoteExplanation, parents :: Parents SliceId }
 
 derive instance eqOuterSelection :: Eq Selection
 
@@ -61,18 +62,23 @@ addParentToNote sel sliceId parNote
   | SelNote { note: selNote, parents, expl } <- sel = case parents of
     MergeParents { left, right }
       | sliceId == left
-      , Just expl' <- setLeftExplParent parNote expl -> setExpl expl'
+      , Just expl' <- setLeftExplParent selNote.pitch (Just parNote) expl -> setExpl expl'
       | sliceId == right
-      , Just expl' <- setRightExplParent parNote expl -> setExpl expl'
+      , Just expl' <- setRightExplParent selNote.pitch (Just parNote) expl -> setExpl expl'
       | otherwise -> NoOp
     VertParent vslice
       | sliceId == vslice
-      , Just expl' <- setHoriExplParent parNote expl -> setExpl expl'
+      , Just expl' <- setHoriExplParent selNote.pitch (Just parNote) expl -> setExpl expl'
       | otherwise -> NoOp
     NoParents -> NoOp
     where
     setExpl e = SetNoteExplanation { noteId: selNote.id, expl: e }
   | otherwise = NoOp
+
+removeParent :: Note -> NoteExplanation -> (SPitch -> Maybe Note -> NoteExplanation -> Maybe NoteExplanation) -> GraphAction
+removeParent note expl setParent = maybe NoOp mkAction $ setParent note.pitch Nothing expl
+  where
+  mkAction e' = SetNoteExplanation { noteId: note.id, expl: e' }
 
 data GraphAction
   = NoOp

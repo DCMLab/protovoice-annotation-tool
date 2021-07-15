@@ -13,7 +13,7 @@ import Data.Set as S
 import Data.Show.Generic (genericShow)
 import Data.Traversable (for_)
 import Folding (AgendaAlg, nothingMore, walkGraph)
-import Model (Edge, Note, NoteExplanation(..), Reduction, Slice, SliceId, StartStop(..), attachSegment, getInnerNotes, isRepeatingEdge, transEdges)
+import Model (Edge, Note, NoteExplanation(..), Reduction, Slice, SliceId, StartStop(..), attachSegment, findDoubleOrn, findLeftOrn, findRightOrn, getInnerNotes, isRepeatingEdge, transEdges)
 
 data NoteError
   = NSNoExpl
@@ -24,16 +24,12 @@ data EdgeError
   | ESNotStepwise
   | ESNotRepetition
 
--- data HoriError
---   = HSOk
---   | HSNotSamePitch
 data SliceError
   = SSInvalidReduction
 
 type Validation
   = { notes :: M.Map String NoteError
     , edges :: M.Map Edge EdgeError
-    -- , horis :: M.Map { parent :: Note, child :: Note } HoriError
     , slices :: M.Map SliceId SliceError
     }
 
@@ -54,17 +50,34 @@ validateNote note = do
   where
   err = case note.expl of
     NoExpl -> Just NSNoExpl
-    -- TODO: check ornament type correctness
-    HoriExpl parent -> if note.note.pitch == parent.pitch then Nothing else Just NSInvalidExplanation
+    RootExpl -> Nothing
+    HoriExpl parent ->
+      if note.note.pitch == parent.pitch then
+        Nothing
+      else
+        Just NSInvalidExplanation
     LeftExpl expl -> case expl.orn of
       Nothing -> Just NSInvalidExplanation
-      _ -> Nothing
+      e ->
+        if e == findLeftOrn note.note.pitch expl.rightParent then
+          Nothing
+        else
+          Just NSInvalidExplanation
     RightExpl expl -> case expl.orn of
       Nothing -> Just NSInvalidExplanation
-      _ -> Nothing
+      e ->
+        if e == findRightOrn note.note.pitch expl.leftParent then
+          Nothing
+        else
+          Just NSInvalidExplanation
     DoubleExpl expl -> case expl.orn of
       Nothing -> Just NSInvalidExplanation
-      _ -> Nothing
+      e ->
+        -- TODO: check presence of child passing edges for non-mid passings
+        if e == findDoubleOrn note.note.pitch expl.leftParent expl.rightParent then
+          Nothing
+        else
+          Just NSInvalidExplanation
 
 validationAlg :: AgendaAlg Unit Validation
 validationAlg = { init, freezeLeft, freezeOnly, splitLeft, splitOnly, splitRight, hori }

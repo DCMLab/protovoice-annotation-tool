@@ -2,7 +2,7 @@ module Render where
 
 import Prelude
 import Common (MBS)
-import CommonApp (GraphAction(..), Selection(..), addParentToNote, noteIsSelected)
+import CommonApp (GraphAction(..), Selection(..), addParentToNote, noteIsSelected, removeParent)
 import Data.Array (catMaybes, elem, findIndex, fromFoldable, length, mapWithIndex)
 import Data.Int (toNumber)
 import Data.Map as M
@@ -15,7 +15,7 @@ import Halogen.HTML.Properties as HA
 import Halogen.HTML.Properties as HP
 import Halogen.Svg.Attributes as SA
 import Halogen.Svg.Elements as SE
-import Model (LeftOrnament(..), RightOrnament(..), DoubleOrnament(..), Edge, Note, NoteExplanation(..), Notes, Piece, Reduction, SliceId, StartStop(..), explHasParent, getInnerNotes, getParents)
+import Model (DoubleOrnament(..), Edge, LeftOrnament(..), Note, NoteExplanation(..), Notes, Piece, Reduction, RightOrnament(..), SliceId, StartStop(..), explHasParent, getInnerNotes, getParents, setHoriExplParent, setLeftExplParent, setRightExplParent)
 import Validation (EdgeError(..), NoteError(..), SliceError(..), Validation)
 import Web.UIEvent.MouseEvent (ctrlKey)
 
@@ -81,6 +81,8 @@ data SelectionStatus
   | Selected
   | Related
 
+derive instance eqSelectionStatus :: Eq SelectionStatus
+
 renderSlice :: forall p. Selection -> Validation -> GraphSlice -> HH.HTML p GraphAction
 renderSlice selection validation { slice: { id, notes, x, parents }, depth: d } = case notes of
   Inner inotes ->
@@ -96,7 +98,7 @@ renderSlice selection validation { slice: { id, notes, x, parents }, depth: d } 
         ]
           <> mapWithIndex mknote inotes
       )
-  startstop -> mknode [ HH.text $ show startstop ] (scalex x) (scaley d) NotSelected Nothing []
+  startstop -> mknode [ HH.text $ show startstop ] (scalex x) (scaley d) (if activeParent then Related else NotSelected) Nothing []
   where
   selected = selection == SelSlice id
 
@@ -137,7 +139,7 @@ renderSlice selection validation { slice: { id, notes, x, parents }, depth: d } 
         , SA.text_anchor SA.AnchorMiddle
         , SA.dominant_baseline SA.BaselineMiddle
         , SA.fill case valid of
-            Nothing -> lightgray
+            Nothing -> if selStatus == Related then white else lightgray
             Just NSNoExpl -> case selStatus of
               Selected -> white
               _ -> black
@@ -347,8 +349,7 @@ mkSelect updateAction orn opts = HH.select_ options
 
 doubleOrnaments :: Array DoubleOrnament
 doubleOrnaments =
-  [ RootNote
-  , FullNeighbor
+  [ FullNeighbor
   , FullRepeat
   , LeftRepeatOfRight
   , RightRepeatOfLeft
@@ -364,11 +365,12 @@ renderNoteExplanation graph sel =
     SelNote { note, parents, expl } ->
       [ gridDiv "pure-u-1-4" [ HH.text $ show note.pitch <> " (" <> note.id <> ") " ] ]
         <> case expl of
-            NoExpl -> [ gridDiv "pure-u-1-4" [ HH.text "(no parents)" ] ]
+            NoExpl -> [ gridDiv "pure-u-1-4" [ HH.text "no parents" ] ]
+            RootExpl -> [ gridDiv "pure-u-1-4" [ HH.text "root note" ] ]
             HoriExpl n ->
               [ gridDiv "pure-u-1-4"
                   [ HH.text $ "parent: " <> show n.pitch <> " (" <> n.id <> ")"
-                  , HH.button [ HE.onClick $ \_ -> SetNoteExplanation { noteId: note.id, expl: NoExpl } ] [ HH.text "x" ]
+                  , HH.button [ HE.onClick $ \_ -> removeParent note expl setHoriExplParent ] [ HH.text "x" ]
                   ]
               ]
             LeftExpl lxpl@{ orn, rightParent } ->
@@ -380,13 +382,13 @@ renderNoteExplanation graph sel =
                   ]
               , gridDiv "pure-u-1-4"
                   [ HH.text $ "right parent: " <> show rightParent.pitch <> " (" <> rightParent.id <> ")"
-                  , HH.button [ HE.onClick $ \_ -> SetNoteExplanation { noteId: note.id, expl: NoExpl } ] [ HH.text "x" ]
+                  , HH.button [ HE.onClick $ \_ -> removeParent note expl setRightExplParent ] [ HH.text "x" ]
                   ]
               ]
             RightExpl rxpl@{ orn, leftParent } ->
               [ gridDiv "pure-u-1-4"
                   [ HH.text $ "left parent: " <> show leftParent.pitch <> " (" <> leftParent.id <> ")"
-                  , HH.button [ HE.onClick $ \_ -> SetNoteExplanation { noteId: note.id, expl: NoExpl } ] [ HH.text "x" ]
+                  , HH.button [ HE.onClick $ \_ -> removeParent note expl setLeftExplParent ] [ HH.text "x" ]
                   ]
               , gridDiv "pure-u-1-4"
                   [ mkSelect (\orn' -> SetNoteExplanation { noteId: note.id, expl: RightExpl rxpl { orn = orn' } })
@@ -398,13 +400,7 @@ renderNoteExplanation graph sel =
               [ gridDiv "pure-u-1-4"
                   [ HH.text $ "left parent: " <> show leftParent.pitch <> " (" <> leftParent.id <> ")"
                   , HH.button
-                      [ HE.onClick
-                          $ \_ ->
-                              SetNoteExplanation
-                                { noteId: note.id
-                                , expl: LeftExpl { orn: Nothing, rightParent }
-                                }
-                      ]
+                      [ HE.onClick $ \_ -> removeParent note expl setLeftExplParent ]
                       [ HH.text "x" ]
                   ]
               , gridDiv "pure-u-1-4"
@@ -415,13 +411,7 @@ renderNoteExplanation graph sel =
               , gridDiv "pure-u-1-4"
                   [ HH.text $ "right parent: " <> show rightParent.pitch <> " (" <> rightParent.id <> ")"
                   , HH.button
-                      [ HE.onClick
-                          $ \_ ->
-                              SetNoteExplanation
-                                { noteId: note.id
-                                , expl: RightExpl { orn: Nothing, leftParent }
-                                }
-                      ]
+                      [ HE.onClick $ \_ -> removeParent note expl setRightExplParent ]
                       [ HH.text "x" ]
                   ]
               ]

@@ -4,10 +4,10 @@ import Prelude
 import Common (MBS, parseMBS)
 import Data.Array (mapWithIndex)
 import Data.Maybe (Maybe, fromJust)
+import Data.Pitches (parseNotation)
 import Data.Traversable (for)
 import Model (Note, Piece)
 import Partial.Unsafe (unsafePartial)
-import SimplePitch (parseSimplePitch)
 
 type JSONPiece n
   = Array { time :: String, notes :: Array { pitch :: String, hold :: Boolean | n } }
@@ -35,7 +35,7 @@ pieceFromJSON piece =
     time <- parseMBS slice.time
     notes <-
       for slice.notes \note ->
-        (\p -> { hold: note.hold, note: { pitch: p, id: note.id } }) <$> parseSimplePitch note.pitch
+        (\p -> { hold: note.hold, note: { pitch: p, id: note.id } }) <$> parseNotation note.pitch
     pure { time, notes }
 
 examplePiece :: Array { time :: MBS, notes :: Array { hold :: Boolean, note :: Note } }
