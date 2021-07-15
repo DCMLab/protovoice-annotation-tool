@@ -2,6 +2,7 @@ module Model where
 
 import Prelude
 import Common (MBS)
+import Data.Array (catMaybes, filter)
 import Data.Array as A
 import Data.Either (Either(..))
 import Data.Foldable (find, foldl, for_, intercalate)
@@ -499,25 +500,93 @@ doAt match f red = go red.start red.segments
     Just (Tuple m remainder) -> (\result -> result <> remainder) <$> f leftSlice m
     Nothing -> Cons seg <$> go seg.rslice rest
 
--- TODO: automatically add unique explanations
 setParents :: Parents Slice -> Segment -> Segment
 setParents p seg = case p of
   NoParents -> seg { rslice { parents = NoParents } }
-  VertParent slice -> seg { rslice { parents = VertParent slice.id } }
-  MergeParents { left, right } ->
-    let
-      notes' =
-        if left.notes == Start && right.notes == Stop then
-          map (_ { expl = RootExpl }) <$> seg.rslice.notes
-        else
-          seg.rslice.notes
-    in
-      seg
-        { rslice
-          { parents = MergeParents { left: left.id, right: right.id }
-          , notes = notes'
-          }
+  VertParent slice ->
+    seg
+      { rslice
+        { parents = VertParent slice.id
+        , notes = map (findUniqueVertExpl slice) <$> seg.rslice.notes
         }
+      }
+  MergeParents { left, right } ->
+    seg
+      { rslice
+        { parents = MergeParents { left: left.id, right: right.id }
+        , notes = map (findUniqueMergeExpl left right) <$> seg.rslice.notes
+        }
+      }
+  where
+  findUniqueVertExpl parentSlice child = case filter (\pnote -> pnote.note.pitch == child.note.pitch) $ getInnerNotes parentSlice of
+    [ parentNote ] -> child { expl = HoriExpl parentNote.note }
+    _ -> child
+
+  findUniqueMergeExpl :: Slice -> Slice -> { note :: Note, expl :: NoteExplanation } -> { note :: Note, expl :: NoteExplanation }
+  findUniqueMergeExpl leftSlice rightSlice child
+    | leftSlice.notes == Start
+    , rightSlice.notes == Stop = child { expl = RootExpl }
+    | Inner lnotes <- leftSlice.notes
+    , Inner rnotes <- rightSlice.notes =
+      let
+        rightExpls =
+          catMaybes do
+            { note: ln } <- lnotes
+            pure do
+              orn <- findRightOrn child.note.pitch ln
+              pure $ RightExpl { orn: Just orn, leftParent: ln }
+
+        leftExpls =
+          catMaybes do
+            { note: rn } <- rnotes
+            pure do
+              orn <- findLeftOrn child.note.pitch rn
+              pure $ LeftExpl { orn: Just orn, rightParent: rn }
+
+        doubleExpls =
+          catMaybes do
+            { note: ln } <- lnotes
+            { note: rn } <- rnotes
+            pure do
+              orn <- findDoubleOrn child.note.pitch ln rn
+              pure $ DoubleExpl { orn: Just orn, leftParent: ln, rightParent: rn }
+      in
+        case doubleExpls of
+          [ uniqueDoubleExpl ] -> child { expl = uniqueDoubleExpl }
+          _ -> case leftExpls <> rightExpls of
+            [ uniqueSingleExpl ] -> child { expl = uniqueSingleExpl }
+            _ -> child
+    | otherwise = child
+
+vertEdgesLeft :: Edges -> Slice -> Either String Edges
+vertEdgesLeft edges slice
+  | Inner notes <- slice.notes =
+    Right
+      $ { regular: A.concatMap replaceRight edges.regular
+        , passing: A.concatMap replaceRight edges.passing
+        }
+    where
+    replaceRight { left, right }
+      | Inner rightNote <- right
+      , Just sliceNote <- A.find (\n -> n.note.id == rightNote.id) notes
+      , HoriExpl parent <- sliceNote.expl = [ { left, right: Inner parent } ]
+      | otherwise = []
+  | otherwise = Left "The current reduction is invalid: Trying to vert a Start or Stop slice."
+
+vertEdgesRight :: Edges -> Slice -> Either String Edges
+vertEdgesRight edges slice
+  | Inner notes <- slice.notes =
+    Right
+      $ { regular: A.concatMap replaceLeft edges.regular
+        , passing: A.concatMap replaceLeft edges.passing
+        }
+    where
+    replaceLeft { left, right }
+      | Inner leftNote <- left
+      , Just sliceNote <- A.find (\n -> n.note.id == leftNote.id) notes
+      , HoriExpl parent <- sliceNote.expl = [ { left: Inner parent, right } ]
+      | otherwise = []
+  | otherwise = Left "The current reduction is invalid: Trying to vert a Start or Stop slice."
 
 -- | Merges two segment into a new segment with a 'Split' operation.
 mkMerge :: TransId -> Slice -> Segment -> Segment -> Segment
@@ -551,10 +620,14 @@ mergeAtSlice sliceId model = case doAt matchSlice tryMerge model.reduction of
 
 -- | Verticalizes three segments into two new segments,
 -- the first of witch gets a 'Hori' operation.
-mkVert :: TransId -> SliceId -> Segment -> Segment -> Segment -> Either String { mkLeftParent :: EndSegment -> EndSegment, rightParent :: Segment, topSlice :: Slice }
+mkVert :: TransId -> SliceId -> Segment -> Segment -> Segment -> Either String { mkLeftParent :: EndSegment -> Either String EndSegment, rightParent :: Segment, topSlice :: Slice }
 mkVert tid sid l@{ rslice: { notes: Inner notesl } } m@{ rslice: { notes: Inner notesr } } r
   | not $ A.all isRepeatingEdge m.trans.edges.regular = Left "Middle transition of a vert must only contain repetition and passing edges!"
-  | otherwise = Right { mkLeftParent, rightParent, topSlice }
+  | otherwise = do
+    rightEdges <- vertEdgesRight r.trans.edges childm.rslice
+    let
+      rightParent = { trans: { id: incT tid, is2nd: true, edges: rightEdges }, rslice: r.rslice, op: Freeze }
+    pure { mkLeftParent, rightParent, topSlice }
     where
     countPitches notes = foldl (\counts n -> M.insertWith (+) n.note.pitch 1 counts) M.empty notes
 
@@ -571,17 +644,16 @@ mkVert tid sid l@{ rslice: { notes: Inner notesl } } m@{ rslice: { notes: Inner 
       , parents: NoParents
       }
 
-    mkLeftParent lchild =
-      { trans: emptyTrans tid false
-      , op:
-          Hori
-            { childl: setParents (VertParent topSlice) (attachSegment lchild l.rslice)
-            , childm: setParents (VertParent topSlice) m
-            , childr: detachSegment r
-            }
-      }
+    childm = setParents (VertParent topSlice) m
 
-    rightParent = { trans: emptyTrans (incT tid) true, rslice: r.rslice, op: Freeze }
+    mkLeftParent lfound = do
+      let
+        childl = setParents (VertParent topSlice) (attachSegment lfound l.rslice)
+      leftEdges <- vertEdgesLeft lfound.trans.edges childl.rslice
+      pure
+        { trans: { id: tid, is2nd: false, edges: leftEdges }
+        , op: Hori { childl, childm, childr: detachSegment r }
+        }
 
 mkVert _ _ _ _ _ = Left "Cannot vert an outer slice!"
 
@@ -611,7 +683,7 @@ vertAtMid transId model = case doVert model.reduction.start model.reduction.segm
   doVert ::
     Slice ->
     List Segment ->
-    Either String { tail' :: List Segment, dangling :: Maybe { dist :: Int, mkLeftParent :: EndSegment -> EndSegment, topSlice :: Slice } }
+    Either String { tail' :: List Segment, dangling :: Maybe { dist :: Int, mkLeftParent :: EndSegment -> Either String EndSegment, topSlice :: Slice } }
   doVert leftSlice (Cons l tail@(Cons m (Cons r rest)))
     | m.trans.id == transId = do
       { mkLeftParent, rightParent, topSlice } <- mkVert nextTId nextSId l m r
@@ -629,11 +701,11 @@ vertAtMid transId model = case doVert model.reduction.start model.reduction.segm
   tryInsert ::
     Int ->
     Slice ->
-    (EndSegment -> EndSegment) ->
+    (EndSegment -> Either String EndSegment) ->
     Slice ->
     Segment ->
     List Segment ->
-    Either String { tail' :: List Segment, dangling :: Maybe { dist :: Int, mkLeftParent :: EndSegment -> EndSegment, topSlice :: Slice } }
+    Either String { tail' :: List Segment, dangling :: Maybe { dist :: Int, mkLeftParent :: EndSegment -> Either String EndSegment, topSlice :: Slice } }
   tryInsert dist topSlice mkLeftParent leftSlice l t' = do
     { seg': l', leftover } <- insertDangling dist topSlice mkLeftParent leftSlice (detachSegment l)
     let
@@ -649,13 +721,15 @@ vertAtMid transId model = case doVert model.reduction.start model.reduction.segm
   insertDangling ::
     Int ->
     Slice ->
-    (EndSegment -> EndSegment) ->
+    (EndSegment -> Either String EndSegment) ->
     Slice ->
     EndSegment ->
     Either String { seg' :: EndSegment, leftover :: Maybe Int }
   insertDangling dist topSlice mkLeftParent leftSlice seg
     -- can be inserted here: return update segment (no leftovers)
-    | dist == 0, not seg.trans.is2nd = Right $ { seg': mkLeftParent seg, leftover: Nothing }
+    | dist == 0, not seg.trans.is2nd = do
+      seg' <- mkLeftParent seg
+      pure { seg', leftover: Nothing }
     -- cannot be inserted here: descend and return updated segment + leftovers
     | otherwise = case seg.op of
       -- freeze: cannot descend -> introduce leftovers
@@ -746,36 +820,6 @@ noteSetExplanation noteId expl model = case traverseTop Nil model.reduction.segm
   setNoteExplInSlice slice = slice { notes = map (\n -> if n.note.id == noteId then n { expl = expl } else n) <$> slice.notes }
 
   notFound = Left $ "Note " <> noteId <> " not found"
-
-  vertEdgesLeft :: Edges -> Slice -> Either String Edges
-  vertEdgesLeft edges slice
-    | Inner notes <- slice.notes =
-      Right
-        $ { regular: A.concatMap replaceRight edges.regular
-          , passing: A.concatMap replaceRight edges.passing
-          }
-      where
-      replaceRight { left, right }
-        | Inner rightNote <- right
-        , Just sliceNote <- A.find (\n -> n.note.id == rightNote.id) notes
-        , HoriExpl parent <- sliceNote.expl = [ { left, right: Inner parent } ]
-        | otherwise = []
-    | otherwise = Left "The current reduction is invalid: Trying to vert a Start or Stop slice."
-
-  vertEdgesRight :: Edges -> Slice -> Either String Edges
-  vertEdgesRight edges slice
-    | Inner notes <- slice.notes =
-      Right
-        $ { regular: A.concatMap replaceLeft edges.regular
-          , passing: A.concatMap replaceLeft edges.passing
-          }
-      where
-      replaceLeft { left, right }
-        | Inner leftNote <- left
-        , Just sliceNote <- A.find (\n -> n.note.id == leftNote.id) notes
-        , HoriExpl parent <- sliceNote.expl = [ { left: Inner parent, right } ]
-        | otherwise = []
-    | otherwise = Left "The current reduction is invalid: Trying to vert a Start or Stop slice."
 
   traverseTop :: List Edges -> List Segment -> Either String (List Segment)
   traverseTop upFromLeft = case _ of
