@@ -121,5 +121,5 @@ in  upstream
         , "strings"
         ]
     , repo = "https://github.com/DCMLab/purescript-pitches.git"
-    , version = "c2e48a7412e871ae64df9a3da589cddfb196040c"
+    , version = "910dacc6d5f4b10bcd4afaa76e0fa1e59f8d6237"
     }

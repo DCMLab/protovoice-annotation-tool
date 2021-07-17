@@ -4,6 +4,7 @@ import Prelude
 import Common (MBS)
 import CommonApp (GraphAction(..), Selection(..), addParentToNote, noteIsSelected, removeParent)
 import Data.Array (catMaybes, elem, findIndex, fromFoldable, length, mapWithIndex)
+import Data.Either (Either(..))
 import Data.Int (toNumber)
 import Data.Map as M
 import Data.Maybe (Maybe(..), fromMaybe)
@@ -15,6 +16,7 @@ import Halogen.HTML.Properties as HA
 import Halogen.HTML.Properties as HP
 import Halogen.Svg.Attributes as SA
 import Halogen.Svg.Elements as SE
+import Leftmost (exportLeftmost, leftmostToJSON)
 import Model (DoubleOrnament(..), Edge, LeftOrnament(..), Note, NoteExplanation(..), Notes, Piece, Reduction, RightOrnament(..), SliceId, StartStop(..), explHasParent, getInnerNotes, getParents, setHoriExplParent, setLeftExplParent, setRightExplParent)
 import Validation (EdgeError(..), NoteError(..), SliceError(..), Validation)
 import Web.UIEvent.MouseEvent (ctrlKey)
@@ -293,17 +295,19 @@ renderHori selection slices { child, parent } =
     HoriExpl parentNote -> Just { childNote: note.note, parentNote }
     _ -> Nothing
 
-renderTime :: forall r p. Int -> { time :: MBS | r } -> HH.HTML p GraphAction
-renderTime i { time }
-  | time.s == 0 % 1 =
-    SE.text
-      [ SA.x $ scalex $ toNumber (i + 1)
-      , SA.y $ scaley (-0.5)
-      , SA.text_anchor SA.AnchorMiddle
-      , SA.dominant_baseline SA.BaselineMiddle
-      ]
-      [ HH.text $ show time.m <> "." <> show time.b ]
-  | otherwise = HH.text ""
+renderTime :: forall r p. Int -> { time :: Either String MBS | r } -> HH.HTML p GraphAction
+renderTime i { time } =
+  SE.text
+    [ SA.x $ scalex $ toNumber (i + 1)
+    , SA.y $ scaley (-0.5)
+    , SA.text_anchor SA.AnchorMiddle
+    , SA.dominant_baseline SA.BaselineMiddle
+    ]
+    [ HH.text label ]
+  where
+  label = case time of
+    Right mbs -> if mbs.s == 0 % 1 then show mbs.m <> "." <> show mbs.b else ""
+    Left str -> str
 
 renderReduction :: forall p. Piece -> Graph -> Validation -> Selection -> HH.HTML p GraphAction
 renderReduction piece graph validation selection =
@@ -332,7 +336,7 @@ renderReduction piece graph validation selection =
   svgAxis = mapWithIndex renderTime piece
 
 renderLeftmost :: forall p. Reduction -> HH.HTML p GraphAction
-renderLeftmost red = HH.ol_ $ map (\step -> HH.li_ [ HH.text $ show step ]) steps
+renderLeftmost red = HH.ol_ $ map (\step -> HH.li_ [ HH.text $ exportLeftmost step ]) steps
   where
   steps = reductionToLeftmost red
 

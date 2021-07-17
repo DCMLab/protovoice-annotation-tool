@@ -18,7 +18,7 @@ import Halogen.HTML.Properties as HP
 import Halogen.Query.Event (eventListener)
 import Halogen.VDom.Driver (runUI)
 import Model (Model, loadPiece, mergeAtSlice, noteSetExplanation, showReduction, undoMergeAtTrans, undoVertAtSlice, vertAtMid)
-import Render (renderNoteExplanation, renderReduction)
+import Render (renderLeftmost, renderNoteExplanation, renderReduction)
 import Utils (examplePiece, examplePieceLong)
 import Validation (validateReduction)
 import Web.DOM.ParentNode (QuerySelector(..))
@@ -148,11 +148,11 @@ appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultE
             HH.div_
               [ HH.p_ [ renderNoteExplanation graph st.selected ]
               , renderReduction model.piece graph valid st.selected
-              --, renderLeftmost model.reduction
+              , renderLeftmost model.reduction
               ]
       , HH.p_
           [ HH.text "Selection: "
           , HH.text $ show st.selected
           ]
-      , HH.pre_ [ HH.text $ maybe "No Piece Loaded" (_.reduction >>> showReduction) st.model ]
+      --, HH.pre_ [ HH.text $ maybe "No Piece Loaded" (_.reduction >>> showReduction) st.model ]
       ]

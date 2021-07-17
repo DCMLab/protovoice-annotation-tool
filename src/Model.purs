@@ -19,12 +19,14 @@ import Data.Traversable (scanl)
 import Data.Tuple (Tuple(..))
 import Effect (Effect)
 import Effect.Console (log, logShow)
+import Simple.JSON (writeImpl)
+import Simple.JSON as JSON
 
 -- types
 -- -----
 --
 type Piece
-  = Array { time :: MBS, notes :: Array { hold :: Boolean, note :: Note } }
+  = Array { time :: Either String MBS, notes :: Array { hold :: Boolean, note :: Note } }
 
 data RightOrnament
   = RightRepeat
@@ -239,6 +241,12 @@ instance showStartStop :: (Show a) => Show (StartStop a) where
   show Start = "⋊"
   show Stop = "⋉"
   show (Inner a) = show a
+
+instance writeForeignStartStop :: (JSON.WriteForeign a) => JSON.WriteForeign (StartStop a) where
+  writeImpl = case _ of
+    Start -> writeImpl "start"
+    Stop -> writeImpl "stop"
+    Inner a -> writeImpl a
 
 type Edge
   = { left :: StartStop Note, right :: StartStop Note }

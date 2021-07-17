@@ -33,6 +33,7 @@ type Validation
     , slices :: M.Map SliceId SliceError
     }
 
+-- TODO: check that every hori parent note is pointed to at least once
 validateSlice :: Slice -> Validation -> Validation
 validateSlice slice st =
   st
