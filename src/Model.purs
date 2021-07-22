@@ -17,7 +17,6 @@ import Data.Pitches (class Interval, Pitch, SPitch, direction, ic, isStep, pc, p
 import Data.Show.Generic (genericShow)
 import Data.Traversable (scanl)
 import Data.Tuple (Tuple(..))
-import Debug (spyWith)
 import Effect (Effect)
 import Effect.Console (log, logShow)
 import Simple.JSON (writeImpl)
@@ -666,7 +665,7 @@ mkVert tid sid l@{ rslice: { notes: Inner notesl } } m@{ rslice: { notes: Inner 
     mkLeftParent lfound = do
       let
         childl = setParents (VertParent topSlice) (attachSegment lfound l.rslice)
-      leftEdges <- spyWith "vertL" show $ vertEdgesLeft lfound.trans.edges childl.rslice
+      leftEdges <- vertEdgesLeft lfound.trans.edges childl.rslice
       pure
         { trans: { id: tid, is2nd: false, edges: leftEdges }
         , op: Hori { childl, childm, childr: detachSegment r }

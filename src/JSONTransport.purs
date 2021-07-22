@@ -11,7 +11,7 @@ import Data.Variant (Variant, case_, inj, on)
 import Folding (leftmostToReduction, reductionToLeftmost)
 import Leftmost (FreezeOp(..), HoriChildren(..), HoriOp(..), Leftmost(..), RootOrnament(..), SplitOp(..))
 import Model (DoubleOrnament(..), Edge, Edges, LeftOrnament(..), Note, Reduction, RightOrnament(..), SliceId(..), StartStop, TransId(..), Transition)
-import Type.Prelude (Proxy(..))
+import Type.Proxy (Proxy(..))
 
 ----------
 -- JSON --

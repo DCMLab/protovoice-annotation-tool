@@ -5,7 +5,7 @@ import Data.Generic.Rep (class Generic)
 import Data.Maybe (Maybe(..), maybe)
 import Data.Pitches (SPitch)
 import Data.Show.Generic (genericShow)
-import Model (Note, NoteExplanation(..), Parents(..), Piece, SliceId, StartStop(..), TransId, setHoriExplParent, setLeftExplParent, setRightExplParent)
+import Model (Note, NoteExplanation, Parents(..), Piece, SliceId, StartStop(..), TransId, setHoriExplParent, setLeftExplParent, setRightExplParent)
 import Web.UIEvent.KeyboardEvent (KeyboardEvent)
 
 data Selection
