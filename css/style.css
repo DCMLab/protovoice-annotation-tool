@@ -10,6 +10,22 @@
     overflow-x: scroll;
 }
 
+.pure-menu-selected {
+    background: #eee;
+}
+
+.tab {
+    background: #eee;
+    padding: 1em;
+}
+
+.alert {
+    background: orange;
+    color: white;
+    padding: 1em;
+    border-radius: 4px;
+}
+
 /* General visual stuff */
 
 .file-input {

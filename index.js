@@ -472,6 +472,9 @@ var PS = {};
   };
   var Eq = function (eq) {
       this.eq = eq;
+  };
+  var Eq1 = function (eq1) {
+      this.eq1 = eq1;
   }; 
   var eqString = new Eq($foreign.eqStringImpl);
   var eqRowNil = new EqRecord(function (v) {
@@ -493,6 +496,9 @@ var PS = {};
   var eqInt = new Eq($foreign.eqIntImpl);
   var eqChar = new Eq($foreign.eqCharImpl);
   var eqBoolean = new Eq($foreign.eqBooleanImpl);
+  var eq1 = function (dict) {
+      return dict.eq1;
+  };
   var eq = function (dict) {
       return dict.eq;
   };
@@ -527,6 +533,9 @@ var PS = {};
   exports["Eq"] = Eq;
   exports["eq"] = eq;
   exports["notEq"] = notEq;
+  exports["Eq1"] = Eq1;
+  exports["eq1"] = eq1;
+  exports["eqBoolean"] = eqBoolean;
   exports["eqInt"] = eqInt;
   exports["eqNumber"] = eqNumber;
   exports["eqChar"] = eqChar;
@@ -720,6 +729,15 @@ var PS = {};
   var compare = function (dict) {
       return dict.compare;
   };
+  var comparing = function (dictOrd) {
+      return function (f) {
+          return function (x) {
+              return function (y) {
+                  return compare(dictOrd)(f(x))(f(y));
+              };
+          };
+      };
+  };
   var greaterThanOrEq = function (dictOrd) {
       return function (a1) {
           return function (a2) {
@@ -821,6 +839,7 @@ var PS = {};
   };
   exports["Ord"] = Ord;
   exports["compare"] = compare;
+  exports["comparing"] = comparing;
   exports["max"] = max;
   exports["abs"] = abs;
   exports["signum"] = signum;
@@ -976,6 +995,15 @@ var PS = {};
   var showNumber = new Show($foreign.showNumberImpl);
   var showInt = new Show($foreign.showIntImpl);
   var showChar = new Show($foreign.showCharImpl);
+  var showBoolean = new Show(function (v) {
+      if (v) {
+          return "true";
+      };
+      if (!v) {
+          return "false";
+      };
+      throw new Error("Failed pattern match at Data.Show (line 20, column 1 - line 22, column 23): " + [ v.constructor.name ]);
+  });
   var show = function (dict) {
       return dict.show;
   };
@@ -998,6 +1026,7 @@ var PS = {};
   };
   exports["Show"] = Show;
   exports["show"] = show;
+  exports["showBoolean"] = showBoolean;
   exports["showInt"] = showInt;
   exports["showNumber"] = showNumber;
   exports["showChar"] = showChar;
@@ -1277,7 +1306,8 @@ var PS = {};
   var Control_Monad = $PS["Control.Monad"];
   var Data_Function = $PS["Data.Function"];
   var Data_Functor = $PS["Data.Functor"];
-  var Data_Maybe = $PS["Data.Maybe"];              
+  var Data_Maybe = $PS["Data.Maybe"];
+  var Data_Show = $PS["Data.Show"];                
   var Left = (function () {
       function Left(value0) {
           this.value0 = value0;
@@ -1296,6 +1326,19 @@ var PS = {};
       };
       return Right;
   })();
+  var showEither = function (dictShow) {
+      return function (dictShow1) {
+          return new Data_Show.Show(function (v) {
+              if (v instanceof Left) {
+                  return "(Left " + (Data_Show.show(dictShow)(v.value0) + ")");
+              };
+              if (v instanceof Right) {
+                  return "(Right " + (Data_Show.show(dictShow1)(v.value0) + ")");
+              };
+              throw new Error("Failed pattern match at Data.Either (line 173, column 1 - line 175, column 46): " + [ v.constructor.name ]);
+          });
+      };
+  }; 
   var functorEither = new Data_Functor.Functor(function (f) {
       return function (m) {
           if (m instanceof Left) {
@@ -1361,6 +1404,7 @@ var PS = {};
   exports["applicativeEither"] = applicativeEither;
   exports["bindEither"] = bindEither;
   exports["monadEither"] = monadEither;
+  exports["showEither"] = showEither;
 })(PS);
 (function(exports) {
   "use strict";
@@ -1865,6 +1909,32 @@ var PS = {};
   };
   var foldl = function (dict) {
       return dict.foldl;
+  };
+  var intercalate = function (dictFoldable) {
+      return function (dictMonoid) {
+          return function (sep) {
+              return function (xs) {
+                  var go = function (v) {
+                      return function (x) {
+                          if (v.init) {
+                              return {
+                                  init: false,
+                                  acc: x
+                              };
+                          };
+                          return {
+                              init: false,
+                              acc: Data_Semigroup.append(dictMonoid.Semigroup0())(v.acc)(Data_Semigroup.append(dictMonoid.Semigroup0())(sep)(x))
+                          };
+                      };
+                  };
+                  return (foldl(dictFoldable)(go)({
+                      init: true,
+                      acc: Data_Monoid.mempty(dictMonoid)
+                  })(xs)).acc;
+              };
+          };
+      };
   }; 
   var foldableMaybe = new Foldable(function (dictMonoid) {
       return function (f) {
@@ -1959,6 +2029,7 @@ var PS = {};
   exports["fold"] = fold;
   exports["traverse_"] = traverse_;
   exports["for_"] = for_;
+  exports["intercalate"] = intercalate;
   exports["elem"] = elem;
   exports["find"] = find;
   exports["foldableArray"] = foldableArray;
@@ -2074,7 +2145,11 @@ var PS = {};
   "use strict";
   $PS["Data.Tuple"] = $PS["Data.Tuple"] || {};
   var exports = $PS["Data.Tuple"];
-  var Data_Functor = $PS["Data.Functor"];          
+  var Data_Eq = $PS["Data.Eq"];
+  var Data_Functor = $PS["Data.Functor"];
+  var Data_Ord = $PS["Data.Ord"];
+  var Data_Ordering = $PS["Data.Ordering"];
+  var Data_Show = $PS["Data.Show"];                
   var Tuple = (function () {
       function Tuple(value0, value1) {
           this.value0 = value0;
@@ -2089,6 +2164,13 @@ var PS = {};
   })();
   var snd = function (v) {
       return v.value1;
+  };
+  var showTuple = function (dictShow) {
+      return function (dictShow1) {
+          return new Data_Show.Show(function (v) {
+              return "(Tuple " + (Data_Show.show(dictShow)(v.value0) + (" " + (Data_Show.show(dictShow1)(v.value1) + ")")));
+          });
+      };
   }; 
   var functorTuple = new Data_Functor.Functor(function (f) {
       return function (m) {
@@ -2097,10 +2179,39 @@ var PS = {};
   });                                                                                                   
   var fst = function (v) {
       return v.value0;
+  }; 
+  var eqTuple = function (dictEq) {
+      return function (dictEq1) {
+          return new Data_Eq.Eq(function (x) {
+              return function (y) {
+                  return Data_Eq.eq(dictEq)(x.value0)(y.value0) && Data_Eq.eq(dictEq1)(x.value1)(y.value1);
+              };
+          });
+      };
+  };
+  var ordTuple = function (dictOrd) {
+      return function (dictOrd1) {
+          return new Data_Ord.Ord(function () {
+              return eqTuple(dictOrd.Eq0())(dictOrd1.Eq0());
+          }, function (x) {
+              return function (y) {
+                  var v = Data_Ord.compare(dictOrd)(x.value0)(y.value0);
+                  if (v instanceof Data_Ordering.LT) {
+                      return Data_Ordering.LT.value;
+                  };
+                  if (v instanceof Data_Ordering.GT) {
+                      return Data_Ordering.GT.value;
+                  };
+                  return Data_Ord.compare(dictOrd1)(x.value1)(y.value1);
+              };
+          });
+      };
   };
   exports["Tuple"] = Tuple;
   exports["fst"] = fst;
   exports["snd"] = snd;
+  exports["showTuple"] = showTuple;
+  exports["ordTuple"] = ordTuple;
   exports["functorTuple"] = functorTuple;
 })(PS);
 (function(exports) {
@@ -2175,6 +2286,7 @@ var PS = {};
   var Control_Applicative = $PS["Control.Applicative"];
   var Control_Apply = $PS["Control.Apply"];
   var Control_Plus = $PS["Control.Plus"];
+  var Data_Eq = $PS["Data.Eq"];
   var Data_Foldable = $PS["Data.Foldable"];
   var Data_Function = $PS["Data.Function"];
   var Data_Functor = $PS["Data.Functor"];
@@ -2182,6 +2294,7 @@ var PS = {};
   var Data_Monoid = $PS["Data.Monoid"];
   var Data_NonEmpty = $PS["Data.NonEmpty"];
   var Data_Semigroup = $PS["Data.Semigroup"];
+  var Data_Show = $PS["Data.Show"];
   var Data_Unfoldable = $PS["Data.Unfoldable"];
   var Data_Unfoldable1 = $PS["Data.Unfoldable1"];                
   var Nil = (function () {
@@ -2333,6 +2446,14 @@ var PS = {};
           return Data_Foldable.foldr(foldableList)(Cons.create)(ys)(xs);
       };
   });
+  var showList = function (dictShow) {
+      return new Data_Show.Show(function (v) {
+          if (v instanceof Nil) {
+              return "Nil";
+          };
+          return "(" + (Data_Foldable.intercalate(foldableList)(Data_Monoid.monoidString)(" : ")(Data_Functor.map(functorList)(Data_Show.show(dictShow))(v)) + " : Nil)");
+      });
+  }; 
   var unfoldable1List = new Data_Unfoldable1.Unfoldable1(function (f) {
       return function (b) {
           var go = function ($copy_source) {
@@ -2393,6 +2514,48 @@ var PS = {};
           return go(b)(Nil.value);
       };
   });
+  var eq1List = new Data_Eq.Eq1(function (dictEq) {
+      return function (xs) {
+          return function (ys) {
+              var go = function ($copy_v) {
+                  return function ($copy_v1) {
+                      return function ($copy_v2) {
+                          var $tco_var_v = $copy_v;
+                          var $tco_var_v1 = $copy_v1;
+                          var $tco_done = false;
+                          var $tco_result;
+                          function $tco_loop(v, v1, v2) {
+                              if (!v2) {
+                                  $tco_done = true;
+                                  return false;
+                              };
+                              if (v instanceof Nil && v1 instanceof Nil) {
+                                  $tco_done = true;
+                                  return v2;
+                              };
+                              if (v instanceof Cons && v1 instanceof Cons) {
+                                  $tco_var_v = v.value1;
+                                  $tco_var_v1 = v1.value1;
+                                  $copy_v2 = v2 && Data_Eq.eq(dictEq)(v1.value0)(v.value0);
+                                  return;
+                              };
+                              $tco_done = true;
+                              return false;
+                          };
+                          while (!$tco_done) {
+                              $tco_result = $tco_loop($tco_var_v, $tco_var_v1, $copy_v2);
+                          };
+                          return $tco_result;
+                      };
+                  };
+              };
+              return go(xs)(ys)(true);
+          };
+      };
+  });                                                      
+  var eqList = function (dictEq) {
+      return new Data_Eq.Eq(Data_Eq.eq1(eq1List)(dictEq));
+  }; 
   var applyList = new Control_Apply.Apply(function () {
       return functorList;
   }, function (v) {
@@ -2420,6 +2583,8 @@ var PS = {};
   exports["Nil"] = Nil;
   exports["Cons"] = Cons;
   exports["NonEmptyList"] = NonEmptyList;
+  exports["showList"] = showList;
+  exports["eqList"] = eqList;
   exports["semigroupList"] = semigroupList;
   exports["functorList"] = functorList;
   exports["foldableList"] = foldableList;
@@ -3176,6 +3341,64 @@ var PS = {};
   };
 
   //------------------------------------------------------------------------------
+  // Sorting ---------------------------------------------------------------------
+  //------------------------------------------------------------------------------
+
+  exports.sortByImpl = (function () {
+    function mergeFromTo(compare, fromOrdering, xs1, xs2, from, to) {
+      var mid;
+      var i;
+      var j;
+      var k;
+      var x;
+      var y;
+      var c;
+
+      mid = from + ((to - from) >> 1);
+      if (mid - from > 1) mergeFromTo(compare, fromOrdering, xs2, xs1, from, mid);
+      if (to - mid > 1) mergeFromTo(compare, fromOrdering, xs2, xs1, mid, to);
+
+      i = from;
+      j = mid;
+      k = from;
+      while (i < mid && j < to) {
+        x = xs2[i];
+        y = xs2[j];
+        c = fromOrdering(compare(x)(y));
+        if (c > 0) {
+          xs1[k++] = y;
+          ++j;
+        }
+        else {
+          xs1[k++] = x;
+          ++i;
+        }
+      }
+      while (i < mid) {
+        xs1[k++] = xs2[i++];
+      }
+      while (j < to) {
+        xs1[k++] = xs2[j++];
+      }
+    }
+
+    return function (compare) {
+      return function (fromOrdering) {
+        return function (xs) {
+          var out;
+
+          if (xs.length < 2) return xs;
+
+          out = xs.slice(0);
+          mergeFromTo(compare, fromOrdering, out, xs.slice(0), 0, xs.length);
+
+          return out;
+        };
+      };
+    };
+  })();
+
+  //------------------------------------------------------------------------------
   // Zipping ---------------------------------------------------------------------
   //------------------------------------------------------------------------------
 
@@ -3226,6 +3449,52 @@ var PS = {};
     };
   };
 })(PS["Data.Array"] = PS["Data.Array"] || {});
+(function(exports) {
+  "use strict";
+
+  exports.pushAll = function (as) {
+    return function (xs) {
+      return function () {
+        return xs.push.apply(xs, as);
+      };
+    };
+  };
+
+  exports.unsafeFreeze = function (xs) {
+    return function () {
+      return xs;
+    };
+  };
+
+  function copyImpl(xs) {
+    return function () {
+      return xs.slice();
+    };
+  }                         
+
+  exports.thaw = copyImpl;
+})(PS["Data.Array.ST"] = PS["Data.Array.ST"] || {});
+(function($PS) {
+  // Generated by purs version 0.14.1
+  "use strict";
+  $PS["Data.Array.ST"] = $PS["Data.Array.ST"] || {};
+  var exports = $PS["Data.Array.ST"];
+  var $foreign = $PS["Data.Array.ST"];                     
+  var withArray = function (f) {
+      return function (xs) {
+          return function __do() {
+              var result = $foreign.thaw(xs)();
+              f(result)();
+              return $foreign.unsafeFreeze(result)();
+          };
+      };
+  };
+  var push = function (a) {
+      return $foreign.pushAll([ a ]);
+  };
+  exports["withArray"] = withArray;
+  exports["push"] = push;
+})(PS);
 (function($PS) {
   // Generated by purs version 0.14.1
   "use strict";
@@ -3234,13 +3503,41 @@ var PS = {};
   var $foreign = $PS["Data.Array"];
   var Control_Bind = $PS["Control.Bind"];
   var Control_Category = $PS["Control.Category"];
+  var Data_Array_ST = $PS["Data.Array.ST"];
   var Data_Eq = $PS["Data.Eq"];
   var Data_Foldable = $PS["Data.Foldable"];
   var Data_Function = $PS["Data.Function"];
   var Data_Functor = $PS["Data.Functor"];
-  var Data_Maybe = $PS["Data.Maybe"];                                                    
+  var Data_Maybe = $PS["Data.Maybe"];
+  var Data_Ord = $PS["Data.Ord"];
+  var Data_Ordering = $PS["Data.Ordering"];
+  var Data_Semigroup = $PS["Data.Semigroup"];                                            
   var unsafeIndex = function (dictPartial) {
       return $foreign.unsafeIndexImpl;
+  };
+  var sortBy = function (comp) {
+      return $foreign.sortByImpl(comp)(function (v) {
+          if (v instanceof Data_Ordering.GT) {
+              return 1;
+          };
+          if (v instanceof Data_Ordering.EQ) {
+              return 0;
+          };
+          if (v instanceof Data_Ordering.LT) {
+              return -1 | 0;
+          };
+          throw new Error("Failed pattern match at Data.Array (line 831, column 31 - line 834, column 11): " + [ v.constructor.name ]);
+      });
+  };
+  var sortWith = function (dictOrd) {
+      return function (f) {
+          return sortBy(Data_Ord.comparing(dictOrd)(f));
+      };
+  };
+  var snoc = function (xs) {
+      return function (x) {
+          return Data_Array_ST.withArray(Data_Array_ST.push(x))(xs)();
+      };
   };
   var singleton = function (a) {
       return [ a ];
@@ -3291,6 +3588,11 @@ var PS = {};
           };
       };
   };
+  var cons = function (x) {
+      return function (xs) {
+          return Data_Semigroup.append(Data_Semigroup.semigroupArray)([ x ])(xs);
+      };
+  };
   var concatMap = Data_Function.flip(Control_Bind.bind(Control_Bind.bindArray));
   var mapMaybe = function (f) {
       return concatMap((function () {
@@ -3302,6 +3604,8 @@ var PS = {};
   };
   var catMaybes = mapMaybe(Control_Category.identity(Control_Category.categoryFn));
   exports["fromFoldable"] = fromFoldable;
+  exports["cons"] = cons;
+  exports["snoc"] = snoc;
   exports["last"] = last;
   exports["elem"] = elem;
   exports["find"] = find;
@@ -3309,6 +3613,7 @@ var PS = {};
   exports["concatMap"] = concatMap;
   exports["catMaybes"] = catMaybes;
   exports["mapWithIndex"] = mapWithIndex;
+  exports["sortWith"] = sortWith;
   exports["deleteBy"] = deleteBy;
   exports["replicate"] = $foreign.replicate;
   exports["length"] = $foreign.length;
@@ -3607,6 +3912,7 @@ var PS = {};
   var Data_Foldable = $PS["Data.Foldable"];
   var Data_Functor = $PS["Data.Functor"];
   var Data_List_Types = $PS["Data.List.Types"];
+  var Data_Tuple = $PS["Data.Tuple"];
   var Data_Unit = $PS["Data.Unit"];
   var reverse = (function () {
       var go = function ($copy_acc) {
@@ -3634,6 +3940,45 @@ var PS = {};
       };
       return go(Data_List_Types.Nil.value);
   })();
+  var zipWith = function (f) {
+      return function (xs) {
+          return function (ys) {
+              var go = function ($copy_v) {
+                  return function ($copy_v1) {
+                      return function ($copy_acc) {
+                          var $tco_var_v = $copy_v;
+                          var $tco_var_v1 = $copy_v1;
+                          var $tco_done = false;
+                          var $tco_result;
+                          function $tco_loop(v, v1, acc) {
+                              if (v instanceof Data_List_Types.Nil) {
+                                  $tco_done = true;
+                                  return acc;
+                              };
+                              if (v1 instanceof Data_List_Types.Nil) {
+                                  $tco_done = true;
+                                  return acc;
+                              };
+                              if (v instanceof Data_List_Types.Cons && v1 instanceof Data_List_Types.Cons) {
+                                  $tco_var_v = v.value1;
+                                  $tco_var_v1 = v1.value1;
+                                  $copy_acc = new Data_List_Types.Cons(f(v.value0)(v1.value0), acc);
+                                  return;
+                              };
+                              throw new Error("Failed pattern match at Data.List (line 795, column 3 - line 795, column 21): " + [ v.constructor.name, v1.constructor.name, acc.constructor.name ]);
+                          };
+                          while (!$tco_done) {
+                              $tco_result = $tco_loop($tco_var_v, $tco_var_v1, $copy_acc);
+                          };
+                          return $tco_result;
+                      };
+                  };
+              };
+              return reverse(go(xs)(ys)(Data_List_Types.Nil.value));
+          };
+      };
+  };
+  var zip = zipWith(Data_Tuple.Tuple.create);
   var $$null = function (v) {
       if (v instanceof Data_List_Types.Nil) {
           return true;
@@ -3669,6 +4014,7 @@ var PS = {};
   exports["null"] = $$null;
   exports["length"] = length;
   exports["reverse"] = reverse;
+  exports["zip"] = zip;
 })(PS);
 (function($PS) {
   // Generated by purs version 0.14.1
@@ -3866,49 +4212,6 @@ var PS = {};
 (function($PS) {
   // Generated by purs version 0.14.1
   "use strict";
-  $PS["Data.Generic.Rep"] = $PS["Data.Generic.Rep"] || {};
-  var exports = $PS["Data.Generic.Rep"];             
-  var Inl = (function () {
-      function Inl(value0) {
-          this.value0 = value0;
-      };
-      Inl.create = function (value0) {
-          return new Inl(value0);
-      };
-      return Inl;
-  })();
-  var Inr = (function () {
-      function Inr(value0) {
-          this.value0 = value0;
-      };
-      Inr.create = function (value0) {
-          return new Inr(value0);
-      };
-      return Inr;
-  })();
-  var NoArguments = (function () {
-      function NoArguments() {
-
-      };
-      NoArguments.value = new NoArguments();
-      return NoArguments;
-  })();
-  var Generic = function (from, to) {
-      this.from = from;
-      this.to = to;
-  };
-  var from = function (dict) {
-      return dict.from;
-  };
-  exports["Generic"] = Generic;
-  exports["from"] = from;
-  exports["NoArguments"] = NoArguments;
-  exports["Inl"] = Inl;
-  exports["Inr"] = Inr;
-})(PS);
-(function($PS) {
-  // Generated by purs version 0.14.1
-  "use strict";
   $PS["Data.Group"] = $PS["Data.Group"] || {};
   var exports = $PS["Data.Group"];                 
   var Group = function (Monoid0, ginverse) {
@@ -3922,65 +4225,12 @@ var PS = {};
   exports["Group"] = Group;
 })(PS);
 (function(exports) {
-                                 
+                                  
+
+  exports._undefined = undefined;
 
   exports._unsafeStringify = JSON.stringify;
 })(PS["Simple.JSON"] = PS["Simple.JSON"] || {});
-(function($PS) {
-  // Generated by purs version 0.14.1
-  "use strict";
-  $PS["Data.Variant"] = $PS["Data.Variant"] || {};
-  var exports = $PS["Data.Variant"];
-  var Data_Symbol = $PS["Data.Symbol"];
-  var on = function (dictCons) {
-      return function (dictIsSymbol) {
-          return function (p) {
-              return function (f) {
-                  return function (g) {
-                      return function (r) {
-                          if (r.type === Data_Symbol.reflectSymbol(dictIsSymbol)(p)) {
-                              return f(r.value);
-                          };
-                          return g(r);
-                      };
-                  };
-              };
-          };
-      };
-  };
-  var inj = function (dictCons) {
-      return function (dictIsSymbol) {
-          return function (p) {
-              return function (value) {
-                  return {
-                      type: Data_Symbol.reflectSymbol(dictIsSymbol)(p),
-                      value: value
-                  };
-              };
-          };
-      };
-  };
-  exports["inj"] = inj;
-  exports["on"] = on;
-})(PS);
-(function(exports) {
-  "use strict";
-
-  exports.typeOf = function (value) {
-    return typeof value;
-  };
-})(PS["Foreign"] = PS["Foreign"] || {});
-(function($PS) {
-  // Generated by purs version 0.14.1
-  "use strict";
-  $PS["Foreign"] = $PS["Foreign"] || {};
-  var exports = $PS["Foreign"];
-  var $foreign = $PS["Foreign"];
-  var Unsafe_Coerce = $PS["Unsafe.Coerce"];
-  var unsafeToForeign = Unsafe_Coerce.unsafeCoerce;
-  exports["unsafeToForeign"] = unsafeToForeign;
-  exports["typeOf"] = $foreign.typeOf;
-})(PS);
 (function(exports) {
   "use strict";
 
@@ -4024,6 +4274,66 @@ var PS = {};
       });
   };
   exports["unsafeCrashWith"] = unsafeCrashWith;
+})(PS);
+(function($PS) {
+  // Generated by purs version 0.14.1
+  "use strict";
+  $PS["Data.Variant"] = $PS["Data.Variant"] || {};
+  var exports = $PS["Data.Variant"];
+  var Data_Symbol = $PS["Data.Symbol"];
+  var Partial_Unsafe = $PS["Partial.Unsafe"];
+  var on = function (dictCons) {
+      return function (dictIsSymbol) {
+          return function (p) {
+              return function (f) {
+                  return function (g) {
+                      return function (r) {
+                          if (r.type === Data_Symbol.reflectSymbol(dictIsSymbol)(p)) {
+                              return f(r.value);
+                          };
+                          return g(r);
+                      };
+                  };
+              };
+          };
+      };
+  };
+  var inj = function (dictCons) {
+      return function (dictIsSymbol) {
+          return function (p) {
+              return function (value) {
+                  return {
+                      type: Data_Symbol.reflectSymbol(dictIsSymbol)(p),
+                      value: value
+                  };
+              };
+          };
+      };
+  };
+  var case_ = function (r) {
+      return Partial_Unsafe.unsafeCrashWith("Data.Variant: pattern match failure [" + (r.type + "]"));
+  };
+  exports["inj"] = inj;
+  exports["on"] = on;
+  exports["case_"] = case_;
+})(PS);
+(function(exports) {
+  "use strict";
+
+  exports.typeOf = function (value) {
+    return typeof value;
+  };
+})(PS["Foreign"] = PS["Foreign"] || {});
+(function($PS) {
+  // Generated by purs version 0.14.1
+  "use strict";
+  $PS["Foreign"] = $PS["Foreign"] || {};
+  var exports = $PS["Foreign"];
+  var $foreign = $PS["Foreign"];
+  var Unsafe_Coerce = $PS["Unsafe.Coerce"];
+  var unsafeToForeign = Unsafe_Coerce.unsafeCoerce;
+  exports["unsafeToForeign"] = unsafeToForeign;
+  exports["typeOf"] = $foreign.typeOf;
 })(PS);
 (function($PS) {
   // Generated by purs version 0.14.1
@@ -4108,6 +4418,7 @@ var PS = {};
   var Control_Category = $PS["Control.Category"];
   var Control_Semigroupoid = $PS["Control.Semigroupoid"];
   var Data_Functor = $PS["Data.Functor"];
+  var Data_Maybe = $PS["Data.Maybe"];
   var Data_Symbol = $PS["Data.Symbol"];
   var Data_Variant = $PS["Data.Variant"];
   var Foreign = $PS["Foreign"];
@@ -4146,11 +4457,17 @@ var PS = {};
           });
       };
   };
-  var writeForeignString = new WriteForeign(Foreign.unsafeToForeign); 
+  var writeForeignString = new WriteForeign(Foreign.unsafeToForeign);
+  var writeForeignInt = new WriteForeign(Foreign.unsafeToForeign); 
+  var writeForeignBoolean = new WriteForeign(Foreign.unsafeToForeign);
   var writeForeignArray = function (dictWriteForeign) {
       return new WriteForeign(function (xs) {
           return Foreign.unsafeToForeign(Data_Functor.map(Data_Functor.functorArray)(writeImpl(dictWriteForeign))(xs));
       });
+  };                                                 
+  var $$undefined = $foreign["_undefined"];
+  var writeForeignMaybe = function (dictWriteForeign) {
+      return new WriteForeign(Data_Maybe.maybe($$undefined)(writeImpl(dictWriteForeign)));
   };
   var recordWriteForeign = function (dictRowToList) {
       return function (dictWriteForeignFields) {
@@ -4213,7 +4530,10 @@ var PS = {};
   exports["WriteForeign"] = WriteForeign;
   exports["writeImpl"] = writeImpl;
   exports["writeForeignString"] = writeForeignString;
+  exports["writeForeignInt"] = writeForeignInt;
+  exports["writeForeignBoolean"] = writeForeignBoolean;
   exports["writeForeignArray"] = writeForeignArray;
+  exports["writeForeignMaybe"] = writeForeignMaybe;
   exports["recordWriteForeign"] = recordWriteForeign;
   exports["consWriteForeignFields"] = consWriteForeignFields;
   exports["nilWriteForeignFields"] = nilWriteForeignFields;
@@ -4700,90 +5020,48 @@ var PS = {};
   exports["writeForeignSPitch"] = writeForeignSPitch;
   exports["parsenotationSPitch"] = parsenotationSPitch;
 })(PS);
-(function(exports) {
-  "use strict";
-
-  exports.intercalate = function (separator) {
-    return function (xs) {
-      var len = xs.length;
-      if (len === 0) return "";
-
-      var res = xs[0];
-      for (var i = 1; i < len; i++) {
-        res = res + separator + xs[i];
-      }
-      return res;
-    };
-  };
-})(PS["Data.Show.Generic"] = PS["Data.Show.Generic"] || {});
 (function($PS) {
   // Generated by purs version 0.14.1
   "use strict";
-  $PS["Data.Show.Generic"] = $PS["Data.Show.Generic"] || {};
-  var exports = $PS["Data.Show.Generic"];
-  var $foreign = $PS["Data.Show.Generic"];
-  var Data_Generic_Rep = $PS["Data.Generic.Rep"];
-  var Data_Semigroup = $PS["Data.Semigroup"];
-  var Data_Show = $PS["Data.Show"];
-  var Data_Symbol = $PS["Data.Symbol"];
-  var Type_Proxy = $PS["Type.Proxy"];                
-  var GenericShowArgs = function (genericShowArgs) {
-      this.genericShowArgs = genericShowArgs;
-  };
-  var GenericShow = function (genericShow$prime) {
-      this["genericShow'"] = genericShow$prime;
-  };
-  var genericShowArgsNoArguments = new GenericShowArgs(function (v) {
-      return [  ];
-  });
-  var genericShowArgsArgument = function (dictShow) {
-      return new GenericShowArgs(function (v) {
-          return [ Data_Show.show(dictShow)(v) ];
-      });
-  };
-  var genericShowArgs = function (dict) {
-      return dict.genericShowArgs;
-  };
-  var genericShowConstructor = function (dictGenericShowArgs) {
-      return function (dictIsSymbol) {
-          return new GenericShow(function (v) {
-              var ctor = Data_Symbol.reflectSymbol(dictIsSymbol)(Type_Proxy["Proxy"].value);
-              var v1 = genericShowArgs(dictGenericShowArgs)(v);
-              if (v1.length === 0) {
-                  return ctor;
-              };
-              return "(" + ($foreign.intercalate(" ")(Data_Semigroup.append(Data_Semigroup.semigroupArray)([ ctor ])(v1)) + ")");
-          });
+  $PS["Data.Generic.Rep"] = $PS["Data.Generic.Rep"] || {};
+  var exports = $PS["Data.Generic.Rep"];             
+  var Inl = (function () {
+      function Inl(value0) {
+          this.value0 = value0;
       };
-  };
-  var genericShow$prime = function (dict) {
-      return dict["genericShow'"];
-  }; 
-  var genericShowSum = function (dictGenericShow) {
-      return function (dictGenericShow1) {
-          return new GenericShow(function (v) {
-              if (v instanceof Data_Generic_Rep.Inl) {
-                  return genericShow$prime(dictGenericShow)(v.value0);
-              };
-              if (v instanceof Data_Generic_Rep.Inr) {
-                  return genericShow$prime(dictGenericShow1)(v.value0);
-              };
-              throw new Error("Failed pattern match at Data.Show.Generic (line 26, column 1 - line 28, column 40): " + [ v.constructor.name ]);
-          });
+      Inl.create = function (value0) {
+          return new Inl(value0);
       };
-  };
-  var genericShow = function (dictGeneric) {
-      return function (dictGenericShow) {
-          return function (x) {
-              return genericShow$prime(dictGenericShow)(Data_Generic_Rep.from(dictGeneric)(x));
-          };
+      return Inl;
+  })();
+  var Inr = (function () {
+      function Inr(value0) {
+          this.value0 = value0;
       };
+      Inr.create = function (value0) {
+          return new Inr(value0);
+      };
+      return Inr;
+  })();
+  var NoArguments = (function () {
+      function NoArguments() {
+
+      };
+      NoArguments.value = new NoArguments();
+      return NoArguments;
+  })();
+  var Generic = function (from, to) {
+      this.from = from;
+      this.to = to;
   };
-  exports["genericShow"] = genericShow;
-  exports["genericShowArgsNoArguments"] = genericShowArgsNoArguments;
-  exports["genericShowSum"] = genericShowSum;
-  exports["genericShowConstructor"] = genericShowConstructor;
-  exports["genericShowArgsArgument"] = genericShowArgsArgument;
+  var from = function (dict) {
+      return dict.from;
+  };
+  exports["Generic"] = Generic;
+  exports["from"] = from;
+  exports["NoArguments"] = NoArguments;
+  exports["Inl"] = Inl;
+  exports["Inr"] = Inr;
 })(PS);
 (function($PS) {
   // Generated by purs version 0.14.1
@@ -4798,6 +5076,7 @@ var PS = {};
   var Data_Ord = $PS["Data.Ord"];
   var Data_Ordering = $PS["Data.Ordering"];
   var Data_Semigroup = $PS["Data.Semigroup"];
+  var Data_Show = $PS["Data.Show"];
   var Data_Tuple = $PS["Data.Tuple"];
   var Data_Unfoldable = $PS["Data.Unfoldable"];                
   var Leaf = (function () {
@@ -5032,6 +5311,14 @@ var PS = {};
           return Data_Unfoldable.unfoldr(dictUnfoldable)(go)(new Data_List_Types.Cons(m, Data_List_Types.Nil.value));
       };
   };
+  var toAscArray = toUnfoldable(Data_Unfoldable.unfoldableArray);
+  var showMap = function (dictShow) {
+      return function (dictShow1) {
+          return new Data_Show.Show(function (m) {
+              return "(fromFoldable " + (Data_Show.show(Data_Show.showArray(Data_Tuple.showTuple(dictShow)(dictShow1)))(toAscArray(m)) + ")");
+          });
+      };
+  };
   var lookup = function (dictOrd) {
       return function (k) {
           var comp = Data_Ord.compare(dictOrd);
@@ -5094,6 +5381,12 @@ var PS = {};
               return Data_Maybe.isJust(lookup(dictOrd)(k)(m));
           };
       };
+  };
+  var isEmpty = function (v) {
+      if (v instanceof Leaf) {
+          return true;
+      };
+      return false;
   }; 
   var fromZipper = function ($copy_dictOrd) {
       return function ($copy_v) {
@@ -5520,6 +5813,15 @@ var PS = {};
       };
   });
   var empty = Leaf.value;
+  var fromFoldable = function (dictOrd) {
+      return function (dictFoldable) {
+          return Data_Foldable.foldl(dictFoldable)(function (m) {
+              return function (v) {
+                  return insert(dictOrd)(v.value0)(v.value1)(m);
+              };
+          })(empty);
+      };
+  };
   var $$delete = function (dictOrd) {
       return function (k) {
           return function (m) {
@@ -5602,19 +5904,108 @@ var PS = {};
       return unionWith(dictOrd)(Data_Function["const"]);
   };
   exports["empty"] = empty;
+  exports["isEmpty"] = isEmpty;
   exports["singleton"] = singleton;
   exports["insert"] = insert;
   exports["insertWith"] = insertWith;
   exports["lookup"] = lookup;
+  exports["fromFoldable"] = fromFoldable;
   exports["fromFoldableWith"] = fromFoldableWith;
   exports["toUnfoldable"] = toUnfoldable;
   exports["delete"] = $$delete;
+  exports["pop"] = pop;
   exports["member"] = member;
   exports["alter"] = alter;
   exports["values"] = values;
   exports["union"] = union;
   exports["unionWith"] = unionWith;
+  exports["showMap"] = showMap;
   exports["foldableMap"] = foldableMap;
+})(PS);
+(function(exports) {
+  "use strict";
+
+  exports.intercalate = function (separator) {
+    return function (xs) {
+      var len = xs.length;
+      if (len === 0) return "";
+
+      var res = xs[0];
+      for (var i = 1; i < len; i++) {
+        res = res + separator + xs[i];
+      }
+      return res;
+    };
+  };
+})(PS["Data.Show.Generic"] = PS["Data.Show.Generic"] || {});
+(function($PS) {
+  // Generated by purs version 0.14.1
+  "use strict";
+  $PS["Data.Show.Generic"] = $PS["Data.Show.Generic"] || {};
+  var exports = $PS["Data.Show.Generic"];
+  var $foreign = $PS["Data.Show.Generic"];
+  var Data_Generic_Rep = $PS["Data.Generic.Rep"];
+  var Data_Semigroup = $PS["Data.Semigroup"];
+  var Data_Show = $PS["Data.Show"];
+  var Data_Symbol = $PS["Data.Symbol"];
+  var Type_Proxy = $PS["Type.Proxy"];                
+  var GenericShowArgs = function (genericShowArgs) {
+      this.genericShowArgs = genericShowArgs;
+  };
+  var GenericShow = function (genericShow$prime) {
+      this["genericShow'"] = genericShow$prime;
+  };
+  var genericShowArgsNoArguments = new GenericShowArgs(function (v) {
+      return [  ];
+  });
+  var genericShowArgsArgument = function (dictShow) {
+      return new GenericShowArgs(function (v) {
+          return [ Data_Show.show(dictShow)(v) ];
+      });
+  };
+  var genericShowArgs = function (dict) {
+      return dict.genericShowArgs;
+  };
+  var genericShowConstructor = function (dictGenericShowArgs) {
+      return function (dictIsSymbol) {
+          return new GenericShow(function (v) {
+              var ctor = Data_Symbol.reflectSymbol(dictIsSymbol)(Type_Proxy["Proxy"].value);
+              var v1 = genericShowArgs(dictGenericShowArgs)(v);
+              if (v1.length === 0) {
+                  return ctor;
+              };
+              return "(" + ($foreign.intercalate(" ")(Data_Semigroup.append(Data_Semigroup.semigroupArray)([ ctor ])(v1)) + ")");
+          });
+      };
+  };
+  var genericShow$prime = function (dict) {
+      return dict["genericShow'"];
+  }; 
+  var genericShowSum = function (dictGenericShow) {
+      return function (dictGenericShow1) {
+          return new GenericShow(function (v) {
+              if (v instanceof Data_Generic_Rep.Inl) {
+                  return genericShow$prime(dictGenericShow)(v.value0);
+              };
+              if (v instanceof Data_Generic_Rep.Inr) {
+                  return genericShow$prime(dictGenericShow1)(v.value0);
+              };
+              throw new Error("Failed pattern match at Data.Show.Generic (line 26, column 1 - line 28, column 40): " + [ v.constructor.name ]);
+          });
+      };
+  };
+  var genericShow = function (dictGeneric) {
+      return function (dictGenericShow) {
+          return function (x) {
+              return genericShow$prime(dictGenericShow)(Data_Generic_Rep.from(dictGeneric)(x));
+          };
+      };
+  };
+  exports["genericShow"] = genericShow;
+  exports["genericShowArgsNoArguments"] = genericShowArgsNoArguments;
+  exports["genericShowSum"] = genericShowSum;
+  exports["genericShowConstructor"] = genericShowConstructor;
+  exports["genericShowArgsArgument"] = genericShowArgsArgument;
 })(PS);
 (function(exports) {
   "use strict";
@@ -5756,6 +6147,9 @@ var PS = {};
   }, function (dictApplicative) {
       return $foreign.traverseArrayImpl(Control_Apply.apply(dictApplicative.Apply0()))(Data_Functor.map((dictApplicative.Apply0()).Functor0()))(Control_Applicative.pure(dictApplicative));
   });
+  var sequence = function (dict) {
+      return dict.sequence;
+  };
   var mapAccumL = function (dictTraversable) {
       return function (f) {
           return function (s0) {
@@ -5795,6 +6189,7 @@ var PS = {};
           };
       };
   };
+  exports["sequence"] = sequence;
   exports["for"] = $$for;
   exports["scanl"] = scanl;
   exports["traversableArray"] = traversableArray;
@@ -6038,6 +6433,7 @@ var PS = {};
       };
       return Hori;
   })();
+  var writeForeignTransId = Simple_JSON.writeForeignInt;
   var writeForeignStartStop = function (dictWriteForeign) {
       return new Simple_JSON.WriteForeign(function (v) {
           if (v instanceof Start) {
@@ -6052,13 +6448,14 @@ var PS = {};
           throw new Error("Failed pattern match at Model (line 246, column 15 - line 249, column 27): " + [ v.constructor.name ]);
       });
   };
+  var writeForeignSliceId = Simple_JSON.writeForeignInt;
   var vertEdgesRight = function (edges) {
       return function (slice) {
           var v = function (v1) {
               if (Data_Boolean.otherwise) {
                   return new Data_Either.Left("The current reduction is invalid: Trying to vert a Start or Stop slice.");
               };
-              throw new Error("Failed pattern match at Model (line 584, column 1 - line 584, column 56): " + [ edges.constructor.name, slice.constructor.name ]);
+              throw new Error("Failed pattern match at Model (line 592, column 1 - line 592, column 56): " + [ edges.constructor.name, slice.constructor.name ]);
           };
           if (slice.notes instanceof Inner) {
               var replaceLeft = function (v1) {
@@ -6066,16 +6463,16 @@ var PS = {};
                       if (Data_Boolean.otherwise) {
                           return [  ];
                       };
-                      throw new Error("Failed pattern match at Model (line 584, column 1 - line 584, column 56): " + [ v1.constructor.name ]);
+                      throw new Error("Failed pattern match at Model (line 592, column 1 - line 592, column 56): " + [ v1.constructor.name ]);
                   };
                   if (v1.left instanceof Inner) {
-                      var $222 = Data_Array.find(function (n) {
+                      var $210 = Data_Array.find(function (n) {
                           return n.note.id === v1.left.value0.id;
                       })(slice.notes.value0);
-                      if ($222 instanceof Data_Maybe.Just) {
-                          if ($222.value0.expl instanceof HoriExpl) {
+                      if ($210 instanceof Data_Maybe.Just) {
+                          if ($210.value0.expl instanceof HoriExpl) {
                               return [ {
-                                  left: new Inner($222.value0.expl.value0),
+                                  left: new Inner($210.value0.expl.value0),
                                   right: v1.right
                               } ];
                           };
@@ -6099,7 +6496,7 @@ var PS = {};
               if (Data_Boolean.otherwise) {
                   return new Data_Either.Left("The current reduction is invalid: Trying to vert a Start or Stop slice.");
               };
-              throw new Error("Failed pattern match at Model (line 569, column 1 - line 569, column 55): " + [ edges.constructor.name, slice.constructor.name ]);
+              throw new Error("Failed pattern match at Model (line 577, column 1 - line 577, column 55): " + [ edges.constructor.name, slice.constructor.name ]);
           };
           if (slice.notes instanceof Inner) {
               var replaceRight = function (v1) {
@@ -6107,17 +6504,17 @@ var PS = {};
                       if (Data_Boolean.otherwise) {
                           return [  ];
                       };
-                      throw new Error("Failed pattern match at Model (line 569, column 1 - line 569, column 55): " + [ v1.constructor.name ]);
+                      throw new Error("Failed pattern match at Model (line 577, column 1 - line 577, column 55): " + [ v1.constructor.name ]);
                   };
                   if (v1.right instanceof Inner) {
-                      var $240 = Data_Array.find(function (n) {
+                      var $228 = Data_Array.find(function (n) {
                           return n.note.id === v1.right.value0.id;
                       })(slice.notes.value0);
-                      if ($240 instanceof Data_Maybe.Just) {
-                          if ($240.value0.expl instanceof HoriExpl) {
+                      if ($228 instanceof Data_Maybe.Just) {
+                          if ($228.value0.expl instanceof HoriExpl) {
                               return [ {
                                   left: v1.left,
-                                  right: new Inner($240.value0.expl.value0)
+                                  right: new Inner($228.value0.expl.value0)
                               } ];
                           };
                           return v2(true);
@@ -6173,7 +6570,13 @@ var PS = {};
                       note: n.note,
                       expl: NoExpl.value
                   };
-              })(slice)),
+              })(Data_Array.sortWith(Data_Ord.ordRecord()(Data_Ord.ordRecordCons(Data_Ord.ordRecordCons(Data_Ord.ordRecordNil)()(new Data_Symbol.IsSymbol(function () {
+                  return "pitch";
+              }))(Data_Pitches_Class.ordPitch(Data_Pitches_Spelled.ordSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                  return "id";
+              }))(Data_Ord.ordString)))(function (v) {
+                  return v.note;
+              })(slice))),
               x: Data_Int.toNumber(id),
               parents: NoParents.value
           };
@@ -6278,7 +6681,7 @@ var PS = {};
               throw new Error("Failed pattern match at Model (line 202, column 44 - line 210, column 17): " + [ parentMaybe.constructor.name ]);
           };
       };
-  };
+  };                                           
   var pbetween = function (dictInterval) {
       return function (dictEq) {
           return function (l) {
@@ -6293,6 +6696,8 @@ var PS = {};
           };
       };
   };
+  var ordTransId = Data_Ord.ordInt;
+  var ordSliceId = Data_Ord.ordInt;
   var loadPiece = function (piece) {
       return {
           piece: piece,
@@ -6321,7 +6726,7 @@ var PS = {};
       if (v instanceof MergeParents) {
           return [ v.value0.left, v.value0.right ];
       };
-      throw new Error("Failed pattern match at Model (line 309, column 14 - line 312, column 50): " + [ v.constructor.name ]);
+      throw new Error("Failed pattern match at Model (line 317, column 14 - line 320, column 50): " + [ v.constructor.name ]);
   };
   var getInnerNotes = function (slice) {
       if (slice.notes instanceof Start) {
@@ -6333,7 +6738,7 @@ var PS = {};
       if (slice.notes instanceof Inner) {
           return slice.notes.value0;
       };
-      throw new Error("Failed pattern match at Model (line 322, column 23 - line 325, column 23): " + [ slice.notes.constructor.name ]);
+      throw new Error("Failed pattern match at Model (line 330, column 23 - line 333, column 23): " + [ slice.notes.constructor.name ]);
   };
   var genericRightOrnament = new Data_Generic_Rep.Generic(function (x) {
       if (x instanceof RightRepeat) {
@@ -6369,7 +6774,7 @@ var PS = {};
       if (x instanceof MergeParents) {
           return new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inr(x.value0));
       };
-      throw new Error("Failed pattern match at Model (line 303, column 1 - line 303, column 56): " + [ x.constructor.name ]);
+      throw new Error("Failed pattern match at Model (line 311, column 1 - line 311, column 56): " + [ x.constructor.name ]);
   }, function (x) {
       if (x instanceof Data_Generic_Rep.Inl) {
           return NoParents.value;
@@ -6380,7 +6785,7 @@ var PS = {};
       if (x instanceof Data_Generic_Rep.Inr && x.value0 instanceof Data_Generic_Rep.Inr) {
           return new MergeParents(x.value0.value0);
       };
-      throw new Error("Failed pattern match at Model (line 303, column 1 - line 303, column 56): " + [ x.constructor.name ]);
+      throw new Error("Failed pattern match at Model (line 311, column 1 - line 311, column 56): " + [ x.constructor.name ]);
   });
   var showParents = function (dictShow) {
       return new Data_Show.Show(function (p) {
@@ -6396,7 +6801,30 @@ var PS = {};
               return "MergeParents";
           })))))(p);
       });
-  }; 
+  };
+  var genericOp = new Data_Generic_Rep.Generic(function (x) {
+      if (x instanceof Freeze) {
+          return new Data_Generic_Rep.Inl(Data_Generic_Rep.NoArguments.value);
+      };
+      if (x instanceof Split) {
+          return new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inl(x.value0));
+      };
+      if (x instanceof Hori) {
+          return new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inr(x.value0));
+      };
+      throw new Error("Failed pattern match at Model (line 354, column 1 - line 354, column 42): " + [ x.constructor.name ]);
+  }, function (x) {
+      if (x instanceof Data_Generic_Rep.Inl) {
+          return Freeze.value;
+      };
+      if (x instanceof Data_Generic_Rep.Inr && x.value0 instanceof Data_Generic_Rep.Inl) {
+          return new Split(x.value0.value0);
+      };
+      if (x instanceof Data_Generic_Rep.Inr && x.value0 instanceof Data_Generic_Rep.Inr) {
+          return new Hori(x.value0.value0);
+      };
+      throw new Error("Failed pattern match at Model (line 354, column 1 - line 354, column 42): " + [ x.constructor.name ]);
+  });
   var genericNoteExplanation = new Data_Generic_Rep.Generic(function (x) {
       if (x instanceof NoExpl) {
           return new Data_Generic_Rep.Inl(Data_Generic_Rep.NoArguments.value);
@@ -6575,6 +7003,269 @@ var PS = {};
           return "DoubleExpl";
       }))))))))(o);
   });
+  var showOp = new Data_Show.Show(function (x) {
+      return Data_Show_Generic.genericShow(genericOp)(Data_Show_Generic.genericShowSum(Data_Show_Generic.genericShowConstructor(Data_Show_Generic.genericShowArgsNoArguments)(new Data_Symbol.IsSymbol(function () {
+          return "Freeze";
+      })))(Data_Show_Generic.genericShowSum(Data_Show_Generic.genericShowConstructor(Data_Show_Generic.genericShowArgsArgument(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "childl";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "childr";
+      }))(Data_Show.showRecordFieldsNil)(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "op";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "trans";
+      }))(Data_Show.showRecordFieldsNil)(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "edges";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "is2nd";
+      }))(Data_Show.showRecordFieldsNil)(Data_Show.showBoolean))(showTransId))(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "passing";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "regular";
+      }))(Data_Show.showRecordFieldsNil)(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "left";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "right";
+      }))(Data_Show.showRecordFieldsNil)(showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString)))))(showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))))))(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "left";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "right";
+      }))(Data_Show.showRecordFieldsNil)(showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString)))))(showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))))))))))(showOp))))(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "op";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "rslice";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "trans";
+      }))(Data_Show.showRecordFieldsNil)(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "edges";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "is2nd";
+      }))(Data_Show.showRecordFieldsNil)(Data_Show.showBoolean))(showTransId))(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "passing";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "regular";
+      }))(Data_Show.showRecordFieldsNil)(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "left";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "right";
+      }))(Data_Show.showRecordFieldsNil)(showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString)))))(showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))))))(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "left";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "right";
+      }))(Data_Show.showRecordFieldsNil)(showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString)))))(showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))))))))))(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "notes";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "parents";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "x";
+      }))(Data_Show.showRecordFieldsNil)(Data_Show.showNumber))(showParents(showSliceId)))(showStartStop(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "expl";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "note";
+      }))(Data_Show.showRecordFieldsNil)(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))(showNoteExplanation))))))(showSliceId))))(showOp))))))(new Data_Symbol.IsSymbol(function () {
+          return "Split";
+      })))(Data_Show_Generic.genericShowConstructor(Data_Show_Generic.genericShowArgsArgument(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "childl";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "childm";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "childr";
+      }))(Data_Show.showRecordFieldsNil)(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "op";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "trans";
+      }))(Data_Show.showRecordFieldsNil)(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "edges";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "is2nd";
+      }))(Data_Show.showRecordFieldsNil)(Data_Show.showBoolean))(showTransId))(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "passing";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "regular";
+      }))(Data_Show.showRecordFieldsNil)(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "left";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "right";
+      }))(Data_Show.showRecordFieldsNil)(showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString)))))(showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))))))(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "left";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "right";
+      }))(Data_Show.showRecordFieldsNil)(showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString)))))(showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))))))))))(showOp))))(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "op";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "rslice";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "trans";
+      }))(Data_Show.showRecordFieldsNil)(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "edges";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "is2nd";
+      }))(Data_Show.showRecordFieldsNil)(Data_Show.showBoolean))(showTransId))(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "passing";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "regular";
+      }))(Data_Show.showRecordFieldsNil)(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "left";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "right";
+      }))(Data_Show.showRecordFieldsNil)(showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString)))))(showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))))))(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "left";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "right";
+      }))(Data_Show.showRecordFieldsNil)(showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString)))))(showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))))))))))(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "notes";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "parents";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "x";
+      }))(Data_Show.showRecordFieldsNil)(Data_Show.showNumber))(showParents(showSliceId)))(showStartStop(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "expl";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "note";
+      }))(Data_Show.showRecordFieldsNil)(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))(showNoteExplanation))))))(showSliceId))))(showOp))))(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "op";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "rslice";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "trans";
+      }))(Data_Show.showRecordFieldsNil)(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "edges";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "is2nd";
+      }))(Data_Show.showRecordFieldsNil)(Data_Show.showBoolean))(showTransId))(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "passing";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "regular";
+      }))(Data_Show.showRecordFieldsNil)(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "left";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "right";
+      }))(Data_Show.showRecordFieldsNil)(showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString)))))(showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))))))(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "left";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "right";
+      }))(Data_Show.showRecordFieldsNil)(showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString)))))(showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))))))))))(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "notes";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "parents";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "x";
+      }))(Data_Show.showRecordFieldsNil)(Data_Show.showNumber))(showParents(showSliceId)))(showStartStop(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "expl";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "note";
+      }))(Data_Show.showRecordFieldsNil)(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))(showNoteExplanation))))))(showSliceId))))(showOp))))))(new Data_Symbol.IsSymbol(function () {
+          return "Hori";
+      })))))(x);
+  });
   var functorStartStop = new Data_Functor.Functor(function (f) {
       return function (m) {
           if (m instanceof Start) {
@@ -6642,16 +7333,16 @@ var PS = {};
                       var v6 = function (v7) {
                           var v8 = function (v9) {
                               if (pbetween(Data_Pitches_Spelled.intervalSIC)(Data_Pitches_Spelled.eqSIC)(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(v.pitch))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(child))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(v1.pitch))) {
-                                  var $388 = Data_Pitches_Class.isStep(Data_Pitches_Spelled.diatonicSIC)(Data_Pitches_Class.ic(Data_Pitches_Spelled.hasintervalclassSInterval)(Data_Pitches_Class.pto(Data_Pitches_Spelled.intervalSInterval)(child)(v.pitch)));
-                                  if ($388) {
-                                      var $389 = Data_Pitches_Class.isStep(Data_Pitches_Spelled.diatonicSIC)(Data_Pitches_Class.ic(Data_Pitches_Spelled.hasintervalclassSInterval)(Data_Pitches_Class.pto(Data_Pitches_Spelled.intervalSInterval)(child)(v1.pitch)));
-                                      if ($389) {
+                                  var $376 = Data_Pitches_Class.isStep(Data_Pitches_Spelled.diatonicSIC)(Data_Pitches_Class.ic(Data_Pitches_Spelled.hasintervalclassSInterval)(Data_Pitches_Class.pto(Data_Pitches_Spelled.intervalSInterval)(child)(v.pitch)));
+                                  if ($376) {
+                                      var $377 = Data_Pitches_Class.isStep(Data_Pitches_Spelled.diatonicSIC)(Data_Pitches_Class.ic(Data_Pitches_Spelled.hasintervalclassSInterval)(Data_Pitches_Class.pto(Data_Pitches_Spelled.intervalSInterval)(child)(v1.pitch)));
+                                      if ($377) {
                                           return new Data_Maybe.Just(PassingMid.value);
                                       };
                                       return new Data_Maybe.Just(PassingLeft.value);
                                   };
-                                  var $390 = Data_Pitches_Class.isStep(Data_Pitches_Spelled.diatonicSIC)(Data_Pitches_Class.ic(Data_Pitches_Spelled.hasintervalclassSInterval)(Data_Pitches_Class.pto(Data_Pitches_Spelled.intervalSInterval)(child)(v1.pitch)));
-                                  if ($390) {
+                                  var $378 = Data_Pitches_Class.isStep(Data_Pitches_Spelled.diatonicSIC)(Data_Pitches_Class.ic(Data_Pitches_Spelled.hasintervalclassSInterval)(Data_Pitches_Class.pto(Data_Pitches_Spelled.intervalSInterval)(child)(v1.pitch)));
+                                  if ($378) {
                                       return new Data_Maybe.Just(PassingRight.value);
                                   };
                                   return Data_Maybe.Nothing.value;
@@ -6661,40 +7352,40 @@ var PS = {};
                               };
                               throw new Error("Failed pattern match at Model (line 137, column 1 - line 137, column 64): " + [ child.constructor.name, v.constructor.name, v1.constructor.name ]);
                           };
-                          var $396 = Data_Eq.eq(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSIC))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(v.pitch))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(v1.pitch));
-                          if ($396) {
-                              var $397 = Data_Pitches_Class.isStep(Data_Pitches_Spelled.diatonicSIC)(Data_Pitches_Class.ic(Data_Pitches_Spelled.hasintervalclassSInterval)(Data_Pitches_Class.pto(Data_Pitches_Spelled.intervalSInterval)(child)(v.pitch)));
-                              if ($397) {
+                          var $384 = Data_Eq.eq(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSIC))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(v.pitch))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(v1.pitch));
+                          if ($384) {
+                              var $385 = Data_Pitches_Class.isStep(Data_Pitches_Spelled.diatonicSIC)(Data_Pitches_Class.ic(Data_Pitches_Spelled.hasintervalclassSInterval)(Data_Pitches_Class.pto(Data_Pitches_Spelled.intervalSInterval)(child)(v.pitch)));
+                              if ($385) {
                                   return new Data_Maybe.Just(FullNeighbor.value);
                               };
                               return v8(true);
                           };
                           return v8(true);
                       };
-                      var $403 = Data_Eq.eq(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSIC))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(child))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(v1.pitch));
-                      if ($403) {
-                          var $404 = Data_Pitches_Class.isStep(Data_Pitches_Spelled.diatonicSIC)(Data_Pitches_Class.ic(Data_Pitches_Spelled.hasintervalclassSInterval)(Data_Pitches_Class.pto(Data_Pitches_Spelled.intervalSInterval)(child)(v.pitch)));
-                          if ($404) {
+                      var $391 = Data_Eq.eq(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSIC))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(child))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(v1.pitch));
+                      if ($391) {
+                          var $392 = Data_Pitches_Class.isStep(Data_Pitches_Spelled.diatonicSIC)(Data_Pitches_Class.ic(Data_Pitches_Spelled.hasintervalclassSInterval)(Data_Pitches_Class.pto(Data_Pitches_Spelled.intervalSInterval)(child)(v.pitch)));
+                          if ($392) {
                               return new Data_Maybe.Just(LeftRepeatOfRight.value);
                           };
                           return v6(true);
                       };
                       return v6(true);
                   };
-                  var $410 = Data_Eq.eq(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSIC))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(child))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(v.pitch));
-                  if ($410) {
-                      var $411 = Data_Pitches_Class.isStep(Data_Pitches_Spelled.diatonicSIC)(Data_Pitches_Class.ic(Data_Pitches_Spelled.hasintervalclassSInterval)(Data_Pitches_Class.pto(Data_Pitches_Spelled.intervalSInterval)(child)(v1.pitch)));
-                      if ($411) {
+                  var $398 = Data_Eq.eq(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSIC))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(child))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(v.pitch));
+                  if ($398) {
+                      var $399 = Data_Pitches_Class.isStep(Data_Pitches_Spelled.diatonicSIC)(Data_Pitches_Class.ic(Data_Pitches_Spelled.hasintervalclassSInterval)(Data_Pitches_Class.pto(Data_Pitches_Spelled.intervalSInterval)(child)(v1.pitch)));
+                      if ($399) {
                           return new Data_Maybe.Just(RightRepeatOfLeft.value);
                       };
                       return v4(true);
                   };
                   return v4(true);
               };
-              var $417 = Data_Eq.eq(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSIC))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(child))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(v.pitch));
-              if ($417) {
-                  var $418 = Data_Eq.eq(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSIC))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(child))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(v1.pitch));
-                  if ($418) {
+              var $405 = Data_Eq.eq(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSIC))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(child))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(v.pitch));
+              if ($405) {
+                  var $406 = Data_Eq.eq(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSIC))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(child))(Data_Pitches_Class.pc(Data_Pitches_Spelled.hasintervalclassSInterval)(v1.pitch));
+                  if ($406) {
                       return new Data_Maybe.Just(FullRepeat.value);
                   };
                   return v2(true);
@@ -6843,18 +7534,7 @@ var PS = {};
           throw new Error("Failed pattern match at Model (line 213, column 20 - line 219, column 88): " + [ v.constructor.name ]);
       };
   };
-  var eqTransId = new Data_Eq.Eq(function (x) {
-      return function (y) {
-          return x === y;
-      };
-  });
-  var ordTransId = new Data_Ord.Ord(function () {
-      return eqTransId;
-  }, function (x) {
-      return function (y) {
-          return Data_Ord.compare(Data_Ord.ordInt)(x)(y);
-      };
-  });
+  var eqTransId = Data_Eq.eqInt;
   var eqStartStop = function (dictEq) {
       return new Data_Eq.Eq(function (x) {
           return function (y) {
@@ -6901,18 +7581,7 @@ var PS = {};
           };
       });
   };
-  var eqSliceId = new Data_Eq.Eq(function (x) {
-      return function (y) {
-          return x === y;
-      };
-  });
-  var ordSliceId = new Data_Ord.Ord(function () {
-      return eqSliceId;
-  }, function (x) {
-      return function (y) {
-          return Data_Ord.compare(Data_Ord.ordInt)(x)(y);
-      };
-  });
+  var eqSliceId = Data_Eq.eqInt;
   var eqRightOrnament = new Data_Eq.Eq(function (x) {
       return function (y) {
           if (x instanceof RightRepeat && y instanceof RightRepeat) {
@@ -7000,6 +7669,164 @@ var PS = {};
           return false;
       };
   });
+  var eqOp = new Data_Eq.Eq(function (x) {
+      return function (y) {
+          if (x instanceof Freeze && y instanceof Freeze) {
+              return true;
+          };
+          if (x instanceof Split && y instanceof Split) {
+              return Data_Eq.eq(eqOp)(x.value0.childl.op)(y.value0.childl.op) && (Data_Eq.eq(eqSliceId)(x.value0.childl.rslice.id)(y.value0.childl.rslice.id) && Data_Eq.eq(eqStartStop(Data_Eq.eqArray(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                  return "note";
+              }))(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                  return "pitch";
+              }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                  return "id";
+              }))(Data_Eq.eqString))))()(new Data_Symbol.IsSymbol(function () {
+                  return "expl";
+              }))(eqNoteExplanation)))))(x.value0.childl.rslice.notes)(y.value0.childl.rslice.notes) && Data_Eq.eq(eqParents(eqSliceId))(x.value0.childl.rslice.parents)(y.value0.childl.rslice.parents) && x.value0.childl.rslice.x === y.value0.childl.rslice.x) && (Data_Eq.eq(Data_Eq.eqArray(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                  return "right";
+              }))(eqStartStop(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                  return "pitch";
+              }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                  return "id";
+              }))(Data_Eq.eqString)))))()(new Data_Symbol.IsSymbol(function () {
+                  return "left";
+              }))(eqStartStop(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                  return "pitch";
+              }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                  return "id";
+              }))(Data_Eq.eqString)))))))(x.value0.childl.trans.edges.passing)(y.value0.childl.trans.edges.passing) && Data_Eq.eq(Data_Eq.eqArray(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                  return "right";
+              }))(eqStartStop(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                  return "pitch";
+              }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                  return "id";
+              }))(Data_Eq.eqString)))))()(new Data_Symbol.IsSymbol(function () {
+                  return "left";
+              }))(eqStartStop(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                  return "pitch";
+              }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                  return "id";
+              }))(Data_Eq.eqString)))))))(x.value0.childl.trans.edges.regular)(y.value0.childl.trans.edges.regular) && Data_Eq.eq(eqTransId)(x.value0.childl.trans.id)(y.value0.childl.trans.id) && x.value0.childl.trans.is2nd === y.value0.childl.trans.is2nd) && (Data_Eq.eq(eqOp)(x.value0.childr.op)(y.value0.childr.op) && (Data_Eq.eq(Data_Eq.eqArray(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                  return "right";
+              }))(eqStartStop(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                  return "pitch";
+              }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                  return "id";
+              }))(Data_Eq.eqString)))))()(new Data_Symbol.IsSymbol(function () {
+                  return "left";
+              }))(eqStartStop(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                  return "pitch";
+              }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                  return "id";
+              }))(Data_Eq.eqString)))))))(x.value0.childr.trans.edges.passing)(y.value0.childr.trans.edges.passing) && Data_Eq.eq(Data_Eq.eqArray(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                  return "right";
+              }))(eqStartStop(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                  return "pitch";
+              }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                  return "id";
+              }))(Data_Eq.eqString)))))()(new Data_Symbol.IsSymbol(function () {
+                  return "left";
+              }))(eqStartStop(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                  return "pitch";
+              }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                  return "id";
+              }))(Data_Eq.eqString)))))))(x.value0.childr.trans.edges.regular)(y.value0.childr.trans.edges.regular) && Data_Eq.eq(eqTransId)(x.value0.childr.trans.id)(y.value0.childr.trans.id) && x.value0.childr.trans.is2nd === y.value0.childr.trans.is2nd));
+          };
+          if (x instanceof Hori && y instanceof Hori) {
+              return Data_Eq.eq(eqOp)(x.value0.childl.op)(y.value0.childl.op) && (Data_Eq.eq(eqSliceId)(x.value0.childl.rslice.id)(y.value0.childl.rslice.id) && Data_Eq.eq(eqStartStop(Data_Eq.eqArray(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                  return "note";
+              }))(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                  return "pitch";
+              }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                  return "id";
+              }))(Data_Eq.eqString))))()(new Data_Symbol.IsSymbol(function () {
+                  return "expl";
+              }))(eqNoteExplanation)))))(x.value0.childl.rslice.notes)(y.value0.childl.rslice.notes) && Data_Eq.eq(eqParents(eqSliceId))(x.value0.childl.rslice.parents)(y.value0.childl.rslice.parents) && x.value0.childl.rslice.x === y.value0.childl.rslice.x) && (Data_Eq.eq(Data_Eq.eqArray(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                  return "right";
+              }))(eqStartStop(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                  return "pitch";
+              }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                  return "id";
+              }))(Data_Eq.eqString)))))()(new Data_Symbol.IsSymbol(function () {
+                  return "left";
+              }))(eqStartStop(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                  return "pitch";
+              }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                  return "id";
+              }))(Data_Eq.eqString)))))))(x.value0.childl.trans.edges.passing)(y.value0.childl.trans.edges.passing) && Data_Eq.eq(Data_Eq.eqArray(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                  return "right";
+              }))(eqStartStop(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                  return "pitch";
+              }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                  return "id";
+              }))(Data_Eq.eqString)))))()(new Data_Symbol.IsSymbol(function () {
+                  return "left";
+              }))(eqStartStop(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                  return "pitch";
+              }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                  return "id";
+              }))(Data_Eq.eqString)))))))(x.value0.childl.trans.edges.regular)(y.value0.childl.trans.edges.regular) && Data_Eq.eq(eqTransId)(x.value0.childl.trans.id)(y.value0.childl.trans.id) && x.value0.childl.trans.is2nd === y.value0.childl.trans.is2nd) && (Data_Eq.eq(eqOp)(x.value0.childm.op)(y.value0.childm.op) && (Data_Eq.eq(eqSliceId)(x.value0.childm.rslice.id)(y.value0.childm.rslice.id) && Data_Eq.eq(eqStartStop(Data_Eq.eqArray(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                  return "note";
+              }))(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                  return "pitch";
+              }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                  return "id";
+              }))(Data_Eq.eqString))))()(new Data_Symbol.IsSymbol(function () {
+                  return "expl";
+              }))(eqNoteExplanation)))))(x.value0.childm.rslice.notes)(y.value0.childm.rslice.notes) && Data_Eq.eq(eqParents(eqSliceId))(x.value0.childm.rslice.parents)(y.value0.childm.rslice.parents) && x.value0.childm.rslice.x === y.value0.childm.rslice.x) && (Data_Eq.eq(Data_Eq.eqArray(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                  return "right";
+              }))(eqStartStop(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                  return "pitch";
+              }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                  return "id";
+              }))(Data_Eq.eqString)))))()(new Data_Symbol.IsSymbol(function () {
+                  return "left";
+              }))(eqStartStop(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                  return "pitch";
+              }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                  return "id";
+              }))(Data_Eq.eqString)))))))(x.value0.childm.trans.edges.passing)(y.value0.childm.trans.edges.passing) && Data_Eq.eq(Data_Eq.eqArray(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                  return "right";
+              }))(eqStartStop(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                  return "pitch";
+              }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                  return "id";
+              }))(Data_Eq.eqString)))))()(new Data_Symbol.IsSymbol(function () {
+                  return "left";
+              }))(eqStartStop(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                  return "pitch";
+              }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                  return "id";
+              }))(Data_Eq.eqString)))))))(x.value0.childm.trans.edges.regular)(y.value0.childm.trans.edges.regular) && Data_Eq.eq(eqTransId)(x.value0.childm.trans.id)(y.value0.childm.trans.id) && x.value0.childm.trans.is2nd === y.value0.childm.trans.is2nd)) && (Data_Eq.eq(eqOp)(x.value0.childr.op)(y.value0.childr.op) && (Data_Eq.eq(Data_Eq.eqArray(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                  return "right";
+              }))(eqStartStop(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                  return "pitch";
+              }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                  return "id";
+              }))(Data_Eq.eqString)))))()(new Data_Symbol.IsSymbol(function () {
+                  return "left";
+              }))(eqStartStop(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                  return "pitch";
+              }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                  return "id";
+              }))(Data_Eq.eqString)))))))(x.value0.childr.trans.edges.passing)(y.value0.childr.trans.edges.passing) && Data_Eq.eq(Data_Eq.eqArray(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                  return "right";
+              }))(eqStartStop(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                  return "pitch";
+              }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                  return "id";
+              }))(Data_Eq.eqString)))))()(new Data_Symbol.IsSymbol(function () {
+                  return "left";
+              }))(eqStartStop(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                  return "pitch";
+              }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                  return "id";
+              }))(Data_Eq.eqString)))))))(x.value0.childr.trans.edges.regular)(y.value0.childr.trans.edges.regular) && Data_Eq.eq(eqTransId)(x.value0.childr.trans.id)(y.value0.childr.trans.id) && x.value0.childr.trans.is2nd === y.value0.childr.trans.is2nd));
+          };
+          return false;
+      };
+  });
   var setParents = function (p) {
       return function (seg) {
           var findUniqueVertExpl = function (parentSlice) {
@@ -7024,7 +7851,7 @@ var PS = {};
                               if (Data_Boolean.otherwise) {
                                   return child;
                               };
-                              throw new Error("Failed pattern match at Model (line 511, column 1 - line 511, column 50): " + [ leftSlice.constructor.name, rightSlice.constructor.name, child.constructor.name ]);
+                              throw new Error("Failed pattern match at Model (line 519, column 1 - line 519, column 50): " + [ leftSlice.constructor.name, rightSlice.constructor.name, child.constructor.name ]);
                           };
                           if (leftSlice.notes instanceof Inner) {
                               if (rightSlice.notes instanceof Inner) {
@@ -7074,7 +7901,7 @@ var PS = {};
                           };
                           return v2(true);
                       };
-                      var $537 = Data_Eq.eq(eqStartStop(Data_Eq.eqArray(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                      var $517 = Data_Eq.eq(eqStartStop(Data_Eq.eqArray(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
                           return "note";
                       }))(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
                           return "pitch";
@@ -7083,8 +7910,8 @@ var PS = {};
                       }))(Data_Eq.eqString))))()(new Data_Symbol.IsSymbol(function () {
                           return "expl";
                       }))(eqNoteExplanation)))))(leftSlice.notes)(Start.value);
-                      if ($537) {
-                          var $538 = Data_Eq.eq(eqStartStop(Data_Eq.eqArray(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                      if ($517) {
+                          var $518 = Data_Eq.eq(eqStartStop(Data_Eq.eqArray(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
                               return "note";
                           }))(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
                               return "pitch";
@@ -7093,7 +7920,7 @@ var PS = {};
                           }))(Data_Eq.eqString))))()(new Data_Symbol.IsSymbol(function () {
                               return "expl";
                           }))(eqNoteExplanation)))))(rightSlice.notes)(Stop.value);
-                          if ($538) {
+                          if ($518) {
                               return {
                                   note: child.note,
                                   expl: RootExpl.value
@@ -7144,7 +7971,7 @@ var PS = {};
                   op: seg.op
               };
           };
-          throw new Error("Failed pattern match at Model (line 512, column 20 - line 527, column 8): " + [ p.constructor.name ]);
+          throw new Error("Failed pattern match at Model (line 520, column 20 - line 535, column 8): " + [ p.constructor.name ]);
       };
   };
   var emptyEdges = {
@@ -7220,8 +8047,8 @@ var PS = {};
                   return {
                       id: slice.id,
                       notes: Data_Functor.map(functorStartStop)(Data_Functor.map(Data_Functor.functorArray)(function (n) {
-                          var $556 = n.note.id === noteId;
-                          if ($556) {
+                          var $536 = n.note.id === noteId;
+                          if ($536) {
                               return {
                                   expl: expl,
                                   note: n.note
@@ -7251,58 +8078,58 @@ var PS = {};
                           if (upFromLeft instanceof Data_List_Types.Cons) {
                               return Data_Either.Right.create({
                                   "seg'": (function () {
-                                      var $559 = {};
-                                      for (var $560 in seg) {
-                                          if ({}.hasOwnProperty.call(seg, $560)) {
-                                              $559[$560] = seg[$560];
+                                      var $539 = {};
+                                      for (var $540 in seg) {
+                                          if ({}.hasOwnProperty.call(seg, $540)) {
+                                              $539[$540] = seg[$540];
                                           };
                                       };
-                                      $559.trans = {
+                                      $539.trans = {
                                           edges: upFromLeft.value0,
                                           id: seg.trans.id,
                                           is2nd: seg.trans.is2nd
                                       };
-                                      return $559;
+                                      return $539;
                                   })(),
                                   rUp: upFromLeft.value1
                               });
                           };
-                          throw new Error("Failed pattern match at Model (line 847, column 15 - line 849, column 86): " + [ upFromLeft.constructor.name ]);
+                          throw new Error("Failed pattern match at Model (line 907, column 15 - line 909, column 86): " + [ upFromLeft.constructor.name ]);
                       };
                       if (seg.op instanceof Split) {
                           return Control_Bind.bind(Data_Either.bindEither)(doSegment(upFromLeft)(seg.op.value0.childl))(function (v) {
                               return Control_Bind.bind(Data_Either.bindEither)(doSegment$prime(v.rUp)(seg.op.value0.childr))(function (v1) {
                                   var segNewOp = (function () {
-                                      var $566 = {};
-                                      for (var $567 in seg) {
-                                          if ({}.hasOwnProperty.call(seg, $567)) {
-                                              $566[$567] = seg[$567];
+                                      var $546 = {};
+                                      for (var $547 in seg) {
+                                          if ({}.hasOwnProperty.call(seg, $547)) {
+                                              $546[$547] = seg[$547];
                                           };
                                       };
-                                      $566.op = new Split({
+                                      $546.op = new Split({
                                           childl: v["seg'"],
                                           childr: v1["seg'"]
                                       });
-                                      return $566;
+                                      return $546;
                                   })();
                                   return Control_Bind.bind(Data_Either.bindEither)((function () {
-                                      var $569 = noteInSlice(seg.op.value0.childl.rslice);
-                                      if ($569) {
-                                          var $570 = explIsSplit(expl);
-                                          if ($570) {
+                                      var $549 = noteInSlice(seg.op.value0.childl.rslice);
+                                      if ($549) {
+                                          var $550 = explIsSplit(expl);
+                                          if ($550) {
                                               return Control_Applicative.pure(Data_Either.applicativeEither)((function () {
-                                                  var $571 = {};
-                                                  for (var $572 in segNewOp) {
-                                                      if ({}.hasOwnProperty.call(segNewOp, $572)) {
-                                                          $571[$572] = segNewOp[$572];
+                                                  var $551 = {};
+                                                  for (var $552 in segNewOp) {
+                                                      if ({}.hasOwnProperty.call(segNewOp, $552)) {
+                                                          $551[$552] = segNewOp[$552];
                                                       };
                                                   };
-                                                  $571.trans = {
+                                                  $551.trans = {
                                                       edges: parentEdges(v["seg'"].rslice),
                                                       id: segNewOp.trans.id,
                                                       is2nd: segNewOp.trans.is2nd
                                                   };
-                                                  return $571;
+                                                  return $551;
                                               })());
                                           };
                                           return new Data_Either.Left("Cannot explain a split note with a hori.");
@@ -7324,8 +8151,8 @@ var PS = {};
                                       return Control_Bind.bind(Data_Either.bindEither)(vertEdgesLeft(v["seg'"].trans.edges)(v["seg'"].rslice))(function (leftParentEdges) {
                                           return Control_Bind.bind(Data_Either.bindEither)(vertEdgesRight(v2["seg'"].trans.edges)(v1["seg'"].rslice))(function (rightParentEdges) {
                                               return Control_Bind.discard(Control_Bind.discardUnit)(Data_Either.bindEither)((function () {
-                                                  var $584 = (noteInSlice(seg.op.value0.childl.rslice) || noteInSlice(seg.op.value0.childm.rslice)) && !explIsHori(expl);
-                                                  if ($584) {
+                                                  var $564 = (noteInSlice(seg.op.value0.childl.rslice) || noteInSlice(seg.op.value0.childm.rslice)) && !explIsHori(expl);
+                                                  if ($564) {
                                                       return Data_Either.Left.create("Cannot explain a hori note with a split. noteId = " + (Data_Show.show(Data_Show.showString)(noteId) + (", childl.rslice = " + (Data_Show.show(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
                                                           return "id";
                                                       }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
@@ -7364,23 +8191,23 @@ var PS = {};
                                               })())(function () {
                                                   return Control_Applicative.pure(Data_Either.applicativeEither)({
                                                       "seg'": (function () {
-                                                          var $585 = {};
-                                                          for (var $586 in seg) {
-                                                              if ({}.hasOwnProperty.call(seg, $586)) {
-                                                                  $585[$586] = seg[$586];
+                                                          var $565 = {};
+                                                          for (var $566 in seg) {
+                                                              if ({}.hasOwnProperty.call(seg, $566)) {
+                                                                  $565[$566] = seg[$566];
                                                               };
                                                           };
-                                                          $585.op = new Hori({
+                                                          $565.op = new Hori({
                                                               childl: v["seg'"],
                                                               childm: v1["seg'"],
                                                               childr: v2["seg'"]
                                                           });
-                                                          $585.trans = {
+                                                          $565.trans = {
                                                               edges: leftParentEdges,
                                                               id: seg.trans.id,
                                                               is2nd: seg.trans.is2nd
                                                           };
-                                                          return $585;
+                                                          return $565;
                                                       })(),
                                                       rUp: new Data_List_Types.Cons(rightParentEdges, v2.rUp)
                                                   });
@@ -7391,14 +8218,14 @@ var PS = {};
                               });
                           });
                       };
-                      throw new Error("Failed pattern match at Model (line 846, column 31 - line 887, column 12): " + [ seg.op.constructor.name ]);
+                      throw new Error("Failed pattern match at Model (line 906, column 31 - line 947, column 12): " + [ seg.op.constructor.name ]);
                   };
               };
               var doSegment = function (upFromLeft) {
                   return function (seg) {
                       var rslice$prime = (function () {
-                          var $598 = noteInSlice(seg.rslice);
-                          if ($598) {
+                          var $578 = noteInSlice(seg.rslice);
+                          if ($578) {
                               return setNoteExplInSlice(seg.rslice);
                           };
                           return seg.rslice;
@@ -7427,7 +8254,7 @@ var PS = {};
                               });
                           });
                       };
-                      throw new Error("Failed pattern match at Model (line 833, column 28 - line 838, column 29): " + [ v.constructor.name ]);
+                      throw new Error("Failed pattern match at Model (line 893, column 28 - line 898, column 29): " + [ v.constructor.name ]);
                   };
               };
               var v = traverseTop(Data_List_Types.Nil.value)(model.reduction.segments);
@@ -7445,7 +8272,7 @@ var PS = {};
               if (v instanceof Data_Either.Left) {
                   return new Data_Either.Left(v.value0);
               };
-              throw new Error("Failed pattern match at Model (line 820, column 40 - line 822, column 23): " + [ v.constructor.name ]);
+              throw new Error("Failed pattern match at Model (line 880, column 40 - line 882, column 23): " + [ v.constructor.name ]);
           };
       };
   };
@@ -7467,9 +8294,9 @@ var PS = {};
                           if (v2 instanceof Data_Maybe.Nothing) {
                               return Data_Functor.map(Data_Either.functorEither)(Data_List_Types.Cons.create(v1.value0))(go(v1.value0.rslice)(v1.value1));
                           };
-                          throw new Error("Failed pattern match at Model (line 507, column 39 - line 509, column 47): " + [ v2.constructor.name ]);
+                          throw new Error("Failed pattern match at Model (line 515, column 39 - line 517, column 47): " + [ v2.constructor.name ]);
                       };
-                      throw new Error("Failed pattern match at Model (line 504, column 3 - line 504, column 62): " + [ v.constructor.name, v1.constructor.name ]);
+                      throw new Error("Failed pattern match at Model (line 512, column 3 - line 512, column 62): " + [ v.constructor.name, v1.constructor.name ]);
                   };
               };
               return go(red.start)(red.segments);
@@ -7517,8 +8344,8 @@ var PS = {};
           };
           var matchSlice = function (v) {
               if (v instanceof Data_List_Types.Cons && v.value1 instanceof Data_List_Types.Cons) {
-                  var $624 = Data_Eq.eq(eqSliceId)(v.value0.rslice.id)(sliceId);
-                  if ($624) {
+                  var $604 = Data_Eq.eq(eqSliceId)(v.value0.rslice.id)(sliceId);
+                  if ($604) {
                       return new Data_Maybe.Just(new Data_Tuple.Tuple({
                           seg1: v.value0,
                           seg2: v.value1.value0
@@ -7543,7 +8370,7 @@ var PS = {};
           if (v instanceof Data_Either.Left) {
               return new Data_Either.Left(v.value0);
           };
-          throw new Error("Failed pattern match at Model (line 615, column 30 - line 617, column 23): " + [ v.constructor.name ]);
+          throw new Error("Failed pattern match at Model (line 623, column 30 - line 625, column 23): " + [ v.constructor.name ]);
       };
   };
   var attachSegment = function (v) {
@@ -7649,8 +8476,8 @@ var PS = {};
           };
           var matchTrans = function (v) {
               if (v instanceof Data_List_Types.Cons) {
-                  var $655 = Data_Eq.eq(eqTransId)(v.value0.trans.id)(transId);
-                  if ($655) {
+                  var $635 = Data_Eq.eq(eqTransId)(v.value0.trans.id)(transId);
+                  if ($635) {
                       return new Data_Maybe.Just(new Data_Tuple.Tuple(v.value0, v.value1));
                   };
                   return Data_Maybe.Nothing.value;
@@ -7672,7 +8499,7 @@ var PS = {};
           if (v instanceof Data_Either.Left) {
               return new Data_Either.Left(v.value0);
           };
-          throw new Error("Failed pattern match at Model (line 784, column 34 - line 786, column 23): " + [ v.constructor.name ]);
+          throw new Error("Failed pattern match at Model (line 844, column 34 - line 846, column 23): " + [ v.constructor.name ]);
       };
   };
   var undoVertAtSlice = function (sliceId) {
@@ -7687,8 +8514,8 @@ var PS = {};
           };
           var matchSlice = function (v) {
               if (v instanceof Data_List_Types.Cons && v.value1 instanceof Data_List_Types.Cons) {
-                  var $671 = Data_Eq.eq(eqSliceId)(v.value0.rslice.id)(sliceId);
-                  if ($671) {
+                  var $651 = Data_Eq.eq(eqSliceId)(v.value0.rslice.id)(sliceId);
+                  if ($651) {
                       return new Data_Maybe.Just(new Data_Tuple.Tuple({
                           pl: v.value0,
                           pr: v.value1.value0
@@ -7713,7 +8540,7 @@ var PS = {};
           if (v instanceof Data_Either.Left) {
               return new Data_Either.Left(v.value0);
           };
-          throw new Error("Failed pattern match at Model (line 802, column 33 - line 804, column 23): " + [ v.constructor.name ]);
+          throw new Error("Failed pattern match at Model (line 862, column 33 - line 864, column 23): " + [ v.constructor.name ]);
       };
   };
   var vertAtMid = function (transId) {
@@ -7722,138 +8549,228 @@ var PS = {};
               return function (topSlice) {
                   return function (mkLeftParent) {
                       return function (leftSlice) {
-                          return function (seg) {
-                              var v = function (v1) {
-                                  if (Data_Boolean.otherwise) {
-                                      if (seg.op instanceof Freeze) {
-                                          return new Data_Either.Right({
-                                              "seg'": seg,
-                                              leftover: new Data_Maybe.Just(0)
-                                          });
-                                      };
-                                      if (seg.op instanceof Split) {
-                                          return Control_Bind.bind(Data_Either.bindEither)(insertDangling(dist)(topSlice)(mkLeftParent)(seg.op.value0.childl.rslice)(seg.op.value0.childr))(function (v2) {
-                                              return Control_Bind.bind(Data_Either.bindEither)((function () {
-                                                  var $686 = dist === 0;
-                                                  if ($686) {
-                                                      if (seg.op.value0.childl.rslice.parents instanceof MergeParents) {
-                                                          return Data_Either.Right.create(resetExpls(setParents(new MergeParents({
-                                                              left: leftSlice,
-                                                              right: topSlice
-                                                          }))(seg.op.value0.childl)));
-                                                      };
-                                                      return new Data_Either.Left("invalid derivation structure: non-merge parents on merge slice");
-                                                  };
-                                                  return Control_Applicative.pure(Data_Either.applicativeEither)(seg.op.value0.childl);
-                                              })())(function (childlFixed) {
-                                                  if (v2.leftover instanceof Data_Maybe.Nothing) {
-                                                      return Control_Applicative.pure(Data_Either.applicativeEither)({
-                                                          "seg'": {
-                                                              op: new Split({
-                                                                  childl: childlFixed,
-                                                                  childr: v2["seg'"]
-                                                              }),
-                                                              trans: seg.trans
-                                                          },
-                                                          leftover: Data_Maybe.Nothing.value
-                                                      });
-                                                  };
-                                                  if (v2.leftover instanceof Data_Maybe.Just) {
-                                                      return Control_Bind.bind(Data_Either.bindEither)(insertDangling((dist + v2.leftover.value0 | 0) + 1 | 0)(topSlice)(mkLeftParent)(leftSlice)(detachSegment(childlFixed)))(function (v3) {
-                                                          var childl$prime = attachSegment(v3["seg'"])(childlFixed.rslice);
-                                                          var seg$prime = {
-                                                              op: new Split({
-                                                                  childl: childl$prime,
-                                                                  childr: v2["seg'"]
-                                                              }),
-                                                              trans: seg.trans
-                                                          };
+                          return function (segl) {
+                              return function (segr) {
+                                  return function (tail) {
+                                      var v = function (v1) {
+                                          if (Data_Boolean.otherwise) {
+                                              var fixRight = function (childm) {
+                                                  return function (childr) {
+                                                      return Control_Bind.bind(Data_Either.bindEither)(vertEdgesRight(childr.trans.edges)(childm.rslice))(function (edges$prime) {
                                                           return Control_Applicative.pure(Data_Either.applicativeEither)({
-                                                              "seg'": seg$prime,
-                                                              leftover: Data_Functor.map(Data_Maybe.functorMaybe)(function (v4) {
-                                                                  return v4 + 1 | 0;
-                                                              })(v3.leftover)
+                                                              trans: {
+                                                                  edges: edges$prime,
+                                                                  id: segr.trans.id,
+                                                                  is2nd: segr.trans.is2nd
+                                                              },
+                                                              op: segr.op,
+                                                              rslice: segr.rslice
                                                           });
                                                       });
                                                   };
-                                                  throw new Error("Failed pattern match at Model (line 754, column 9 - line 762, column 55): " + [ v2.leftover.constructor.name ]);
-                                              });
-                                          });
+                                              };
+                                              if (segl.op instanceof Freeze) {
+                                                  return new Data_Either.Right({
+                                                      "segl'": segl,
+                                                      "segr'": segr,
+                                                      "tail'": tail,
+                                                      leftover: new Data_Maybe.Just(0)
+                                                  });
+                                              };
+                                              if (segl.op instanceof Split) {
+                                                  return Control_Bind.bind(Data_Either.bindEither)(insertDangling(dist)(topSlice)(mkLeftParent)(segl.op.value0.childl.rslice)(attachSegment(segl.op.value0.childr)(segl.rslice))(segr)(tail))(function (v2) {
+                                                      return Control_Bind.bind(Data_Either.bindEither)((function () {
+                                                          var $668 = dist === 0;
+                                                          if ($668) {
+                                                              if (segl.op.value0.childl.rslice.parents instanceof MergeParents) {
+                                                                  return Data_Either.Right.create(setParents(new MergeParents({
+                                                                      left: leftSlice,
+                                                                      right: topSlice
+                                                                  }))(resetExpls(segl.op.value0.childl)));
+                                                              };
+                                                              return new Data_Either.Left("invalid derivation structure: non-merge parents on merge slice");
+                                                          };
+                                                          return Control_Applicative.pure(Data_Either.applicativeEither)(segl.op.value0.childl);
+                                                      })())(function (childlFixed) {
+                                                          if (v2.leftover instanceof Data_Maybe.Nothing) {
+                                                              return Control_Applicative.pure(Data_Either.applicativeEither)({
+                                                                  "segl'": {
+                                                                      op: new Split({
+                                                                          childl: childlFixed,
+                                                                          childr: detachSegment(v2["segl'"])
+                                                                      }),
+                                                                      trans: {
+                                                                          edges: parentEdges(childlFixed.rslice),
+                                                                          id: segl.trans.id,
+                                                                          is2nd: segl.trans.is2nd
+                                                                      },
+                                                                      rslice: segl.rslice
+                                                                  },
+                                                                  "segr'": v2["segr'"],
+                                                                  "tail'": v2["tail'"],
+                                                                  leftover: Data_Maybe.Nothing.value
+                                                              });
+                                                          };
+                                                          if (v2.leftover instanceof Data_Maybe.Just) {
+                                                              return Control_Bind.bind(Data_Either.bindEither)(insertDangling((dist + v2.leftover.value0 | 0) + 1 | 0)(topSlice)(mkLeftParent)(leftSlice)(childlFixed)(v2["segl'"])(new Data_List_Types.Cons(v2["segr'"], v2["tail'"])))(function (v3) {
+                                                                  if (v3["tail'"] instanceof Data_List_Types.Cons) {
+                                                                      var segl$prime = {
+                                                                          op: new Split({
+                                                                              childl: v3["segl'"],
+                                                                              childr: detachSegment(v3["segr'"])
+                                                                          }),
+                                                                          rslice: segl.rslice,
+                                                                          trans: segl.trans
+                                                                      };
+                                                                      return Control_Applicative.pure(Data_Either.applicativeEither)({
+                                                                          "segl'": segl$prime,
+                                                                          "segr'": v3["tail'"].value0,
+                                                                          "tail'": v3["tail'"].value1,
+                                                                          leftover: Data_Functor.map(Data_Maybe.functorMaybe)(function (v4) {
+                                                                              return v4 + 1 | 0;
+                                                                          })(v3.leftover)
+                                                                      });
+                                                                  };
+                                                                  return new Data_Either.Left("Returned tail too short (splitLeft). This is a bug!");
+                                                              });
+                                                          };
+                                                          throw new Error("Failed pattern match at Model (line 767, column 9 - line 787, column 78): " + [ v2.leftover.constructor.name ]);
+                                                      });
+                                                  });
+                                              };
+                                              if (segl.op instanceof Hori) {
+                                                  if (segr.op instanceof Hori) {
+                                                      return new Data_Either.Left("Not a leftmost derivation (Hori right of Hori)!");
+                                                  };
+                                                  if (segr.op instanceof Split) {
+                                                      return Control_Bind.bind(Data_Either.bindEither)(insertDangling(dist)(topSlice)(mkLeftParent)(leftSlice)(segl)(segr.op.value0.childl)(new Data_List_Types.Cons(attachSegment(segr.op.value0.childr)(segr.rslice), tail)))(function (v2) {
+                                                          if (v2["tail'"] instanceof Data_List_Types.Cons) {
+                                                              var splitOp$prime = new Split({
+                                                                  childl: v2["segr'"],
+                                                                  childr: detachSegment(v2["tail'"].value0)
+                                                              });
+                                                              return Control_Applicative.pure(Data_Either.applicativeEither)({
+                                                                  "segl'": v2["segl'"],
+                                                                  "segr'": {
+                                                                      op: splitOp$prime,
+                                                                      rslice: segr.rslice,
+                                                                      trans: segr.trans
+                                                                  },
+                                                                  "tail'": v2["tail'"].value1,
+                                                                  leftover: v2.leftover
+                                                              });
+                                                          };
+                                                          return new Data_Either.Left("Returned tail too short (splitRight). This is a bug!");
+                                                      });
+                                                  };
+                                                  if (segr.op instanceof Freeze) {
+                                                      if (tail instanceof Data_List_Types.Nil) {
+                                                          return new Data_Either.Left("Tail too short (hori). This is a bug!");
+                                                      };
+                                                      if (tail instanceof Data_List_Types.Cons) {
+                                                          return Control_Bind.bind(Data_Either.bindEither)(insertDangling(dist - 1 | 0)(topSlice)(mkLeftParent)(segl.op.value0.childm.rslice)(attachSegment(segl.op.value0.childr)(segl.rslice))(tail.value0)(tail.value1))(function (v2) {
+                                                              var tail$primer = new Data_List_Types.Cons(v2["segr'"], v2["tail'"]);
+                                                              if (v2.leftover instanceof Data_Maybe.Nothing) {
+                                                                  var op$prime = new Hori({
+                                                                      childl: segl.op.value0.childl,
+                                                                      childm: segl.op.value0.childm,
+                                                                      childr: detachSegment(v2["segl'"])
+                                                                  });
+                                                                  return Control_Bind.bind(Data_Either.bindEither)(fixRight(segl.op.value0.childm)(v2["segl'"]))(function (segr$primer) {
+                                                                      return Control_Applicative.pure(Data_Either.applicativeEither)({
+                                                                          "segl'": {
+                                                                              op: op$prime,
+                                                                              rslice: segl.rslice,
+                                                                              trans: segl.trans
+                                                                          },
+                                                                          "segr'": segr$primer,
+                                                                          "tail'": tail$primer,
+                                                                          leftover: Data_Maybe.Nothing.value
+                                                                      });
+                                                                  });
+                                                              };
+                                                              if (v2.leftover instanceof Data_Maybe.Just) {
+                                                                  return Control_Bind.bind(Data_Either.bindEither)(insertDangling(dist + v2.leftover.value0 | 0)(topSlice)(mkLeftParent)(segl.op.value0.childl.rslice)(segl.op.value0.childm)(v2["segl'"])(tail$primer))(function (v3) {
+                                                                      if (v3.leftover instanceof Data_Maybe.Nothing) {
+                                                                          var op$prime = new Hori({
+                                                                              childl: segl.op.value0.childl,
+                                                                              childm: v3["segl'"],
+                                                                              childr: detachSegment(v3["segr'"])
+                                                                          });
+                                                                          return Control_Bind.bind(Data_Either.bindEither)(fixRight(v3["segl'"])(v3["segr'"]))(function (segr$primem) {
+                                                                              return Control_Applicative.pure(Data_Either.applicativeEither)({
+                                                                                  "segl'": {
+                                                                                      op: op$prime,
+                                                                                      rslice: segl.rslice,
+                                                                                      trans: segl.trans
+                                                                                  },
+                                                                                  "segr'": segr$primem,
+                                                                                  "tail'": v3["tail'"],
+                                                                                  leftover: Data_Maybe.Nothing.value
+                                                                              });
+                                                                          });
+                                                                      };
+                                                                      if (v3.leftover instanceof Data_Maybe.Just) {
+                                                                          return Control_Bind.bind(Data_Either.bindEither)(insertDangling((dist + 1 | 0) + v3.leftover.value0 | 0)(topSlice)(mkLeftParent)(leftSlice)(segl.op.value0.childl)(v3["segl'"])(new Data_List_Types.Cons(v3["segr'"], v3["tail'"])))(function (v4) {
+                                                                              if (v4["tail'"] instanceof Data_List_Types.Nil) {
+                                                                                  return new Data_Either.Left("Returned tail too short (hori). This is a bug!");
+                                                                              };
+                                                                              if (v4["tail'"] instanceof Data_List_Types.Cons) {
+                                                                                  var op$prime = new Hori({
+                                                                                      childl: v4["segl'"],
+                                                                                      childm: v4["segr'"],
+                                                                                      childr: detachSegment(v4["tail'"].value0)
+                                                                                  });
+                                                                                  return Control_Bind.bind(Data_Either.bindEither)(fixRight(v4["segr'"])(v4["tail'"].value0))(function (segr$primel) {
+                                                                                      return Control_Applicative.pure(Data_Either.applicativeEither)({
+                                                                                          "segl'": {
+                                                                                              op: op$prime,
+                                                                                              rslice: segl.rslice,
+                                                                                              trans: segl.trans
+                                                                                          },
+                                                                                          "segr'": segr$primel,
+                                                                                          "tail'": v4["tail'"].value1,
+                                                                                          leftover: Data_Functor.map(Data_Maybe.functorMaybe)(function (v5) {
+                                                                                              return v5 + 2 | 0;
+                                                                                          })(v4.leftover)
+                                                                                      });
+                                                                                  });
+                                                                              };
+                                                                              throw new Error("Failed pattern match at Model (line 830, column 21 - line 836, column 115): " + [ v4["tail'"].constructor.name ]);
+                                                                          });
+                                                                      };
+                                                                      throw new Error("Failed pattern match at Model (line 820, column 17 - line 836, column 115): " + [ v3.leftover.constructor.name ]);
+                                                                  });
+                                                              };
+                                                              throw new Error("Failed pattern match at Model (line 810, column 13 - line 836, column 115): " + [ v2.leftover.constructor.name ]);
+                                                          });
+                                                      };
+                                                      throw new Error("Failed pattern match at Model (line 802, column 19 - line 836, column 115): " + [ tail.constructor.name ]);
+                                                  };
+                                                  throw new Error("Failed pattern match at Model (line 789, column 42 - line 836, column 115): " + [ segr.op.constructor.name ]);
+                                              };
+                                              throw new Error("Failed pattern match at Model (line 752, column 19 - line 836, column 115): " + [ segl.op.constructor.name ]);
+                                          };
+                                          throw new Error("Failed pattern match at Model (line 677, column 1 - line 677, column 53): " + [ dist.constructor.name, topSlice.constructor.name, mkLeftParent.constructor.name, leftSlice.constructor.name, segl.constructor.name, segr.constructor.name, tail.constructor.name ]);
                                       };
-                                      if (seg.op instanceof Hori) {
-                                          return Control_Bind.bind(Data_Either.bindEither)(insertDangling(dist - 1 | 0)(topSlice)(mkLeftParent)(seg.op.value0.childm.rslice)(seg.op.value0.childr))(function (v2) {
-                                              if (v2.leftover instanceof Data_Maybe.Nothing) {
+                                      var $736 = dist === 0;
+                                      if ($736) {
+                                          var $737 = !segl.trans.is2nd;
+                                          if ($737) {
+                                              return Control_Bind.bind(Data_Either.bindEither)(mkLeftParent(detachSegment(segl)))(function (segl$prime) {
                                                   return Control_Applicative.pure(Data_Either.applicativeEither)({
-                                                      "seg'": {
-                                                          op: new Hori({
-                                                              childl: seg.op.value0.childl,
-                                                              childm: seg.op.value0.childm,
-                                                              childr: v2["seg'"]
-                                                          }),
-                                                          trans: seg.trans
-                                                      },
+                                                      "segl'": attachSegment(segl$prime)(segl.rslice),
+                                                      "segr'": segr,
+                                                      "tail'": tail,
                                                       leftover: Data_Maybe.Nothing.value
                                                   });
-                                              };
-                                              if (v2.leftover instanceof Data_Maybe.Just) {
-                                                  return Control_Bind.bind(Data_Either.bindEither)(insertDangling(dist + v2.leftover.value0 | 0)(topSlice)(mkLeftParent)(seg.op.value0.childl.rslice)(detachSegment(seg.op.value0.childm)))(function (v3) {
-                                                      var childm$prime = attachSegment(v3["seg'"])(seg.op.value0.childm.rslice);
-                                                      if (v3.leftover instanceof Data_Maybe.Nothing) {
-                                                          return Control_Applicative.pure(Data_Either.applicativeEither)({
-                                                              "seg'": {
-                                                                  op: new Hori({
-                                                                      childl: seg.op.value0.childl,
-                                                                      childm: childm$prime,
-                                                                      childr: v2["seg'"]
-                                                                  }),
-                                                                  trans: seg.trans
-                                                              },
-                                                              leftover: Data_Maybe.Nothing.value
-                                                          });
-                                                      };
-                                                      if (v3.leftover instanceof Data_Maybe.Just) {
-                                                          return Control_Bind.bind(Data_Either.bindEither)(insertDangling((dist + 1 | 0) + v3.leftover.value0 | 0)(topSlice)(mkLeftParent)(leftSlice)(detachSegment(seg.op.value0.childl)))(function (v4) {
-                                                              var childl$prime = attachSegment(v4["seg'"])(seg.op.value0.childl.rslice);
-                                                              var seg$prime = {
-                                                                  op: new Hori({
-                                                                      childl: childl$prime,
-                                                                      childm: childm$prime,
-                                                                      childr: v2["seg'"]
-                                                                  }),
-                                                                  trans: seg.trans
-                                                              };
-                                                              return Control_Applicative.pure(Data_Either.applicativeEither)({
-                                                                  "seg'": seg$prime,
-                                                                  leftover: Data_Functor.map(Data_Maybe.functorMaybe)(function (v5) {
-                                                                      return v5 + 2 | 0;
-                                                                  })(v4.leftover)
-                                                              });
-                                                          });
-                                                      };
-                                                      throw new Error("Failed pattern match at Model (line 772, column 13 - line 780, column 57): " + [ v3.leftover.constructor.name ]);
-                                                  });
-                                              };
-                                              throw new Error("Failed pattern match at Model (line 766, column 9 - line 780, column 57): " + [ v2.leftover.constructor.name ]);
-                                          });
+                                              });
+                                          };
+                                          return v(true);
                                       };
-                                      throw new Error("Failed pattern match at Model (line 742, column 19 - line 780, column 57): " + [ seg.op.constructor.name ]);
+                                      return v(true);
                                   };
-                                  throw new Error("Failed pattern match at Model (line 669, column 1 - line 669, column 53): " + [ dist.constructor.name, topSlice.constructor.name, mkLeftParent.constructor.name, leftSlice.constructor.name, seg.constructor.name ]);
                               };
-                              var $722 = dist === 0;
-                              if ($722) {
-                                  var $723 = !seg.trans.is2nd;
-                                  if ($723) {
-                                      return Control_Bind.bind(Data_Either.bindEither)(mkLeftParent(seg))(function (seg$prime) {
-                                          return Control_Applicative.pure(Data_Either.applicativeEither)({
-                                              "seg'": seg$prime,
-                                              leftover: Data_Maybe.Nothing.value
-                                          });
-                                      });
-                                  };
-                                  return v(true);
-                              };
-                              return v(true);
                           };
                       };
                   };
@@ -7863,30 +8780,33 @@ var PS = {};
               return function (topSlice) {
                   return function (mkLeftParent) {
                       return function (leftSlice) {
-                          return function (l) {
-                              return function (t$prime) {
-                                  return Control_Bind.bind(Data_Either.bindEither)(insertDangling(dist)(topSlice)(mkLeftParent)(leftSlice)(detachSegment(l)))(function (v) {
-                                      var tail$prime = new Data_List_Types.Cons(attachSegment(v["seg'"])(l.rslice), t$prime);
-                                      return Control_Applicative.pure(Data_Either.applicativeEither)((function () {
-                                          if (v.leftover instanceof Data_Maybe.Nothing) {
-                                              return {
-                                                  "tail'": tail$prime,
-                                                  dangling: Data_Maybe.Nothing.value
+                          return function (segl) {
+                              return function (segr) {
+                                  return function (tail) {
+                                      return Control_Bind.bind(Data_Either.bindEither)(insertDangling(dist)(topSlice)(mkLeftParent)(leftSlice)(segl)(segr)(tail))(function (v) {
+                                          return Control_Applicative.pure(Data_Either.applicativeEither)((function () {
+                                              if (v.leftover instanceof Data_Maybe.Nothing) {
+                                                  return {
+                                                      "seg'": v["segl'"],
+                                                      "tail'": new Data_List_Types.Cons(v["segr'"], v["tail'"]),
+                                                      dangling: Data_Maybe.Nothing.value
+                                                  };
                                               };
-                                          };
-                                          if (v.leftover instanceof Data_Maybe.Just) {
-                                              return {
-                                                  "tail'": tail$prime,
-                                                  dangling: new Data_Maybe.Just({
-                                                      dist: (dist + 1 | 0) + v.leftover.value0 | 0,
-                                                      mkLeftParent: mkLeftParent,
-                                                      topSlice: topSlice
-                                                  })
+                                              if (v.leftover instanceof Data_Maybe.Just) {
+                                                  return {
+                                                      "seg'": v["segl'"],
+                                                      "tail'": new Data_List_Types.Cons(v["segr'"], v["tail'"]),
+                                                      dangling: new Data_Maybe.Just({
+                                                          dist: (dist + 1 | 0) + v.leftover.value0 | 0,
+                                                          mkLeftParent: mkLeftParent,
+                                                          topSlice: topSlice
+                                                      })
+                                                  };
                                               };
-                                          };
-                                          throw new Error("Failed pattern match at Model (line 721, column 10 - line 723, column 89): " + [ v.leftover.constructor.name ]);
-                                      })());
-                                  });
+                                              throw new Error("Failed pattern match at Model (line 729, column 10 - line 731, column 120): " + [ v.leftover.constructor.name ]);
+                                          })());
+                                      });
+                                  };
                               };
                           };
                       };
@@ -7902,21 +8822,22 @@ var PS = {};
                                   trans: v1.value0.trans,
                                   rslice: v2.topSlice,
                                   op: v1.value0.op
-                              })(new Data_List_Types.Cons(v2.rightParent, v1.value1.value1.value1));
+                              })(v2.rightParent)(v1.value1.value1.value1);
                           });
                       };
                       if (Data_Boolean.otherwise) {
                           return Control_Bind.bind(Data_Either.bindEither)(doVert(v1.value0.rslice)(v1.value1))(function (v2) {
                               if (v2.dangling instanceof Data_Maybe.Nothing) {
                                   return new Data_Either.Right({
-                                      "tail'": new Data_List_Types.Cons(v1.value0, v2["tail'"]),
+                                      "seg'": v1.value0,
+                                      "tail'": new Data_List_Types.Cons(v2["seg'"], v2["tail'"]),
                                       dangling: Data_Maybe.Nothing.value
                                   });
                               };
                               if (v2.dangling instanceof Data_Maybe.Just) {
-                                  return tryInsert(v2.dangling.value0.dist)(v2.dangling.value0.topSlice)(v2.dangling.value0.mkLeftParent)(v)(v1.value0)(v2["tail'"]);
+                                  return tryInsert(v2.dangling.value0.dist)(v2.dangling.value0.topSlice)(v2.dangling.value0.mkLeftParent)(v)(v1.value0)(v2["seg'"])(v2["tail'"]);
                               };
-                              throw new Error("Failed pattern match at Model (line 701, column 7 - line 703, column 104): " + [ v2.dangling.constructor.name ]);
+                              throw new Error("Failed pattern match at Model (line 709, column 7 - line 711, column 108): " + [ v2.dangling.constructor.name ]);
                           });
                       };
                   };
@@ -7928,7 +8849,7 @@ var PS = {};
               if (v.value0.dangling instanceof Data_Maybe.Nothing) {
                   return new Data_Either.Right({
                       reduction: {
-                          segments: v["value0"]["tail'"],
+                          segments: new Data_List_Types.Cons(v["value0"]["seg'"], v["value0"]["tail'"]),
                           nextTransId: incT(incT(model.reduction.nextTransId)),
                           nextSliceId: incS(model.reduction.nextSliceId),
                           start: model.reduction.start
@@ -7939,12 +8860,12 @@ var PS = {};
               if (v.value0.dangling instanceof Data_Maybe.Just) {
                   return new Data_Either.Left("Failed to insert hori!");
               };
-              throw new Error("Failed pattern match at Model (line 671, column 43 - line 681, column 47): " + [ v.value0.dangling.constructor.name ]);
+              throw new Error("Failed pattern match at Model (line 679, column 38 - line 689, column 47): " + [ v.value0.dangling.constructor.name ]);
           };
           if (v instanceof Data_Either.Left) {
               return new Data_Either.Left(v.value0);
           };
-          throw new Error("Failed pattern match at Model (line 670, column 27 - line 682, column 23): " + [ v.constructor.name ]);
+          throw new Error("Failed pattern match at Model (line 678, column 27 - line 690, column 23): " + [ v.constructor.name ]);
       };
   };
   exports["RightRepeat"] = RightRepeat;
@@ -7964,6 +8885,7 @@ var PS = {};
   exports["RightExpl"] = RightExpl;
   exports["LeftExpl"] = LeftExpl;
   exports["DoubleExpl"] = DoubleExpl;
+  exports["parentEdges"] = parentEdges;
   exports["findLeftOrn"] = findLeftOrn;
   exports["findRightOrn"] = findRightOrn;
   exports["findDoubleOrn"] = findDoubleOrn;
@@ -7975,6 +8897,8 @@ var PS = {};
   exports["Inner"] = Inner;
   exports["Stop"] = Stop;
   exports["isRepeatingEdge"] = isRepeatingEdge;
+  exports["incS"] = incS;
+  exports["incT"] = incT;
   exports["NoParents"] = NoParents;
   exports["VertParent"] = VertParent;
   exports["MergeParents"] = MergeParents;
@@ -7985,7 +8909,10 @@ var PS = {};
   exports["Split"] = Split;
   exports["Hori"] = Hori;
   exports["attachSegment"] = attachSegment;
+  exports["detachSegment"] = detachSegment;
   exports["loadPiece"] = loadPiece;
+  exports["vertEdgesLeft"] = vertEdgesLeft;
+  exports["vertEdgesRight"] = vertEdgesRight;
   exports["mergeAtSlice"] = mergeAtSlice;
   exports["vertAtMid"] = vertAtMid;
   exports["undoMergeAtTrans"] = undoMergeAtTrans;
@@ -7999,17 +8926,23 @@ var PS = {};
   exports["showDoubleOrnament"] = showDoubleOrnament;
   exports["eqNoteExplanation"] = eqNoteExplanation;
   exports["showNoteExplanation"] = showNoteExplanation;
+  exports["eqStartStop"] = eqStartStop;
+  exports["functorStartStop"] = functorStartStop;
   exports["ordStartStop"] = ordStartStop;
   exports["showStartStop"] = showStartStop;
   exports["writeForeignStartStop"] = writeForeignStartStop;
   exports["showSliceId"] = showSliceId;
   exports["eqSliceId"] = eqSliceId;
   exports["ordSliceId"] = ordSliceId;
+  exports["writeForeignSliceId"] = writeForeignSliceId;
   exports["showTransId"] = showTransId;
   exports["eqTransId"] = eqTransId;
   exports["ordTransId"] = ordTransId;
+  exports["writeForeignTransId"] = writeForeignTransId;
   exports["eqParents"] = eqParents;
   exports["showParents"] = showParents;
+  exports["eqOp"] = eqOp;
+  exports["showOp"] = showOp;
 })(PS);
 (function($PS) {
   // Generated by purs version 0.14.1
@@ -8018,14 +8951,31 @@ var PS = {};
   var exports = $PS["CommonApp"];
   var Data_Boolean = $PS["Data.Boolean"];
   var Data_Eq = $PS["Data.Eq"];
-  var Data_Generic_Rep = $PS["Data.Generic.Rep"];
   var Data_Maybe = $PS["Data.Maybe"];
   var Data_Pitches_Class = $PS["Data.Pitches.Class"];
   var Data_Pitches_Spelled = $PS["Data.Pitches.Spelled"];
-  var Data_Show = $PS["Data.Show"];
-  var Data_Show_Generic = $PS["Data.Show.Generic"];
-  var Data_Symbol = $PS["Data.Symbol"];
   var Model = $PS["Model"];                
+  var HelpTab = (function () {
+      function HelpTab() {
+
+      };
+      HelpTab.value = new HelpTab();
+      return HelpTab;
+  })();
+  var ImportTab = (function () {
+      function ImportTab() {
+
+      };
+      ImportTab.value = new ImportTab();
+      return ImportTab;
+  })();
+  var ExportTab = (function () {
+      function ExportTab() {
+
+      };
+      ExportTab.value = new ExportTab();
+      return ExportTab;
+  })();
   var SelNone = (function () {
       function SelNone() {
 
@@ -8074,6 +9024,24 @@ var PS = {};
       Init.value = new Init();
       return Init;
   })();
+  var LoadPiece = (function () {
+      function LoadPiece(value0) {
+          this.value0 = value0;
+      };
+      LoadPiece.create = function (value0) {
+          return new LoadPiece(value0);
+      };
+      return LoadPiece;
+  })();
+  var SwitchTab = (function () {
+      function SwitchTab(value0) {
+          this.value0 = value0;
+      };
+      SwitchTab.create = function (value0) {
+          return new SwitchTab(value0);
+      };
+      return SwitchTab;
+  })();
   var HandleKey = (function () {
       function HandleKey(value0) {
           this.value0 = value0;
@@ -8091,15 +9059,6 @@ var PS = {};
           return new Select(value0);
       };
       return Select;
-  })();
-  var LoadPiece = (function () {
-      function LoadPiece(value0) {
-          this.value0 = value0;
-      };
-      LoadPiece.create = function (value0) {
-          return new LoadPiece(value0);
-      };
-      return LoadPiece;
   })();
   var MergeAtSelected = (function () {
       function MergeAtSelected() {
@@ -8193,56 +9152,20 @@ var PS = {};
           return new Data_Maybe.Just(v.value0);
       };
       return Data_Maybe.Nothing.value;
-  };
-  var genericOuterSelection = new Data_Generic_Rep.Generic(function (x) {
-      if (x instanceof SelNone) {
-          return new Data_Generic_Rep.Inl(Data_Generic_Rep.NoArguments.value);
+  }; 
+  var eqTab = new Data_Eq.Eq(function (x) {
+      return function (y) {
+          if (x instanceof HelpTab && y instanceof HelpTab) {
+              return true;
+          };
+          if (x instanceof ImportTab && y instanceof ImportTab) {
+              return true;
+          };
+          if (x instanceof ExportTab && y instanceof ExportTab) {
+              return true;
+          };
+          return false;
       };
-      if (x instanceof SelSlice) {
-          return new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inl(x.value0));
-      };
-      if (x instanceof SelTrans) {
-          return new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inl(x.value0)));
-      };
-      if (x instanceof SelNote) {
-          return new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inr(x.value0)));
-      };
-      throw new Error("Failed pattern match at CommonApp (line 19, column 1 - line 19, column 61): " + [ x.constructor.name ]);
-  }, function (x) {
-      if (x instanceof Data_Generic_Rep.Inl) {
-          return SelNone.value;
-      };
-      if (x instanceof Data_Generic_Rep.Inr && x.value0 instanceof Data_Generic_Rep.Inl) {
-          return new SelSlice(x.value0.value0);
-      };
-      if (x instanceof Data_Generic_Rep.Inr && (x.value0 instanceof Data_Generic_Rep.Inr && x.value0.value0 instanceof Data_Generic_Rep.Inl)) {
-          return new SelTrans(x.value0.value0.value0);
-      };
-      if (x instanceof Data_Generic_Rep.Inr && (x.value0 instanceof Data_Generic_Rep.Inr && x.value0.value0 instanceof Data_Generic_Rep.Inr)) {
-          return new SelNote(x.value0.value0.value0);
-      };
-      throw new Error("Failed pattern match at CommonApp (line 19, column 1 - line 19, column 61): " + [ x.constructor.name ]);
-  });
-  var showOuterSelection = new Data_Show.Show(function (os) {
-      return Data_Show_Generic.genericShow(genericOuterSelection)(Data_Show_Generic.genericShowSum(Data_Show_Generic.genericShowConstructor(Data_Show_Generic.genericShowArgsNoArguments)(new Data_Symbol.IsSymbol(function () {
-          return "SelNone";
-      })))(Data_Show_Generic.genericShowSum(Data_Show_Generic.genericShowConstructor(Data_Show_Generic.genericShowArgsArgument(Model.showSliceId))(new Data_Symbol.IsSymbol(function () {
-          return "SelSlice";
-      })))(Data_Show_Generic.genericShowSum(Data_Show_Generic.genericShowConstructor(Data_Show_Generic.genericShowArgsArgument(Model.showTransId))(new Data_Symbol.IsSymbol(function () {
-          return "SelTrans";
-      })))(Data_Show_Generic.genericShowConstructor(Data_Show_Generic.genericShowArgsArgument(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
-          return "expl";
-      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
-          return "note";
-      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
-          return "parents";
-      }))(Data_Show.showRecordFieldsNil)(Model.showParents(Model.showSliceId)))(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))(Model.showNoteExplanation))))(new Data_Symbol.IsSymbol(function () {
-          return "SelNote";
-      }))))))(os);
   });
   var eqOuterSelection = new Data_Eq.Eq(function (x) {
       return function (y) {
@@ -8292,11 +9215,11 @@ var PS = {};
                               throw new Error("Failed pattern match at CommonApp (line 60, column 1 - line 60, column 63): " + [ sel.value0.parents.constructor.name ]);
                           };
                           if (sel.value0.parents instanceof Model.VertParent) {
-                              var $81 = Data_Eq.eq(Model.eqSliceId)(sliceId)(sel.value0.parents.value0);
-                              if ($81) {
-                                  var $82 = Model.setHoriExplParent(sel.value0.note.pitch)(new Data_Maybe.Just(parNote))(sel.value0.expl);
-                                  if ($82 instanceof Data_Maybe.Just) {
-                                      return setExpl($82.value0);
+                              var $85 = Data_Eq.eq(Model.eqSliceId)(sliceId)(sel.value0.parents.value0);
+                              if ($85) {
+                                  var $86 = Model.setHoriExplParent(sel.value0.note.pitch)(new Data_Maybe.Just(parNote))(sel.value0.expl);
+                                  if ($86 instanceof Data_Maybe.Just) {
+                                      return setExpl($86.value0);
                                   };
                                   return v5(true);
                               };
@@ -8305,11 +9228,11 @@ var PS = {};
                           return v5(true);
                       };
                       if (sel.value0.parents instanceof Model.MergeParents) {
-                          var $86 = Data_Eq.eq(Model.eqSliceId)(sliceId)(sel.value0.parents.value0.right);
-                          if ($86) {
-                              var $87 = Model.setRightExplParent(sel.value0.note.pitch)(new Data_Maybe.Just(parNote))(sel.value0.expl);
-                              if ($87 instanceof Data_Maybe.Just) {
-                                  return setExpl($87.value0);
+                          var $90 = Data_Eq.eq(Model.eqSliceId)(sliceId)(sel.value0.parents.value0.right);
+                          if ($90) {
+                              var $91 = Model.setRightExplParent(sel.value0.note.pitch)(new Data_Maybe.Just(parNote))(sel.value0.expl);
+                              if ($91 instanceof Data_Maybe.Just) {
+                                  return setExpl($91.value0);
                               };
                               return v3(true);
                           };
@@ -8318,11 +9241,11 @@ var PS = {};
                       return v3(true);
                   };
                   if (sel.value0.parents instanceof Model.MergeParents) {
-                      var $93 = Data_Eq.eq(Model.eqSliceId)(sliceId)(sel.value0.parents.value0.left);
-                      if ($93) {
-                          var $94 = Model.setLeftExplParent(sel.value0.note.pitch)(new Data_Maybe.Just(parNote))(sel.value0.expl);
-                          if ($94 instanceof Data_Maybe.Just) {
-                              return setExpl($94.value0);
+                      var $97 = Data_Eq.eq(Model.eqSliceId)(sliceId)(sel.value0.parents.value0.left);
+                      if ($97) {
+                          var $98 = Model.setLeftExplParent(sel.value0.note.pitch)(new Data_Maybe.Just(parNote))(sel.value0.expl);
+                          if ($98 instanceof Data_Maybe.Just) {
+                              return setExpl($98.value0);
                           };
                           return v1(true);
                       };
@@ -8344,11 +9267,15 @@ var PS = {};
   exports["outerSelected"] = outerSelected;
   exports["addParentToNote"] = addParentToNote;
   exports["removeParent"] = removeParent;
+  exports["HelpTab"] = HelpTab;
+  exports["ImportTab"] = ImportTab;
+  exports["ExportTab"] = ExportTab;
   exports["NoOp"] = NoOp;
   exports["Init"] = Init;
+  exports["LoadPiece"] = LoadPiece;
+  exports["SwitchTab"] = SwitchTab;
   exports["HandleKey"] = HandleKey;
   exports["Select"] = Select;
-  exports["LoadPiece"] = LoadPiece;
   exports["MergeAtSelected"] = MergeAtSelected;
   exports["VertAtSelected"] = VertAtSelected;
   exports["UnMergeAtSelected"] = UnMergeAtSelected;
@@ -8357,7 +9284,7 @@ var PS = {};
   exports["RemoveAny"] = RemoveAny;
   exports["SetNoteExplanation"] = SetNoteExplanation;
   exports["eqOuterSelection"] = eqOuterSelection;
-  exports["showOuterSelection"] = showOuterSelection;
+  exports["eqTab"] = eqTab;
 })(PS);
 (function($PS) {
   // Generated by purs version 0.14.1
@@ -10397,6 +11324,14 @@ var PS = {};
           });
       };
   };
+  var modify = function (dictMonadState) {
+      return function (f) {
+          return state(dictMonadState)(function (s) {
+              var s$prime = f(s);
+              return new Data_Tuple.Tuple(s$prime, s$prime);
+          });
+      };
+  };
   var gets = function (dictMonadState) {
       return function (f) {
           return state(dictMonadState)(function (s) {
@@ -10413,7 +11348,22 @@ var PS = {};
   exports["get"] = get;
   exports["gets"] = gets;
   exports["put"] = put;
+  exports["modify"] = modify;
   exports["modify_"] = modify_;
+})(PS);
+(function($PS) {
+  // Generated by purs version 0.14.1
+  "use strict";
+  $PS["Control.Monad.Trans.Class"] = $PS["Control.Monad.Trans.Class"] || {};
+  var exports = $PS["Control.Monad.Trans.Class"];
+  var MonadTrans = function (lift) {
+      this.lift = lift;
+  };
+  var lift = function (dict) {
+      return dict.lift;
+  };
+  exports["lift"] = lift;
+  exports["MonadTrans"] = MonadTrans;
 })(PS);
 (function($PS) {
   // Generated by purs version 0.14.1
@@ -10425,11 +11375,24 @@ var PS = {};
   var Control_Bind = $PS["Control.Bind"];
   var Control_Monad = $PS["Control.Monad"];
   var Control_Monad_State_Class = $PS["Control.Monad.State.Class"];
+  var Control_Monad_Trans_Class = $PS["Control.Monad.Trans.Class"];
   var Data_Functor = $PS["Data.Functor"];
   var Data_Tuple = $PS["Data.Tuple"];                    
   var StateT = function (x) {
       return x;
+  };
+  var runStateT = function (v) {
+      return v;
   }; 
+  var monadTransStateT = new Control_Monad_Trans_Class.MonadTrans(function (dictMonad) {
+      return function (m) {
+          return function (s) {
+              return Control_Bind.bind(dictMonad.Bind1())(m)(function (x) {
+                  return Control_Applicative.pure(dictMonad.Applicative0())(new Data_Tuple.Tuple(x, s));
+              });
+          };
+      };
+  });
   var functorStateT = function (dictFunctor) {
       return new Data_Functor.Functor(function (f) {
           return function (v) {
@@ -10488,8 +11451,11 @@ var PS = {};
           })());
       });
   };
+  exports["runStateT"] = runStateT;
+  exports["functorStateT"] = functorStateT;
   exports["applicativeStateT"] = applicativeStateT;
   exports["bindStateT"] = bindStateT;
+  exports["monadTransStateT"] = monadTransStateT;
   exports["monadStateStateT"] = monadStateStateT;
 })(PS);
 (function($PS) {
@@ -10522,6 +11488,237 @@ var PS = {};
       };
   };
   exports["parSequence_"] = parSequence_;
+})(PS);
+(function($PS) {
+  // Generated by purs version 0.14.1
+  "use strict";
+  $PS["DOM.HTML.Indexed.InputType"] = $PS["DOM.HTML.Indexed.InputType"] || {};
+  var exports = $PS["DOM.HTML.Indexed.InputType"];
+  var InputButton = (function () {
+      function InputButton() {
+
+      };
+      InputButton.value = new InputButton();
+      return InputButton;
+  })();
+  var InputCheckbox = (function () {
+      function InputCheckbox() {
+
+      };
+      InputCheckbox.value = new InputCheckbox();
+      return InputCheckbox;
+  })();
+  var InputColor = (function () {
+      function InputColor() {
+
+      };
+      InputColor.value = new InputColor();
+      return InputColor;
+  })();
+  var InputDate = (function () {
+      function InputDate() {
+
+      };
+      InputDate.value = new InputDate();
+      return InputDate;
+  })();
+  var InputDatetimeLocal = (function () {
+      function InputDatetimeLocal() {
+
+      };
+      InputDatetimeLocal.value = new InputDatetimeLocal();
+      return InputDatetimeLocal;
+  })();
+  var InputEmail = (function () {
+      function InputEmail() {
+
+      };
+      InputEmail.value = new InputEmail();
+      return InputEmail;
+  })();
+  var InputFile = (function () {
+      function InputFile() {
+
+      };
+      InputFile.value = new InputFile();
+      return InputFile;
+  })();
+  var InputHidden = (function () {
+      function InputHidden() {
+
+      };
+      InputHidden.value = new InputHidden();
+      return InputHidden;
+  })();
+  var InputImage = (function () {
+      function InputImage() {
+
+      };
+      InputImage.value = new InputImage();
+      return InputImage;
+  })();
+  var InputMonth = (function () {
+      function InputMonth() {
+
+      };
+      InputMonth.value = new InputMonth();
+      return InputMonth;
+  })();
+  var InputNumber = (function () {
+      function InputNumber() {
+
+      };
+      InputNumber.value = new InputNumber();
+      return InputNumber;
+  })();
+  var InputPassword = (function () {
+      function InputPassword() {
+
+      };
+      InputPassword.value = new InputPassword();
+      return InputPassword;
+  })();
+  var InputRadio = (function () {
+      function InputRadio() {
+
+      };
+      InputRadio.value = new InputRadio();
+      return InputRadio;
+  })();
+  var InputRange = (function () {
+      function InputRange() {
+
+      };
+      InputRange.value = new InputRange();
+      return InputRange;
+  })();
+  var InputReset = (function () {
+      function InputReset() {
+
+      };
+      InputReset.value = new InputReset();
+      return InputReset;
+  })();
+  var InputSearch = (function () {
+      function InputSearch() {
+
+      };
+      InputSearch.value = new InputSearch();
+      return InputSearch;
+  })();
+  var InputSubmit = (function () {
+      function InputSubmit() {
+
+      };
+      InputSubmit.value = new InputSubmit();
+      return InputSubmit;
+  })();
+  var InputTel = (function () {
+      function InputTel() {
+
+      };
+      InputTel.value = new InputTel();
+      return InputTel;
+  })();
+  var InputText = (function () {
+      function InputText() {
+
+      };
+      InputText.value = new InputText();
+      return InputText;
+  })();
+  var InputTime = (function () {
+      function InputTime() {
+
+      };
+      InputTime.value = new InputTime();
+      return InputTime;
+  })();
+  var InputUrl = (function () {
+      function InputUrl() {
+
+      };
+      InputUrl.value = new InputUrl();
+      return InputUrl;
+  })();
+  var InputWeek = (function () {
+      function InputWeek() {
+
+      };
+      InputWeek.value = new InputWeek();
+      return InputWeek;
+  })();
+  var renderInputType = function (v) {
+      if (v instanceof InputButton) {
+          return "button";
+      };
+      if (v instanceof InputCheckbox) {
+          return "checkbox";
+      };
+      if (v instanceof InputColor) {
+          return "color";
+      };
+      if (v instanceof InputDate) {
+          return "date";
+      };
+      if (v instanceof InputDatetimeLocal) {
+          return "datetime-local";
+      };
+      if (v instanceof InputEmail) {
+          return "email";
+      };
+      if (v instanceof InputFile) {
+          return "file";
+      };
+      if (v instanceof InputHidden) {
+          return "hidden";
+      };
+      if (v instanceof InputImage) {
+          return "image";
+      };
+      if (v instanceof InputMonth) {
+          return "month";
+      };
+      if (v instanceof InputNumber) {
+          return "number";
+      };
+      if (v instanceof InputPassword) {
+          return "password";
+      };
+      if (v instanceof InputRadio) {
+          return "radio";
+      };
+      if (v instanceof InputRange) {
+          return "range";
+      };
+      if (v instanceof InputReset) {
+          return "reset";
+      };
+      if (v instanceof InputSearch) {
+          return "search";
+      };
+      if (v instanceof InputSubmit) {
+          return "submit";
+      };
+      if (v instanceof InputTel) {
+          return "tel";
+      };
+      if (v instanceof InputText) {
+          return "text";
+      };
+      if (v instanceof InputTime) {
+          return "time";
+      };
+      if (v instanceof InputUrl) {
+          return "url";
+      };
+      if (v instanceof InputWeek) {
+          return "week";
+      };
+      throw new Error("Failed pattern match at DOM.HTML.Indexed.InputType (line 28, column 19 - line 50, column 22): " + [ v.constructor.name ]);
+  };
+  exports["InputCheckbox"] = InputCheckbox;
+  exports["renderInputType"] = renderInputType;
 })(PS);
 (function($PS) {
   // Generated by purs version 0.14.1
@@ -10788,18 +11985,24 @@ var PS = {};
   "use strict";
   $PS["Leftmost"] = $PS["Leftmost"] || {};
   var exports = $PS["Leftmost"];
+  var Control_Applicative = $PS["Control.Applicative"];
+  var Control_Bind = $PS["Control.Bind"];
+  var Data_Array = $PS["Data.Array"];
   var Data_Either = $PS["Data.Either"];
   var Data_Functor = $PS["Data.Functor"];
+  var Data_Generic_Rep = $PS["Data.Generic.Rep"];
   var Data_Map_Internal = $PS["Data.Map.Internal"];
+  var Data_Maybe = $PS["Data.Maybe"];
+  var Data_Ord = $PS["Data.Ord"];
   var Data_Pitches_Class = $PS["Data.Pitches.Class"];
   var Data_Pitches_Spelled = $PS["Data.Pitches.Spelled"];
   var Data_Semigroup = $PS["Data.Semigroup"];
   var Data_Show = $PS["Data.Show"];
+  var Data_Show_Generic = $PS["Data.Show.Generic"];
   var Data_Symbol = $PS["Data.Symbol"];
+  var Data_Traversable = $PS["Data.Traversable"];
   var Data_Unfoldable = $PS["Data.Unfoldable"];
-  var Data_Variant = $PS["Data.Variant"];
-  var Model = $PS["Model"];
-  var Simple_JSON = $PS["Simple.JSON"];                
+  var Model = $PS["Model"];                
   var RootNote = (function () {
       function RootNote() {
 
@@ -10889,54 +12092,45 @@ var PS = {};
       return BothChildren;
   })();
   var TooManyChildren = (function () {
-      function TooManyChildren() {
-
+      function TooManyChildren(value0) {
+          this.value0 = value0;
       };
-      TooManyChildren.value = new TooManyChildren();
+      TooManyChildren.create = function (value0) {
+          return new TooManyChildren(value0);
+      };
       return TooManyChildren;
   })();
-  var splitToJSON = function (v) {
-      var unwrap = function (f) {
-          return function (v1) {
-              return {
-                  parent: v1.value0,
-                  children: Data_Functor.map(Data_Functor.functorArray)(function (v2) {
-                      return {
-                          child: v2.child,
-                          orn: f(v2.orn)
-                      };
-                  })(v1.value1)
-              };
-          };
-      };
-      var regToJSON = function (v1) {
-          if (v1 instanceof Data_Either.Left) {
-              return "RootNote";
-          };
-          if (v1 instanceof Data_Either.Right) {
-              return Data_Show.show(Model.showDoubleOrnament)(v1.value0);
-          };
-          throw new Error("Failed pattern match at Leftmost (line 167, column 15 - line 169, column 22): " + [ v1.constructor.name ]);
-      };
-      return {
-          regular: Data_Functor.map(Data_Functor.functorArray)(unwrap(regToJSON))(Data_Map_Internal.toUnfoldable(Data_Unfoldable.unfoldableArray)(v.regular)),
-          passing: Data_Functor.map(Data_Functor.functorArray)(unwrap(Data_Show.show(Model.showDoubleOrnament)))(Data_Map_Internal.toUnfoldable(Data_Unfoldable.unfoldableArray)(v.passing)),
-          fromLeft: Data_Functor.map(Data_Functor.functorArray)(unwrap(Data_Show.show(Model.showRightOrnament)))(Data_Map_Internal.toUnfoldable(Data_Unfoldable.unfoldableArray)(v.fromLeft)),
-          fromRight: Data_Functor.map(Data_Functor.functorArray)(unwrap(Data_Show.show(Model.showLeftOrnament)))(Data_Map_Internal.toUnfoldable(Data_Unfoldable.unfoldableArray)(v.fromRight)),
-          keepLeft: v.keepLeft,
-          keepRight: v.keepRight
-      };
+  var FreezeOp = function (x) {
+      return x;
   };
   var semigroupHoriChildren = new Data_Semigroup.Semigroup(function (a) {
       return function (b) {
           if (a instanceof LeftChild) {
+              if (b instanceof LeftChild) {
+                  return new TooManyChildren({
+                      left: [ a.value0, b.value0 ],
+                      right: [  ]
+                  });
+              };
               if (b instanceof RightChild) {
                   return new BothChildren({
                       left: a.value0,
                       right: b.value0
                   });
               };
-              return TooManyChildren.value;
+              if (b instanceof BothChildren) {
+                  return new TooManyChildren({
+                      left: [ a.value0, b.value0.left ],
+                      right: [ b.value0.right ]
+                  });
+              };
+              if (b instanceof TooManyChildren) {
+                  return new TooManyChildren({
+                      left: Data_Array.cons(a.value0)(b.value0.left),
+                      right: b.value0.right
+                  });
+              };
+              throw new Error("Failed pattern match at Leftmost (line 104, column 20 - line 108, column 88): " + [ b.constructor.name ]);
           };
           if (a instanceof RightChild) {
               if (b instanceof LeftChild) {
@@ -10945,544 +12139,623 @@ var PS = {};
                       right: a.value0
                   });
               };
-              return TooManyChildren.value;
+              if (b instanceof RightChild) {
+                  return new TooManyChildren({
+                      left: [  ],
+                      right: [ a.value0, b.value0 ]
+                  });
+              };
+              if (b instanceof BothChildren) {
+                  return new TooManyChildren({
+                      left: [ b.value0.left ],
+                      right: [ a.value0, b.value0.right ]
+                  });
+              };
+              if (b instanceof TooManyChildren) {
+                  return new TooManyChildren({
+                      left: b.value0.left,
+                      right: Data_Array.cons(a.value0)(b.value0.right)
+                  });
+              };
+              throw new Error("Failed pattern match at Leftmost (line 109, column 21 - line 113, column 89): " + [ b.constructor.name ]);
           };
-          return TooManyChildren.value;
+          if (a instanceof BothChildren) {
+              if (b instanceof LeftChild) {
+                  return new TooManyChildren({
+                      left: [ a.value0.left, b.value0 ],
+                      right: [ a.value0.right ]
+                  });
+              };
+              if (b instanceof RightChild) {
+                  return new TooManyChildren({
+                      left: [ a.value0.left ],
+                      right: [ a.value0.right, b.value0 ]
+                  });
+              };
+              if (b instanceof BothChildren) {
+                  return new TooManyChildren({
+                      left: [ a.value0.left, b.value0.left ],
+                      right: [ a.value0.right, b.value0.right ]
+                  });
+              };
+              if (b instanceof TooManyChildren) {
+                  return new TooManyChildren({
+                      left: Data_Array.cons(a.value0.left)(b.value0.left),
+                      right: Data_Array.cons(a.value0.right)(b.value0.right)
+                  });
+              };
+              throw new Error("Failed pattern match at Leftmost (line 114, column 43 - line 118, column 104): " + [ b.constructor.name ]);
+          };
+          if (a instanceof TooManyChildren) {
+              if (b instanceof LeftChild) {
+                  return new TooManyChildren({
+                      left: Data_Array.snoc(a.value0.left)(b.value0),
+                      right: a.value0.right
+                  });
+              };
+              if (b instanceof RightChild) {
+                  return new TooManyChildren({
+                      left: a.value0.left,
+                      right: Data_Array.snoc(a.value0.right)(b.value0)
+                  });
+              };
+              if (b instanceof BothChildren) {
+                  return new TooManyChildren({
+                      left: Data_Array.snoc(a.value0.left)(b.value0.left),
+                      right: Data_Array.snoc(a.value0.right)(b.value0.right)
+                  });
+              };
+              if (b instanceof TooManyChildren) {
+                  return new TooManyChildren({
+                      left: Data_Semigroup.append(Data_Semigroup.semigroupArray)(a.value0.left)(b.value0.left),
+                      right: Data_Semigroup.append(Data_Semigroup.semigroupArray)(a.value0.right)(b.value0.right)
+                  });
+              };
+              throw new Error("Failed pattern match at Leftmost (line 119, column 46 - line 123, column 96): " + [ b.constructor.name ]);
+          };
+          throw new Error("Failed pattern match at Leftmost (line 103, column 16 - line 123, column 96): " + [ a.constructor.name ]);
       };
   });
-  var horiToJSON = function (v) {
-      var childToJSON = function (v1) {
-          var child = (function () {
-              if (v1.value1 instanceof LeftChild) {
-                  return Data_Variant.inj()(new Data_Symbol.IsSymbol(function () {
-                      return "leftChild";
-                  }))(Data_Symbol.SProxy.value)(v1.value1.value0);
-              };
-              if (v1.value1 instanceof RightChild) {
-                  return Data_Variant.inj()(new Data_Symbol.IsSymbol(function () {
-                      return "rightChild";
-                  }))(Data_Symbol.SProxy.value)(v1.value1.value0);
-              };
-              if (v1.value1 instanceof BothChildren) {
-                  return Data_Variant.inj()(new Data_Symbol.IsSymbol(function () {
-                      return "bothChildren";
-                  }))(Data_Symbol.SProxy.value)(v1.value1.value0);
-              };
-              if (v1.value1 instanceof TooManyChildren) {
-                  return Data_Variant.inj()(new Data_Symbol.IsSymbol(function () {
-                      return "invalidChildren";
-                  }))(Data_Symbol.SProxy.value)("invalid");
-              };
-              throw new Error("Failed pattern match at Leftmost (line 179, column 15 - line 183, column 78): " + [ v1.value1.constructor.name ]);
-          })();
+  var horiRightChildren = function (v) {
+      var unexpl = Data_Functor.map(Data_Functor.functorArray)(function (note) {
           return {
-              parent: v1.value0,
-              child: child
+              note: note,
+              expl: Model.NoExpl.value
+          };
+      })(v.unexplained.right);
+      var getChild = function (v1) {
+          if (v1.value1 instanceof RightChild) {
+              return [ {
+                  note: v1.value1.value0,
+                  expl: new Model.HoriExpl(v1.value0)
+              } ];
+          };
+          if (v1.value1 instanceof LeftChild) {
+              return [  ];
+          };
+          if (v1.value1 instanceof BothChildren) {
+              return [ {
+                  note: v1.value1.value0.right,
+                  expl: new Model.HoriExpl(v1.value0)
+              } ];
+          };
+          if (v1.value1 instanceof TooManyChildren) {
+              return Data_Functor.map(Data_Functor.functorArray)(function (v2) {
+                  return {
+                      note: v2,
+                      expl: new Model.HoriExpl(v1.value0)
+                  };
+              })(v1.value1.value0.right);
+          };
+          throw new Error("Failed pattern match at Leftmost (line 153, column 34 - line 157, column 78): " + [ v1.value1.constructor.name ]);
+      };
+      var explained = Data_Array.concatMap(getChild)(Data_Map_Internal.toUnfoldable(Data_Unfoldable.unfoldableArray)(v.children));
+      return Data_Array.sortWith(Data_Ord.ordRecord()(Data_Ord.ordRecordCons(Data_Ord.ordRecordCons(Data_Ord.ordRecordNil)()(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Pitches_Class.ordPitch(Data_Pitches_Spelled.ordSInterval)))()(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Ord.ordString)))(function (v1) {
+          return v1.note;
+      })(Data_Semigroup.append(Data_Semigroup.semigroupArray)(unexpl)(explained));
+  };
+  var horiLeftChildren = function (v) {
+      var unexpl = Data_Functor.map(Data_Functor.functorArray)(function (note) {
+          return {
+              note: note,
+              expl: Model.NoExpl.value
+          };
+      })(v.unexplained.left);
+      var getChild = function (v1) {
+          if (v1.value1 instanceof LeftChild) {
+              return [ {
+                  note: v1.value1.value0,
+                  expl: new Model.HoriExpl(v1.value0)
+              } ];
+          };
+          if (v1.value1 instanceof RightChild) {
+              return [  ];
+          };
+          if (v1.value1 instanceof BothChildren) {
+              return [ {
+                  note: v1.value1.value0.left,
+                  expl: new Model.HoriExpl(v1.value0)
+              } ];
+          };
+          if (v1.value1 instanceof TooManyChildren) {
+              return Data_Functor.map(Data_Functor.functorArray)(function (v2) {
+                  return {
+                      note: v2,
+                      expl: new Model.HoriExpl(v1.value0)
+                  };
+              })(v1.value1.value0.left);
+          };
+          throw new Error("Failed pattern match at Leftmost (line 140, column 34 - line 144, column 76): " + [ v1.value1.constructor.name ]);
+      };
+      var explained = Data_Array.concatMap(getChild)(Data_Map_Internal.toUnfoldable(Data_Unfoldable.unfoldableArray)(v.children));
+      return Data_Array.sortWith(Data_Ord.ordRecord()(Data_Ord.ordRecordCons(Data_Ord.ordRecordCons(Data_Ord.ordRecordNil)()(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Pitches_Class.ordPitch(Data_Pitches_Spelled.ordSInterval)))()(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Ord.ordString)))(function (v1) {
+          return v1.note;
+      })(Data_Semigroup.append(Data_Semigroup.semigroupArray)(unexpl)(explained));
+  };
+  var genericSplitOp = new Data_Generic_Rep.Generic(function (x) {
+      return x;
+  }, function (x) {
+      return x;
+  });
+  var genericRootOrnament = new Data_Generic_Rep.Generic(function (x) {
+      return Data_Generic_Rep.NoArguments.value;
+  }, function (x) {
+      return RootNote.value;
+  });
+  var showRootOrnament = new Data_Show.Show(function (ro) {
+      return Data_Show_Generic.genericShow(genericRootOrnament)(Data_Show_Generic.genericShowConstructor(Data_Show_Generic.genericShowArgsNoArguments)(new Data_Symbol.IsSymbol(function () {
+          return "RootNote";
+      })))(ro);
+  });
+  var showSplitOp = new Data_Show.Show(function (so) {
+      return Data_Show_Generic.genericShow(genericSplitOp)(Data_Show_Generic.genericShowConstructor(Data_Show_Generic.genericShowArgsArgument(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "fromLeft";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "fromRight";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "ids";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "keepLeft";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "keepRight";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "passing";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "regular";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "unexplained";
+      }))(Data_Show.showRecordFieldsNil)(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString)))))(Data_Map_Internal.showMap(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "left";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "right";
+      }))(Data_Show.showRecordFieldsNil)(Model.showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString)))))(Model.showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))))(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "child";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "orn";
+      }))(Data_Show.showRecordFieldsNil)(Data_Either.showEither(showRootOrnament)(Data_Maybe.showMaybe(Model.showDoubleOrnament))))(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))))))(Data_Map_Internal.showMap(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "left";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "right";
+      }))(Data_Show.showRecordFieldsNil)(Model.showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString)))))(Model.showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))))(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "child";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "orn";
+      }))(Data_Show.showRecordFieldsNil)(Data_Maybe.showMaybe(Model.showDoubleOrnament)))(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))))))(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "left";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "right";
+      }))(Data_Show.showRecordFieldsNil)(Model.showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString)))))(Model.showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))))))(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "left";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "right";
+      }))(Data_Show.showRecordFieldsNil)(Model.showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString)))))(Model.showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))))))(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "left";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "right";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "slice";
+      }))(Data_Show.showRecordFieldsNil)(Model.showSliceId))(Model.showTransId))(Model.showTransId))))(Data_Map_Internal.showMap(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString)))(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "child";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "orn";
+      }))(Data_Show.showRecordFieldsNil)(Data_Maybe.showMaybe(Model.showLeftOrnament)))(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))))))(Data_Map_Internal.showMap(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString)))(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "child";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "orn";
+      }))(Data_Show.showRecordFieldsNil)(Data_Maybe.showMaybe(Model.showRightOrnament)))(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))))))))(new Data_Symbol.IsSymbol(function () {
+          return "SplitOp";
+      })))(so);
+  });
+  var genericLeftmost = new Data_Generic_Rep.Generic(function (x) {
+      if (x instanceof LMSplitLeft) {
+          return new Data_Generic_Rep.Inl(x.value0);
+      };
+      if (x instanceof LMFreezeLeft) {
+          return new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inl(x.value0));
+      };
+      if (x instanceof LMSplitRight) {
+          return new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inl(x.value0)));
+      };
+      if (x instanceof LMHorizontalize) {
+          return new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inl(x.value0))));
+      };
+      if (x instanceof LMSplitOnly) {
+          return new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inl(x.value0)))));
+      };
+      if (x instanceof LMFreezeOnly) {
+          return new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inr(x.value0)))));
+      };
+      throw new Error("Failed pattern match at Leftmost (line 26, column 1 - line 26, column 62): " + [ x.constructor.name ]);
+  }, function (x) {
+      if (x instanceof Data_Generic_Rep.Inl) {
+          return new LMSplitLeft(x.value0);
+      };
+      if (x instanceof Data_Generic_Rep.Inr && x.value0 instanceof Data_Generic_Rep.Inl) {
+          return new LMFreezeLeft(x.value0.value0);
+      };
+      if (x instanceof Data_Generic_Rep.Inr && (x.value0 instanceof Data_Generic_Rep.Inr && x.value0.value0 instanceof Data_Generic_Rep.Inl)) {
+          return new LMSplitRight(x.value0.value0.value0);
+      };
+      if (x instanceof Data_Generic_Rep.Inr && (x.value0 instanceof Data_Generic_Rep.Inr && (x.value0.value0 instanceof Data_Generic_Rep.Inr && x.value0.value0.value0 instanceof Data_Generic_Rep.Inl))) {
+          return new LMHorizontalize(x.value0.value0.value0.value0);
+      };
+      if (x instanceof Data_Generic_Rep.Inr && (x.value0 instanceof Data_Generic_Rep.Inr && (x.value0.value0 instanceof Data_Generic_Rep.Inr && (x.value0.value0.value0 instanceof Data_Generic_Rep.Inr && x.value0.value0.value0.value0 instanceof Data_Generic_Rep.Inl)))) {
+          return new LMSplitOnly(x.value0.value0.value0.value0.value0);
+      };
+      if (x instanceof Data_Generic_Rep.Inr && (x.value0 instanceof Data_Generic_Rep.Inr && (x.value0.value0 instanceof Data_Generic_Rep.Inr && (x.value0.value0.value0 instanceof Data_Generic_Rep.Inr && x.value0.value0.value0.value0 instanceof Data_Generic_Rep.Inr)))) {
+          return new LMFreezeOnly(x.value0.value0.value0.value0.value0);
+      };
+      throw new Error("Failed pattern match at Leftmost (line 26, column 1 - line 26, column 62): " + [ x.constructor.name ]);
+  });
+  var showLeftmost = function (dictShow) {
+      return function (dictShow1) {
+          return function (dictShow2) {
+              return new Data_Show.Show(function (lm) {
+                  return Data_Show_Generic.genericShow(genericLeftmost)(Data_Show_Generic.genericShowSum(Data_Show_Generic.genericShowConstructor(Data_Show_Generic.genericShowArgsArgument(dictShow))(new Data_Symbol.IsSymbol(function () {
+                      return "LMSplitLeft";
+                  })))(Data_Show_Generic.genericShowSum(Data_Show_Generic.genericShowConstructor(Data_Show_Generic.genericShowArgsArgument(dictShow1))(new Data_Symbol.IsSymbol(function () {
+                      return "LMFreezeLeft";
+                  })))(Data_Show_Generic.genericShowSum(Data_Show_Generic.genericShowConstructor(Data_Show_Generic.genericShowArgsArgument(dictShow))(new Data_Symbol.IsSymbol(function () {
+                      return "LMSplitRight";
+                  })))(Data_Show_Generic.genericShowSum(Data_Show_Generic.genericShowConstructor(Data_Show_Generic.genericShowArgsArgument(dictShow2))(new Data_Symbol.IsSymbol(function () {
+                      return "LMHorizontalize";
+                  })))(Data_Show_Generic.genericShowSum(Data_Show_Generic.genericShowConstructor(Data_Show_Generic.genericShowArgsArgument(dictShow))(new Data_Symbol.IsSymbol(function () {
+                      return "LMSplitOnly";
+                  })))(Data_Show_Generic.genericShowConstructor(Data_Show_Generic.genericShowArgsArgument(dictShow1))(new Data_Symbol.IsSymbol(function () {
+                      return "LMFreezeOnly";
+                  }))))))))(lm);
+              });
           };
       };
-      return {
-          midEdges: v.midEdges,
-          children: Data_Functor.map(Data_Functor.functorArray)(childToJSON)(Data_Map_Internal.toUnfoldable(Data_Unfoldable.unfoldableArray)(v.children))
-      };
-  }; 
-  var freezeToJSON = function (v) {
-      return v;
   };
-  var leftmostToJSON = function (v) {
-      if (v instanceof LMFreezeLeft) {
-          return Data_Variant.inj()(new Data_Symbol.IsSymbol(function () {
-              return "freezeLeft";
-          }))(Data_Symbol.SProxy.value)(freezeToJSON(v.value0));
+  var genericHoriOp = new Data_Generic_Rep.Generic(function (x) {
+      return x;
+  }, function (x) {
+      return x;
+  });
+  var genericHoriChildren = new Data_Generic_Rep.Generic(function (x) {
+      if (x instanceof LeftChild) {
+          return new Data_Generic_Rep.Inl(x.value0);
       };
-      if (v instanceof LMFreezeOnly) {
-          return Data_Variant.inj()(new Data_Symbol.IsSymbol(function () {
-              return "freezeOnly";
-          }))(Data_Symbol.SProxy.value)(freezeToJSON(v.value0));
+      if (x instanceof RightChild) {
+          return new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inl(x.value0));
       };
-      if (v instanceof LMSplitLeft) {
-          return Data_Variant.inj()(new Data_Symbol.IsSymbol(function () {
-              return "splitLeft";
-          }))(Data_Symbol.SProxy.value)(splitToJSON(v.value0));
+      if (x instanceof BothChildren) {
+          return new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inl(x.value0)));
       };
-      if (v instanceof LMSplitOnly) {
-          return Data_Variant.inj()(new Data_Symbol.IsSymbol(function () {
-              return "splitOnly";
-          }))(Data_Symbol.SProxy.value)(splitToJSON(v.value0));
+      if (x instanceof TooManyChildren) {
+          return new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inr(new Data_Generic_Rep.Inr(x.value0)));
       };
-      if (v instanceof LMSplitRight) {
-          return Data_Variant.inj()(new Data_Symbol.IsSymbol(function () {
-              return "splitRight";
-          }))(Data_Symbol.SProxy.value)(splitToJSON(v.value0));
+      throw new Error("Failed pattern match at Leftmost (line 176, column 1 - line 176, column 62): " + [ x.constructor.name ]);
+  }, function (x) {
+      if (x instanceof Data_Generic_Rep.Inl) {
+          return new LeftChild(x.value0);
       };
-      if (v instanceof LMHorizontalize) {
-          return Data_Variant.inj()(new Data_Symbol.IsSymbol(function () {
-              return "hori";
-          }))(Data_Symbol.SProxy.value)(horiToJSON(v.value0));
+      if (x instanceof Data_Generic_Rep.Inr && x.value0 instanceof Data_Generic_Rep.Inl) {
+          return new RightChild(x.value0.value0);
       };
-      throw new Error("Failed pattern match at Leftmost (line 136, column 18 - line 142, column 68): " + [ v.constructor.name ]);
-  };
-  var exportLeftmost = (function () {
-      var $115 = Simple_JSON.writeJSON(Simple_JSON.writeForeignVariant()(Simple_JSON.consWriteForeignVariant(new Data_Symbol.IsSymbol(function () {
-          return "freezeLeft";
-      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "ties";
-      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+      if (x instanceof Data_Generic_Rep.Inr && (x.value0 instanceof Data_Generic_Rep.Inr && x.value0.value0 instanceof Data_Generic_Rep.Inl)) {
+          return new BothChildren(x.value0.value0.value0);
+      };
+      if (x instanceof Data_Generic_Rep.Inr && (x.value0 instanceof Data_Generic_Rep.Inr && x.value0.value0 instanceof Data_Generic_Rep.Inr)) {
+          return new TooManyChildren(x.value0.value0.value0);
+      };
+      throw new Error("Failed pattern match at Leftmost (line 176, column 1 - line 176, column 62): " + [ x.constructor.name ]);
+  });
+  var showHoriChildren = new Data_Show.Show(function (hc) {
+      return Data_Show_Generic.genericShow(genericHoriChildren)(Data_Show_Generic.genericShowSum(Data_Show_Generic.genericShowConstructor(Data_Show_Generic.genericShowArgsArgument(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))(new Data_Symbol.IsSymbol(function () {
+          return "LeftChild";
+      })))(Data_Show_Generic.genericShowSum(Data_Show_Generic.genericShowConstructor(Data_Show_Generic.genericShowArgsArgument(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))(new Data_Symbol.IsSymbol(function () {
+          return "RightChild";
+      })))(Data_Show_Generic.genericShowSum(Data_Show_Generic.genericShowConstructor(Data_Show_Generic.genericShowArgsArgument(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
           return "left";
-      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
           return "right";
-      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+      }))(Data_Show.showRecordFieldsNil)(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
           return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
           return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()()))()(Simple_JSON.consWriteForeignVariant(new Data_Symbol.IsSymbol(function () {
-          return "freezeOnly";
-      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "ties";
-      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))))(new Data_Symbol.IsSymbol(function () {
+          return "BothChildren";
+      })))(Data_Show_Generic.genericShowConstructor(Data_Show_Generic.genericShowArgsArgument(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
           return "left";
-      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
           return "right";
-      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+      }))(Data_Show.showRecordFieldsNil)(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
           return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
           return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()()))()(Simple_JSON.consWriteForeignVariant(new Data_Symbol.IsSymbol(function () {
-          return "hori";
-      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString)))))(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString)))))))(new Data_Symbol.IsSymbol(function () {
+          return "TooManyChildren";
+      }))))))(hc);
+  });
+  var showHoriOp = new Data_Show.Show(function (ho) {
+      return Data_Show_Generic.genericShow(genericHoriOp)(Data_Show_Generic.genericShowConstructor(Data_Show_Generic.genericShowArgsArgument(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
           return "children";
-      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "child";
-      }))(Simple_JSON.writeForeignVariant()(Simple_JSON.consWriteForeignVariant(new Data_Symbol.IsSymbol(function () {
-          return "bothChildren";
-      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "left";
-      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "right";
-      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()()))()(Simple_JSON.consWriteForeignVariant(new Data_Symbol.IsSymbol(function () {
-          return "invalidChildren";
-      }))(Simple_JSON.writeForeignString)()(Simple_JSON.consWriteForeignVariant(new Data_Symbol.IsSymbol(function () {
-          return "leftChild";
-      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))()(Simple_JSON.consWriteForeignVariant(new Data_Symbol.IsSymbol(function () {
-          return "rightChild";
-      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))()(Simple_JSON.nilWriteForeignVariant))))))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "parent";
-      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "ids";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
           return "midEdges";
-      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "unexplained";
+      }))(Data_Show.showRecordFieldsNil)(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "left";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "right";
+      }))(Data_Show.showRecordFieldsNil)(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString)))))(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString)))))))(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
           return "passing";
-      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "left";
-      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "right";
-      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
           return "regular";
-      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+      }))(Data_Show.showRecordFieldsNil)(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
           return "left";
-      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
           return "right";
-      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+      }))(Data_Show.showRecordFieldsNil)(Model.showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
           return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
           return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()()))()(Simple_JSON.consWriteForeignVariant(new Data_Symbol.IsSymbol(function () {
-          return "splitLeft";
-      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "fromLeft";
-      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "children";
-      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "child";
-      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString)))))(Model.showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
           return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
           return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "orn";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "parent";
-      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "fromRight";
-      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "children";
-      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "child";
-      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "orn";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "parent";
-      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "keepLeft";
-      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))))))(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
           return "left";
-      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
           return "right";
-      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+      }))(Data_Show.showRecordFieldsNil)(Model.showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
           return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
           return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "keepRight";
-      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString)))))(Model.showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))))))))(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
           return "left";
-      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "lslice";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "mid";
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
           return "right";
-      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "rslice";
+      }))(Data_Show.showRecordFieldsNil)(Model.showSliceId))(Model.showTransId))(Model.showTransId))(Model.showSliceId))(Model.showTransId))))(Data_Map_Internal.showMap(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
           return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
           return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "passing";
-      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "children";
-      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "child";
-      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "orn";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "parent";
-      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString)))(showHoriChildren)))))(new Data_Symbol.IsSymbol(function () {
+          return "HoriOp";
+      })))(ho);
+  });
+  var genericFreezeOp = new Data_Generic_Rep.Generic(function (x) {
+      return x;
+  }, function (x) {
+      return x;
+  });
+  var showFreezeOp = new Data_Show.Show(function (fo) {
+      return Data_Show_Generic.genericShow(genericFreezeOp)(Data_Show_Generic.genericShowConstructor(Data_Show_Generic.genericShowArgsArgument(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+          return "ties";
+      }))(Data_Show.showRecordFieldsNil)(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
           return "left";
-      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
           return "right";
-      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+      }))(Data_Show.showRecordFieldsNil)(Model.showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
           return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
           return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "regular";
-      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "children";
-      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "child";
-      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString)))))(Model.showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
           return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+      }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
           return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "orn";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "parent";
-      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "left";
-      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "right";
-      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())()()())()()())()()())()()()))()(Simple_JSON.consWriteForeignVariant(new Data_Symbol.IsSymbol(function () {
-          return "splitOnly";
-      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "fromLeft";
-      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "children";
-      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "child";
-      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "orn";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "parent";
-      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "fromRight";
-      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "children";
-      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "child";
-      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "orn";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "parent";
-      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "keepLeft";
-      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "left";
-      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "right";
-      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "keepRight";
-      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "left";
-      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "right";
-      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "passing";
-      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "children";
-      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "child";
-      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "orn";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "parent";
-      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "left";
-      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "right";
-      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "regular";
-      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "children";
-      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "child";
-      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "orn";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "parent";
-      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "left";
-      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "right";
-      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())()()())()()())()()())()()()))()(Simple_JSON.consWriteForeignVariant(new Data_Symbol.IsSymbol(function () {
-          return "splitRight";
-      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "fromLeft";
-      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "children";
-      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "child";
-      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "orn";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "parent";
-      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "fromRight";
-      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "children";
-      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "child";
-      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "orn";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "parent";
-      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "keepLeft";
-      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "left";
-      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "right";
-      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "keepRight";
-      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "left";
-      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "right";
-      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "passing";
-      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "children";
-      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "child";
-      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "orn";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "parent";
-      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "left";
-      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "right";
-      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "regular";
-      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "children";
-      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "child";
-      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "orn";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "parent";
-      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "left";
-      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "right";
-      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "id";
-      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
-          return "pitch";
-      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())()()())()()())()()())()()()))()(Simple_JSON.nilWriteForeignVariant))))))));
-      return function ($116) {
-          return $115(leftmostToJSON($116));
+      }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))))))))(new Data_Symbol.IsSymbol(function () {
+          return "FreezeOp";
+      })))(fo);
+  });
+  var extractChildNotes = function (splits) {
+      return function (f) {
+          return Data_Traversable.sequence(Data_Traversable.traversableArray)(Data_Either.applicativeEither)(Control_Bind.bind(Control_Bind.bindArray)(Data_Map_Internal.toUnfoldable(Data_Unfoldable.unfoldableArray)(splits))(function (v) {
+              return Control_Bind.bind(Control_Bind.bindArray)(v.value1)(function (child) {
+                  return Control_Applicative.pure(Control_Applicative.applicativeArray)((function () {
+                      var v1 = f(v.value0)(child.orn);
+                      if (v1 instanceof Data_Either.Left) {
+                          return new Data_Either.Left(v1.value0);
+                      };
+                      if (v1 instanceof Data_Either.Right) {
+                          return new Data_Either.Right({
+                              note: child.child,
+                              expl: v1.value0
+                          });
+                      };
+                      throw new Error("Failed pattern match at Leftmost (line 67, column 10 - line 69, column 54): " + [ v1.constructor.name ]);
+                  })());
+              });
+          }));
       };
-  })();
+  };
+  var splitGetChildNotes = function (v) {
+      return Control_Bind.bind(Data_Either.bindEither)(extractChildNotes(v.regular)(function (p) {
+          return function (o) {
+              if (o instanceof Data_Either.Left) {
+                  return new Data_Either.Right(Model.RootExpl.value);
+              };
+              if (o instanceof Data_Either.Right) {
+                  if (p.left instanceof Model.Inner) {
+                      if (p.right instanceof Model.Inner) {
+                          return Data_Either.Right.create(new Model.DoubleExpl({
+                              leftParent: p.left.value0,
+                              rightParent: p.right.value0,
+                              orn: o.value0
+                          }));
+                      };
+                      return new Data_Either.Left("Parent note cannot be Start or Stop!");
+                  };
+                  return new Data_Either.Left("Parent note cannot be Start or Stop!");
+              };
+              throw new Error("Failed pattern match at Leftmost (line 74, column 41 - line 80, column 57): " + [ o.constructor.name ]);
+          };
+      }))(function (regular) {
+          return Control_Bind.bind(Data_Either.bindEither)(extractChildNotes(v.passing)(function (p) {
+              return function (orn) {
+                  if (p.left instanceof Model.Inner) {
+                      if (p.right instanceof Model.Inner) {
+                          return Data_Either.Right.create(new Model.DoubleExpl({
+                              leftParent: p.left.value0,
+                              rightParent: p.right.value0,
+                              orn: orn
+                          }));
+                      };
+                      return new Data_Either.Left("Parent note cannot be Start or Stop!");
+                  };
+                  return new Data_Either.Left("Parent note cannot be Start or Stop!");
+              };
+          }))(function (passing) {
+              return Control_Bind.bind(Data_Either.bindEither)(extractChildNotes(v.fromLeft)(function (p) {
+                  return function (orn) {
+                      return Data_Either.Right.create(new Model.RightExpl({
+                          leftParent: p,
+                          orn: orn
+                      }));
+                  };
+              }))(function (fromLeft) {
+                  return Control_Bind.bind(Data_Either.bindEither)(extractChildNotes(v.fromRight)(function (p) {
+                      return function (orn) {
+                          return Data_Either.Right.create(new Model.LeftExpl({
+                              rightParent: p,
+                              orn: orn
+                          }));
+                      };
+                  }))(function (fromRight) {
+                      var unexplained = Data_Functor.map(Data_Functor.functorArray)(function (note) {
+                          return {
+                              note: note,
+                              expl: Model.NoExpl.value
+                          };
+                      })(v.unexplained);
+                      return Control_Applicative.pure(Data_Either.applicativeEither)(Data_Array.sortWith(Data_Ord.ordRecord()(Data_Ord.ordRecordCons(Data_Ord.ordRecordCons(Data_Ord.ordRecordNil)()(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.ordPitch(Data_Pitches_Spelled.ordSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Data_Ord.ordString)))(function (v1) {
+                          return v1.note;
+                      })(Data_Semigroup.append(Data_Semigroup.semigroupArray)(regular)(Data_Semigroup.append(Data_Semigroup.semigroupArray)(passing)(Data_Semigroup.append(Data_Semigroup.semigroupArray)(fromLeft)(Data_Semigroup.append(Data_Semigroup.semigroupArray)(fromRight)(unexplained))))));
+                  });
+              });
+          });
+      });
+  };
   exports["LMSplitLeft"] = LMSplitLeft;
   exports["LMFreezeLeft"] = LMFreezeLeft;
   exports["LMSplitRight"] = LMSplitRight;
@@ -11490,10 +12763,19 @@ var PS = {};
   exports["LMSplitOnly"] = LMSplitOnly;
   exports["LMFreezeOnly"] = LMFreezeOnly;
   exports["RootNote"] = RootNote;
+  exports["splitGetChildNotes"] = splitGetChildNotes;
+  exports["FreezeOp"] = FreezeOp;
   exports["LeftChild"] = LeftChild;
   exports["RightChild"] = RightChild;
-  exports["exportLeftmost"] = exportLeftmost;
+  exports["BothChildren"] = BothChildren;
+  exports["TooManyChildren"] = TooManyChildren;
+  exports["horiLeftChildren"] = horiLeftChildren;
+  exports["horiRightChildren"] = horiRightChildren;
+  exports["showLeftmost"] = showLeftmost;
   exports["semigroupHoriChildren"] = semigroupHoriChildren;
+  exports["showSplitOp"] = showSplitOp;
+  exports["showFreezeOp"] = showFreezeOp;
+  exports["showHoriOp"] = showHoriOp;
 })(PS);
 (function($PS) {
   // Generated by purs version 0.14.1
@@ -11505,6 +12787,7 @@ var PS = {};
   var Control_Monad_State = $PS["Control.Monad.State"];
   var Control_Monad_State_Class = $PS["Control.Monad.State.Class"];
   var Control_Monad_State_Trans = $PS["Control.Monad.State.Trans"];
+  var Control_Monad_Trans_Class = $PS["Control.Monad.Trans.Class"];
   var Data_Array = $PS["Data.Array"];
   var Data_Either = $PS["Data.Either"];
   var Data_Eq = $PS["Data.Eq"];
@@ -11512,6 +12795,7 @@ var PS = {};
   var Data_Function = $PS["Data.Function"];
   var Data_Functor = $PS["Data.Functor"];
   var Data_Identity = $PS["Data.Identity"];
+  var Data_List = $PS["Data.List"];
   var Data_List_Types = $PS["Data.List.Types"];
   var Data_Map_Internal = $PS["Data.Map.Internal"];
   var Data_Maybe = $PS["Data.Maybe"];
@@ -11566,25 +12850,25 @@ var PS = {};
               return v.leftId;
           }))(function (oldid) {
               return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(Control_Monad_State_Class.modify_(Control_Monad_State_Trans.monadStateStateT(Data_Identity.monadIdentity))(function (st) {
-                  var $34 = {};
-                  for (var $35 in st) {
-                      if ({}.hasOwnProperty.call(st, $35)) {
-                          $34[$35] = st[$35];
+                  var $52 = {};
+                  for (var $53 in st) {
+                      if ({}.hasOwnProperty.call(st, $53)) {
+                          $52[$53] = st[$53];
                       };
                   };
-                  $34.leftId = id;
-                  return $34;
+                  $52.leftId = id;
+                  return $52;
               }))(function () {
                   return Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(action)(function (res) {
                       return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(Control_Monad_State_Class.modify_(Control_Monad_State_Trans.monadStateStateT(Data_Identity.monadIdentity))(function (st) {
-                          var $37 = {};
-                          for (var $38 in st) {
-                              if ({}.hasOwnProperty.call(st, $38)) {
-                                  $37[$38] = st[$38];
+                          var $55 = {};
+                          for (var $56 in st) {
+                              if ({}.hasOwnProperty.call(st, $56)) {
+                                  $55[$56] = st[$56];
                               };
                           };
-                          $37.leftId = oldid;
-                          return $37;
+                          $55.leftId = oldid;
+                          return $55;
                       }))(function () {
                           return Control_Applicative.pure(Control_Monad_State_Trans.applicativeStateT(Data_Identity.monadIdentity))(res);
                       });
@@ -11628,7 +12912,7 @@ var PS = {};
                       l: new Data_List_Types.Cons(v1.value0, v.l)
                   };
               };
-              throw new Error("Failed pattern match at Folding (line 232, column 27 - line 236, column 36): " + [ v1.constructor.name ]);
+              throw new Error("Failed pattern match at Folding (line 233, column 27 - line 237, column 36): " + [ v1.constructor.name ]);
           };
       };
       return Data_Foldable.foldl(dictFoldable)(select)({
@@ -11642,6 +12926,294 @@ var PS = {};
       return {
           seg: seg,
           more: Data_Unit.unit
+      };
+  };
+  var leftmostToReduction = function (topSegments) {
+      return function (deriv) {
+          var startSlice = {
+              id: 0,
+              x: 0.0,
+              notes: Model.Start.value,
+              parents: Model.NoParents.value
+          };
+          var prepareTop = function (v) {
+              return {
+                  transId: v.trans.id,
+                  rslice: {
+                      id: v.rslice.id,
+                      parents: Model.NoParents.value,
+                      notes: Data_Functor.map(Model.functorStartStop)(Data_Functor.map(Data_Functor.functorArray)(function (note) {
+                          return {
+                              note: note,
+                              expl: Model.NoExpl.value
+                          };
+                      }))(v.rslice.notes)
+                  }
+              };
+          };
+          var prepareSplit = function (leftSliceId) {
+              return function (top) {
+                  return function (v) {
+                      return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Data_Either.monadEither))(Control_Monad_State_Class.modify_(Control_Monad_State_Trans.monadStateStateT(Data_Either.monadEither))(function (st) {
+                          var $76 = {};
+                          for (var $77 in st) {
+                              if ({}.hasOwnProperty.call(st, $77)) {
+                                  $76[$77] = st[$77];
+                              };
+                          };
+                          $76.maxT = Data_Ord.max(Model.ordTransId)(st.maxT)(top.transId);
+                          return $76;
+                      }))(function () {
+                          return Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Data_Either.monadEither))(Control_Monad_Trans_Class.lift(Control_Monad_State_Trans.monadTransStateT)(Data_Either.monadEither)(Leftmost.splitGetChildNotes(v)))(function (childNotes) {
+                              var childrTop = {
+                                  transId: v.ids.right,
+                                  rslice: top.rslice
+                              };
+                              var childSlice = {
+                                  id: v.ids.slice,
+                                  notes: new Model.Inner(childNotes),
+                                  parents: new Model.MergeParents({
+                                      left: leftSliceId,
+                                      right: top.rslice.id
+                                  })
+                              };
+                              var childlTop = {
+                                  transId: v.ids.left,
+                                  rslice: childSlice
+                              };
+                              return Control_Applicative.pure(Control_Monad_State_Trans.applicativeStateT(Data_Either.monadEither))({
+                                  childlTop: childlTop,
+                                  childrTop: childrTop
+                              });
+                          });
+                      });
+                  };
+              };
+          };
+          var prepareHori = function (topl) {
+              return function (topr) {
+                  return function (v) {
+                      return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Data_Either.monadEither))(Control_Monad_State_Class.modify_(Control_Monad_State_Trans.monadStateStateT(Data_Either.monadEither))(function (st) {
+                          var $82 = {};
+                          for (var $83 in st) {
+                              if ({}.hasOwnProperty.call(st, $83)) {
+                                  $82[$83] = st[$83];
+                              };
+                          };
+                          $82.maxT = Data_Ord.max(Model.ordTransId)(st.maxT)(Data_Ord.max(Model.ordTransId)(topl.transId)(topr.transId));
+                          $82.maxS = Data_Ord.max(Model.ordSliceId)(st.maxS)(topl.rslice.id);
+                          return $82;
+                      }))(function () {
+                          var childrTop = {
+                              transId: v.ids.right,
+                              rslice: topr.rslice
+                          };
+                          var childmTop = {
+                              transId: v.ids.mid,
+                              rslice: {
+                                  id: v.ids.rslice,
+                                  notes: Model.Inner.create(Leftmost.horiRightChildren(v)),
+                                  parents: new Model.VertParent(topl.rslice.id)
+                              }
+                          };
+                          var childlTop = {
+                              transId: v.ids.left,
+                              rslice: {
+                                  id: v.ids.lslice,
+                                  notes: Model.Inner.create(Leftmost.horiLeftChildren(v)),
+                                  parents: new Model.VertParent(topl.rslice.id)
+                              }
+                          };
+                          return Control_Applicative.pure(Control_Monad_State_Trans.applicativeStateT(Data_Either.monadEither))({
+                              childlTop: childlTop,
+                              childmTop: childmTop,
+                              childrTop: childrTop
+                          });
+                      });
+                  };
+              };
+          };
+          var freeze = function (ties) {
+              return function (v) {
+                  return Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Data_Either.monadEither))(Control_Monad_State_Class.modify(Control_Monad_State_Trans.monadStateStateT(Data_Either.monadEither))(function (st) {
+                      var $87 = {};
+                      for (var $88 in st) {
+                          if ({}.hasOwnProperty.call(st, $88)) {
+                              $87[$88] = st[$88];
+                          };
+                      };
+                      $87.x = st.x + 1.0;
+                      $87.maxT = Data_Ord.max(Model.ordTransId)(st.maxT)(v.transId);
+                      $87.maxS = Data_Ord.max(Model.ordSliceId)(st.maxS)(v.rslice.id);
+                      return $87;
+                  }))(function (st) {
+                      return Control_Applicative.pure(Control_Monad_State_Trans.applicativeStateT(Data_Either.monadEither))({
+                          trans: {
+                              id: v.transId,
+                              edges: {
+                                  passing: [  ],
+                                  regular: ties
+                              },
+                              is2nd: false
+                          },
+                          rslice: {
+                              id: v.rslice.id,
+                              notes: v.rslice.notes,
+                              parents: v.rslice.parents,
+                              x: st.x
+                          },
+                          op: Model.Freeze.value
+                      });
+                  });
+              };
+          };
+          var completeSplit = function (top) {
+              return function (childl) {
+                  return function (childr) {
+                      return {
+                          trans: {
+                              id: top.transId,
+                              edges: Model.parentEdges(childl.rslice),
+                              is2nd: childl.trans.is2nd
+                          },
+                          rslice: childr.rslice,
+                          op: new Model.Split({
+                              childl: childl,
+                              childr: Model.detachSegment(childr)
+                          })
+                      };
+                  };
+              };
+          };
+          var completeHori = function (topl) {
+              return function (topr) {
+                  return function (childl) {
+                      return function (childm) {
+                          return function (childr) {
+                              var topSlice = {
+                                  id: topl.rslice.id,
+                                  notes: topl.rslice.notes,
+                                  parents: topl.rslice.parents,
+                                  x: (childl.rslice.x + childm.rslice.x) / 2.0
+                              };
+                              return Control_Bind.bind(Data_Either.bindEither)(Model.vertEdgesLeft(childl.trans.edges)(childl.rslice))(function (edgesL) {
+                                  return Control_Bind.bind(Data_Either.bindEither)(Model.vertEdgesRight(childr.trans.edges)(childm.rslice))(function (edgesR) {
+                                      var segr = {
+                                          trans: {
+                                              id: topr.transId,
+                                              edges: edgesR,
+                                              is2nd: true
+                                          },
+                                          rslice: childr.rslice,
+                                          op: Model.Freeze.value
+                                      };
+                                      var segl = {
+                                          trans: {
+                                              id: topl.transId,
+                                              edges: edgesL,
+                                              is2nd: false
+                                          },
+                                          rslice: topSlice,
+                                          op: new Model.Hori({
+                                              childl: childl,
+                                              childm: childm,
+                                              childr: Model.detachSegment(childr)
+                                          })
+                                      };
+                                      return Control_Applicative.pure(Data_Either.applicativeEither)({
+                                          segl: segl,
+                                          segr: segr
+                                      });
+                                  });
+                              });
+                          };
+                      };
+                  };
+              };
+          };
+          var go = function (v) {
+              return function (v1) {
+                  return function (v2) {
+                      if (v1 instanceof Data_List_Types.Nil && v2 instanceof Data_List_Types.Nil) {
+                          return Control_Applicative.pure(Control_Monad_State_Trans.applicativeStateT(Data_Either.monadEither))(Data_List_Types.Nil.value);
+                      };
+                      if (v1 instanceof Data_List_Types.Cons && v2 instanceof Data_List_Types.Cons) {
+                          if (v1.value1 instanceof Data_List_Types.Cons) {
+                              if (v2.value0 instanceof Leftmost.LMFreezeLeft) {
+                                  return Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Data_Either.monadEither))(freeze(v2.value0.value0.ties)(v1.value0))(function (top$prime) {
+                                      return Data_Functor.map(Control_Monad_State_Trans.functorStateT(Data_Either.functorEither))(Data_List_Types.Cons.create(top$prime))(go(top$prime.rslice)(v1.value1)(v2.value1));
+                                  });
+                              };
+                              if (v2.value0 instanceof Leftmost.LMSplitLeft) {
+                                  return Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Data_Either.monadEither))(prepareSplit(v.id)(v1.value0)(v2.value0.value0))(function (v3) {
+                                      return Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Data_Either.monadEither))(go(v)(Data_List_Types.Cons.create(v3.childlTop)(new Data_List_Types.Cons(v3.childrTop, v1.value1)))(v2.value1))(function (segs) {
+                                          if (segs instanceof Data_List_Types.Cons && segs.value1 instanceof Data_List_Types.Cons) {
+                                              return Control_Applicative.pure(Control_Monad_State_Trans.applicativeStateT(Data_Either.monadEither))(new Data_List_Types.Cons(completeSplit(v1.value0)(segs.value0)(segs.value1.value0), segs.value1.value1));
+                                          };
+                                          return Control_Monad_Trans_Class.lift(Control_Monad_State_Trans.monadTransStateT)(Data_Either.monadEither)(new Data_Either.Left("Operations after splitLeft do not fit!"));
+                                      });
+                                  });
+                              };
+                              if (v2.value0 instanceof Leftmost.LMSplitRight) {
+                                  return Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Data_Either.monadEither))(prepareSplit(v1.value0.rslice.id)(v1.value1.value0)(v2.value0.value0))(function (v3) {
+                                      return Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Data_Either.monadEither))(go(v)(Data_List_Types.Cons.create(v1.value0)(Data_List_Types.Cons.create(v3.childlTop)(new Data_List_Types.Cons(v3.childrTop, v1.value1.value1))))(v2.value1))(function (segs) {
+                                          if (segs instanceof Data_List_Types.Cons && (segs.value1 instanceof Data_List_Types.Cons && segs.value1.value1 instanceof Data_List_Types.Cons)) {
+                                              return Control_Applicative.pure(Control_Monad_State_Trans.applicativeStateT(Data_Either.monadEither))(Data_List_Types.Cons.create(segs.value0)(new Data_List_Types.Cons(completeSplit(v1.value1.value0)(segs.value1.value0)(segs.value1.value1.value0), segs.value1.value1.value1)));
+                                          };
+                                          return Control_Monad_Trans_Class.lift(Control_Monad_State_Trans.monadTransStateT)(Data_Either.monadEither)(new Data_Either.Left("Operations after splitRight do not fit!"));
+                                      });
+                                  });
+                              };
+                              if (v2.value0 instanceof Leftmost.LMHorizontalize) {
+                                  return Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Data_Either.monadEither))(prepareHori(v1.value0)(v1.value1.value0)(v2.value0.value0))(function (v3) {
+                                      return Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Data_Either.monadEither))(go(v)(Data_List_Types.Cons.create(v3.childlTop)(Data_List_Types.Cons.create(v3.childmTop)(new Data_List_Types.Cons(v3.childrTop, v1.value1.value1))))(v2.value1))(function (segs) {
+                                          if (segs instanceof Data_List_Types.Cons && (segs.value1 instanceof Data_List_Types.Cons && segs.value1.value1 instanceof Data_List_Types.Cons)) {
+                                              return Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Data_Either.monadEither))(Control_Monad_Trans_Class.lift(Control_Monad_State_Trans.monadTransStateT)(Data_Either.monadEither)(completeHori(v1.value0)(v1.value1.value0)(segs.value0)(segs.value1.value0)(segs.value1.value1.value0)))(function (v4) {
+                                                  return Control_Applicative.pure(Control_Monad_State_Trans.applicativeStateT(Data_Either.monadEither))(Data_List_Types.Cons.create(v4.segl)(new Data_List_Types.Cons(v4.segr, segs.value1.value1.value1)));
+                                              });
+                                          };
+                                          return Control_Monad_Trans_Class.lift(Control_Monad_State_Trans.monadTransStateT)(Data_Either.monadEither)(new Data_Either.Left("Operations after hori do not fit!"));
+                                      });
+                                  });
+                              };
+                              return Control_Monad_Trans_Class.lift(Control_Monad_State_Trans.monadTransStateT)(Data_Either.monadEither)(new Data_Either.Left("Applying a single-transition operation while several transitions are left!"));
+                          };
+                          if (v1.value1 instanceof Data_List_Types.Nil) {
+                              if (v2.value0 instanceof Leftmost.LMFreezeOnly) {
+                                  return Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Data_Either.monadEither))(freeze(v2.value0.value0.ties)(v1.value0))(function (seg) {
+                                      return Control_Applicative.pure(Control_Monad_State_Trans.applicativeStateT(Data_Either.monadEither))(new Data_List_Types.Cons(seg, Data_List_Types.Nil.value));
+                                  });
+                              };
+                              if (v2.value0 instanceof Leftmost.LMSplitOnly) {
+                                  return Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Data_Either.monadEither))(prepareSplit(v.id)(v1.value0)(v2.value0.value0))(function (v3) {
+                                      return Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Data_Either.monadEither))(go(v)(Data_List_Types.Cons.create(v3.childlTop)(new Data_List_Types.Cons(v3.childrTop, Data_List_Types.Nil.value)))(v2.value1))(function (segs) {
+                                          if (segs instanceof Data_List_Types.Cons && (segs.value1 instanceof Data_List_Types.Cons && segs.value1.value1 instanceof Data_List_Types.Nil)) {
+                                              return Control_Applicative.pure(Control_Monad_State_Trans.applicativeStateT(Data_Either.monadEither))(new Data_List_Types.Cons(completeSplit(v1.value0)(segs.value0)(segs.value1.value0), Data_List_Types.Nil.value));
+                                          };
+                                          return Control_Monad_Trans_Class.lift(Control_Monad_State_Trans.monadTransStateT)(Data_Either.monadEither)(new Data_Either.Left("Operations after splitOnly do not fit!"));
+                                      });
+                                  });
+                              };
+                              return Control_Monad_Trans_Class.lift(Control_Monad_State_Trans.monadTransStateT)(Data_Either.monadEither)(new Data_Either.Left("Applying a non-single operation to a single transition!"));
+                          };
+                          throw new Error("Failed pattern match at Folding (line 355, column 48 - line 393, column 84): " + [ v1.value1.constructor.name ]);
+                      };
+                      return Control_Monad_Trans_Class.lift(Control_Monad_State_Trans.monadTransStateT)(Data_Either.monadEither)(new Data_Either.Left("Lengths of top-level and derivation do not match!"));
+                  };
+              };
+          };
+          return Control_Bind.bind(Data_Either.bindEither)(Control_Monad_State_Trans.runStateT(go(startSlice)(Data_List.fromFoldable(Data_Foldable.foldableArray)(Data_Functor.map(Data_Functor.functorArray)(prepareTop)(topSegments)))(Data_List.fromFoldable(Data_Foldable.foldableArray)(deriv)))({
+              maxS: 0,
+              maxT: 0,
+              x: 0.0
+          }))(function (v) {
+              return Control_Applicative.pure(Data_Either.applicativeEither)({
+                  start: startSlice,
+                  segments: v.value0,
+                  nextSliceId: Model.incS(v.value1.maxS),
+                  nextTransId: Model.incT(v.value1.maxT)
+              });
+          });
       };
   };
   var foldAgenda = function (v) {
@@ -11661,7 +13233,7 @@ var PS = {};
               if (v1.value0.seg.op instanceof Model.Hori) {
                   return Control_Applicative.pure(Control_Monad_State_Trans.applicativeStateT(Data_Identity.monadIdentity))(Data_Unit.unit);
               };
-              throw new Error("Failed pattern match at Folding (line 50, column 3 - line 55, column 24): " + [ v1.value0.seg.op.constructor.name ]);
+              throw new Error("Failed pattern match at Folding (line 51, column 3 - line 56, column 24): " + [ v1.value0.seg.op.constructor.name ]);
           };
           if (v1 instanceof Data_List_Types.Cons && v1.value1 instanceof Data_List_Types.Cons) {
               if (v1.value0.seg.op instanceof Model.Freeze) {
@@ -11684,9 +13256,9 @@ var PS = {};
                       return foldAgenda(v)(Data_Semigroup.append(Data_List_Types.semigroupList)(children)(v1.value1.value1));
                   });
               };
-              throw new Error("Failed pattern match at Folding (line 59, column 3 - line 76, column 45): " + [ v1.value0.seg.op.constructor.name ]);
+              throw new Error("Failed pattern match at Folding (line 60, column 3 - line 77, column 45): " + [ v1.value0.seg.op.constructor.name ]);
           };
-          throw new Error("Failed pattern match at Folding (line 41, column 1 - line 44, column 41): " + [ v.constructor.name, v1.constructor.name ]);
+          throw new Error("Failed pattern match at Folding (line 42, column 1 - line 45, column 41): " + [ v.constructor.name, v1.constructor.name ]);
       };
   };
   var walkGraph = function (alg) {
@@ -11700,19 +13272,76 @@ var PS = {};
   };
   var reductionToLeftmost = function (reduction) {
       var lmAlg = (function () {
+          var mkFreeze = function (seg) {
+              return {
+                  ties: seg.trans.edges.regular
+              };
+          };
+          var getUnexplained = function (slice) {
+              return Data_Functor.map(Data_Functor.functorArray)(function (v) {
+                  return v.note;
+              })(Data_Array.filter(function (v) {
+                  return Data_Eq.eq(Model.eqNoteExplanation)(v.expl)(Model.NoExpl.value);
+              })(Model.getInnerNotes(slice)));
+          };
+          var mkHori = function (seg) {
+              return function (childl) {
+                  return function (childm) {
+                      return function (childr) {
+                          var horiChild = function (wrapper) {
+                              return function (v) {
+                                  if (v.expl instanceof Model.HoriExpl) {
+                                      return Data_Maybe.Just.create(Data_Tuple.Tuple.create(v.expl.value0)(wrapper(v.note)));
+                                  };
+                                  return Data_Maybe.Nothing.value;
+                              };
+                          };
+                          var children = Data_Array.catMaybes(Data_Semigroup.append(Data_Semigroup.semigroupArray)(Data_Functor.map(Data_Functor.functorArray)(horiChild(Leftmost.LeftChild.create))(Model.getInnerNotes(childl.rslice)))(Data_Functor.map(Data_Functor.functorArray)(horiChild(Leftmost.RightChild.create))(Model.getInnerNotes(childm.rslice))));
+                          return {
+                              children: Data_Map_Internal.fromFoldableWith(Data_Ord.ordRecord()(Data_Ord.ordRecordCons(Data_Ord.ordRecordCons(Data_Ord.ordRecordNil)()(new Data_Symbol.IsSymbol(function () {
+                                  return "pitch";
+                              }))(Data_Pitches_Class.ordPitch(Data_Pitches_Spelled.ordSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                                  return "id";
+                              }))(Data_Ord.ordString)))(Data_Foldable.foldableArray)(Data_Semigroup.append(Leftmost.semigroupHoriChildren))(children),
+                              midEdges: childm.trans.edges,
+                              ids: {
+                                  left: childl.trans.id,
+                                  lslice: childl.rslice.id,
+                                  mid: childm.trans.id,
+                                  rslice: childm.rslice.id,
+                                  right: childr.trans.id
+                              },
+                              unexplained: {
+                                  left: getUnexplained(childl.rslice),
+                                  right: getUnexplained(childm.rslice)
+                              }
+                          };
+                      };
+                  };
+              };
+          };
+          var hori = function (v) {
+              return function (v1) {
+                  return function (v2) {
+                      return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(Control_Monad_State_Class.modify_(Control_Monad_State_Trans.monadStateStateT(Data_Identity.monadIdentity))(Data_List_Types.Cons.create(Leftmost.LMHorizontalize.create(mkHori(v1.seg)(v2.childl)(v2.childm)(v2.childr)))))(function () {
+                          return Control_Applicative.pure(Control_Monad_State_Trans.applicativeStateT(Data_Identity.monadIdentity))(Data_Functor.map(Data_List_Types.functorList)(nothingMore)(new Data_List_Types.Cons(v2.childl, new Data_List_Types.Cons(v2.childm, new Data_List_Types.Cons(Model.attachSegment(v2.childr)(v1.seg.rslice), Data_List_Types.Nil.value)))));
+                      });
+                  };
+              };
+          };
           var mkSplit = function (seg) {
               return function (childl) {
                   return function (childr) {
                       var getElaboration = function (n) {
-                          if (n.expl instanceof Model.DoubleExpl && n.expl.value0.orn instanceof Data_Maybe.Just) {
-                              var $67 = Data_Eq.eq(Model.eqDoubleOrnament)(n.expl.value0.orn.value0)(Model.PassingLeft.value) || (Data_Eq.eq(Model.eqDoubleOrnament)(n.expl.value0.orn.value0)(Model.PassingRight.value) || Data_Eq.eq(Model.eqDoubleOrnament)(n.expl.value0.orn.value0)(Model.PassingMid.value));
-                              if ($67) {
+                          if (n.expl instanceof Model.DoubleExpl) {
+                              var $192 = Data_Eq.eq(Data_Maybe.eqMaybe(Model.eqDoubleOrnament))(n.expl.value0.orn)(new Data_Maybe.Just(Model.PassingLeft.value)) || (Data_Eq.eq(Data_Maybe.eqMaybe(Model.eqDoubleOrnament))(n.expl.value0.orn)(new Data_Maybe.Just(Model.PassingRight.value)) || Data_Eq.eq(Data_Maybe.eqMaybe(Model.eqDoubleOrnament))(n.expl.value0.orn)(new Data_Maybe.Just(Model.PassingMid.value)));
+                              if ($192) {
                                   return Data_Maybe.Just.create(EN.create(new Data_Tuple.Tuple({
                                       left: new Model.Inner(n.expl.value0.leftParent),
                                       right: new Model.Inner(n.expl.value0.rightParent)
                                   }, [ {
                                       child: n.note,
-                                      orn: n.expl.value0.orn.value0
+                                      orn: n.expl.value0.orn
                                   } ])));
                               };
                               return Data_Maybe.Just.create(ET.create(new Data_Tuple.Tuple({
@@ -11720,19 +13349,19 @@ var PS = {};
                                   right: new Model.Inner(n.expl.value0.rightParent)
                               }, [ {
                                   child: n.note,
-                                  orn: new Data_Either.Right(n.expl.value0.orn.value0)
+                                  orn: new Data_Either.Right(n.expl.value0.orn)
                               } ])));
                           };
-                          if (n.expl instanceof Model.RightExpl && n.expl.value0.orn instanceof Data_Maybe.Just) {
+                          if (n.expl instanceof Model.RightExpl) {
                               return Data_Maybe.Just.create(ER.create(new Data_Tuple.Tuple(n.expl.value0.leftParent, [ {
                                   child: n.note,
-                                  orn: n.expl.value0.orn.value0
+                                  orn: n.expl.value0.orn
                               } ])));
                           };
-                          if (n.expl instanceof Model.LeftExpl && n.expl.value0.orn instanceof Data_Maybe.Just) {
+                          if (n.expl instanceof Model.LeftExpl) {
                               return Data_Maybe.Just.create(EL.create(new Data_Tuple.Tuple(n.expl.value0.rightParent, [ {
                                   child: n.note,
-                                  orn: n.expl.value0.orn.value0
+                                  orn: n.expl.value0.orn
                               } ])));
                           };
                           if (n.expl instanceof Model.RootExpl) {
@@ -11784,8 +13413,14 @@ var PS = {};
                           }))(Data_Pitches_Class.ordPitch(Data_Pitches_Spelled.ordSInterval)))()(new Data_Symbol.IsSymbol(function () {
                               return "id";
                           }))(Data_Ord.ordString)))(Data_List_Types.foldableList)(Data_Semigroup.append(Data_Semigroup.semigroupArray))(v.l),
+                          unexplained: getUnexplained(childl.rslice),
                           keepLeft: childl.trans.edges.regular,
-                          keepRight: childr.trans.edges.regular
+                          keepRight: childr.trans.edges.regular,
+                          ids: {
+                              left: childl.trans.id,
+                              slice: childl.rslice.id,
+                              right: childr.trans.id
+                          }
                       };
                   };
               };
@@ -11809,45 +13444,6 @@ var PS = {};
                   return function (v2) {
                       return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(Control_Monad_State_Class.modify_(Control_Monad_State_Trans.monadStateStateT(Data_Identity.monadIdentity))(Data_List_Types.Cons.create(Leftmost.LMSplitRight.create(mkSplit(v1.seg)(v2.childl)(v2.childr)))))(function () {
                           return Control_Applicative.pure(Control_Monad_State_Trans.applicativeStateT(Data_Identity.monadIdentity))(Data_Functor.map(Data_List_Types.functorList)(nothingMore)(new Data_List_Types.Cons(v2.childl, new Data_List_Types.Cons(Model.attachSegment(v2.childr)(v1.seg.rslice), Data_List_Types.Nil.value))));
-                      });
-                  };
-              };
-          };
-          var mkHori = function (seg) {
-              return function (childl) {
-                  return function (childm) {
-                      return function (childr) {
-                          var horiChild = function (wrapper) {
-                              return function (v) {
-                                  if (v.expl instanceof Model.HoriExpl) {
-                                      return Data_Maybe.Just.create(Data_Tuple.Tuple.create(v.expl.value0)(wrapper(v.note)));
-                                  };
-                                  return Data_Maybe.Nothing.value;
-                              };
-                          };
-                          var children = Data_Array.catMaybes(Data_Semigroup.append(Data_Semigroup.semigroupArray)(Data_Functor.map(Data_Functor.functorArray)(horiChild(Leftmost.LeftChild.create))(Model.getInnerNotes(childl.rslice)))(Data_Functor.map(Data_Functor.functorArray)(horiChild(Leftmost.RightChild.create))(Model.getInnerNotes(childm.rslice))));
-                          return {
-                              children: Data_Map_Internal.fromFoldableWith(Data_Ord.ordRecord()(Data_Ord.ordRecordCons(Data_Ord.ordRecordCons(Data_Ord.ordRecordNil)()(new Data_Symbol.IsSymbol(function () {
-                                  return "pitch";
-                              }))(Data_Pitches_Class.ordPitch(Data_Pitches_Spelled.ordSInterval)))()(new Data_Symbol.IsSymbol(function () {
-                                  return "id";
-                              }))(Data_Ord.ordString)))(Data_Foldable.foldableArray)(Data_Semigroup.append(Leftmost.semigroupHoriChildren))(children),
-                              midEdges: childm.trans.edges
-                          };
-                      };
-                  };
-              };
-          };
-          var mkFreeze = function (seg) {
-              return {
-                  ties: seg.trans.edges.regular
-              };
-          };
-          var hori = function (v) {
-              return function (v1) {
-                  return function (v2) {
-                      return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(Control_Monad_State_Class.modify_(Control_Monad_State_Trans.monadStateStateT(Data_Identity.monadIdentity))(Data_List_Types.Cons.create(Leftmost.LMHorizontalize.create(mkHori(v1.seg)(v2.childl)(v2.childm)(v2.childr)))))(function () {
-                          return Control_Applicative.pure(Control_Monad_State_Trans.applicativeStateT(Data_Identity.monadIdentity))(Data_Functor.map(Data_List_Types.functorList)(nothingMore)(new Data_List_Types.Cons(v2.childl, new Data_List_Types.Cons(v2.childm, new Data_List_Types.Cons(Model.attachSegment(v2.childr)(v1.seg.rslice), Data_List_Types.Nil.value)))));
                       });
                   };
               };
@@ -11876,17 +13472,17 @@ var PS = {};
   var addHoriEdge = function (v) {
       return function (v1) {
           return Control_Monad_State_Class.modify_(Control_Monad_State_Trans.monadStateStateT(Data_Identity.monadIdentity))(function (st) {
-              var $121 = {};
-              for (var $122 in st) {
-                  if ({}.hasOwnProperty.call(st, $122)) {
-                      $121[$122] = st[$122];
+              var $230 = {};
+              for (var $231 in st) {
+                  if ({}.hasOwnProperty.call(st, $231)) {
+                      $230[$231] = st[$231];
                   };
               };
-              $121.horis = new Data_List_Types.Cons({
+              $230.horis = new Data_List_Types.Cons({
                   child: v.id,
                   parent: v1.id
               }, st.horis);
-              return $121;
+              return $230;
           });
       };
   };
@@ -11901,14 +13497,14 @@ var PS = {};
               };
           };
           var add = function (st) {
-              var $128 = {};
-              for (var $129 in st) {
-                  if ({}.hasOwnProperty.call(st, $129)) {
-                      $128[$129] = st[$129];
+              var $237 = {};
+              for (var $238 in st) {
+                  if ({}.hasOwnProperty.call(st, $238)) {
+                      $237[$238] = st[$238];
                   };
               };
-              $128.transitions = Data_Map_Internal.insert(Model.ordTransId)(v.id)(trans(st.leftId))(st.transitions);
-              return $128;
+              $237.transitions = Data_Map_Internal.insert(Model.ordTransId)(v.id)(trans(st.leftId))(st.transitions);
+              return $237;
           };
           return Control_Monad_State_Class.modify_(Control_Monad_State_Trans.monadStateStateT(Data_Identity.monadIdentity))(add);
       };
@@ -11920,16 +13516,16 @@ var PS = {};
               slice: slice
           };
           var add = function (st) {
-              var $133 = {};
-              for (var $134 in st) {
-                  if ({}.hasOwnProperty.call(st, $134)) {
-                      $133[$134] = st[$134];
+              var $242 = {};
+              for (var $243 in st) {
+                  if ({}.hasOwnProperty.call(st, $243)) {
+                      $242[$243] = st[$243];
                   };
               };
-              $133.maxd = Data_Ord.max(Data_Ord.ordNumber)(depth)(st.maxd);
-              $133.maxx = Data_Ord.max(Data_Ord.ordNumber)(slice.x)(st.maxx);
-              $133.slices = Data_Map_Internal.insert(Model.ordSliceId)(slice.id)(gslice)(st.slices);
-              return $133;
+              $242.maxd = Data_Ord.max(Data_Ord.ordNumber)(depth)(st.maxd);
+              $242.maxx = Data_Ord.max(Data_Ord.ordNumber)(slice.x)(st.maxx);
+              $242.slices = Data_Map_Internal.insert(Model.ordSliceId)(slice.id)(gslice)(st.slices);
+              return $242;
           };
           return Control_Monad_State_Class.modify_(Control_Monad_State_Trans.monadStateStateT(Data_Identity.monadIdentity))(add);
       };
@@ -11978,14 +13574,14 @@ var PS = {};
       var init = function (start) {
           return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(addGraphSlice(start)(0.0))(function () {
               return Control_Monad_State_Class.modify_(Control_Monad_State_Trans.monadStateStateT(Data_Identity.monadIdentity))(function (st) {
-                  var $136 = {};
-                  for (var $137 in st) {
-                      if ({}.hasOwnProperty.call(st, $137)) {
-                          $136[$137] = st[$137];
+                  var $245 = {};
+                  for (var $246 in st) {
+                      if ({}.hasOwnProperty.call(st, $246)) {
+                          $245[$246] = st[$246];
                       };
                   };
-                  $136.leftId = start.id;
-                  return $136;
+                  $245.leftId = start.id;
+                  return $245;
               });
           });
       };
@@ -12030,15 +13626,15 @@ var PS = {};
           return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(addGraphTrans(left.seg.trans)(left.seg.rslice.id))(function () {
               return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(addGraphSlice(left.seg.rslice)(left.more.rdepth))(function () {
                   return Control_Monad_State_Class.modify_(Control_Monad_State_Trans.monadStateStateT(Data_Identity.monadIdentity))(function (st) {
-                      var $145 = {};
-                      for (var $146 in st) {
-                          if ({}.hasOwnProperty.call(st, $146)) {
-                              $145[$146] = st[$146];
+                      var $254 = {};
+                      for (var $255 in st) {
+                          if ({}.hasOwnProperty.call(st, $255)) {
+                              $254[$255] = st[$255];
                           };
                       };
-                      $145.currentDepth = left.more.rdepth;
-                      $145.leftId = left.seg.rslice.id;
-                      return $145;
+                      $254.currentDepth = left.more.rdepth;
+                      $254.leftId = left.seg.rslice.id;
+                      return $254;
                   });
               });
           });
@@ -12077,6 +13673,7 @@ var PS = {};
   exports["evalGraph"] = evalGraph;
   exports["nothingMore"] = nothingMore;
   exports["reductionToLeftmost"] = reductionToLeftmost;
+  exports["leftmostToReduction"] = leftmostToReduction;
 })(PS);
 (function(exports) {
   "use strict";
@@ -12126,10 +13723,95 @@ var PS = {};
 (function($PS) {
   // Generated by purs version 0.14.1
   "use strict";
+  $PS["Halogen.Data.OrdBox"] = $PS["Halogen.Data.OrdBox"] || {};
+  var exports = $PS["Halogen.Data.OrdBox"];
+  var Data_Eq = $PS["Data.Eq"];
+  var Data_Ord = $PS["Data.Ord"];                
+  var OrdBox = (function () {
+      function OrdBox(value0, value1, value2) {
+          this.value0 = value0;
+          this.value1 = value1;
+          this.value2 = value2;
+      };
+      OrdBox.create = function (value0) {
+          return function (value1) {
+              return function (value2) {
+                  return new OrdBox(value0, value1, value2);
+              };
+          };
+      };
+      return OrdBox;
+  })();
+  var mkOrdBox = function (dictOrd) {
+      return OrdBox.create(Data_Eq.eq(dictOrd.Eq0()))(Data_Ord.compare(dictOrd));
+  };
+  var eqOrdBox = new Data_Eq.Eq(function (v) {
+      return function (v1) {
+          return v.value0(v.value2)(v1.value2);
+      };
+  });
+  var ordOrdBox = new Data_Ord.Ord(function () {
+      return eqOrdBox;
+  }, function (v) {
+      return function (v1) {
+          return v.value1(v.value2)(v1.value2);
+      };
+  });
+  exports["mkOrdBox"] = mkOrdBox;
+  exports["ordOrdBox"] = ordOrdBox;
+})(PS);
+(function($PS) {
+  // Generated by purs version 0.14.1
+  "use strict";
   $PS["Halogen.Data.Slot"] = $PS["Halogen.Data.Slot"] || {};
   var exports = $PS["Halogen.Data.Slot"];
   var Data_Foldable = $PS["Data.Foldable"];
   var Data_Map_Internal = $PS["Data.Map.Internal"];
+  var Data_Ord = $PS["Data.Ord"];
+  var Data_Symbol = $PS["Data.Symbol"];
+  var Data_Tuple = $PS["Data.Tuple"];
+  var Halogen_Data_OrdBox = $PS["Halogen.Data.OrdBox"];
+  var pop = function (dictCons) {
+      return function (dictIsSymbol) {
+          return function (dictOrd) {
+              return function (sym) {
+                  return function (key) {
+                      return function (v) {
+                          return Data_Map_Internal.pop(Data_Tuple.ordTuple(Data_Ord.ordString)(Halogen_Data_OrdBox.ordOrdBox))(new Data_Tuple.Tuple(Data_Symbol.reflectSymbol(dictIsSymbol)(sym), Halogen_Data_OrdBox.mkOrdBox(dictOrd)(key)))(v);
+                      };
+                  };
+              };
+          };
+      };
+  };
+  var lookup = function (dictCons) {
+      return function (dictIsSymbol) {
+          return function (dictOrd) {
+              return function (sym) {
+                  return function (key) {
+                      return function (v) {
+                          return Data_Map_Internal.lookup(Data_Tuple.ordTuple(Data_Ord.ordString)(Halogen_Data_OrdBox.ordOrdBox))(new Data_Tuple.Tuple(Data_Symbol.reflectSymbol(dictIsSymbol)(sym), Halogen_Data_OrdBox.mkOrdBox(dictOrd)(key)))(v);
+                      };
+                  };
+              };
+          };
+      };
+  };
+  var insert = function (dictCons) {
+      return function (dictIsSymbol) {
+          return function (dictOrd) {
+              return function (sym) {
+                  return function (key) {
+                      return function (val) {
+                          return function (v) {
+                              return Data_Map_Internal.insert(Data_Tuple.ordTuple(Data_Ord.ordString)(Halogen_Data_OrdBox.ordOrdBox))(new Data_Tuple.Tuple(Data_Symbol.reflectSymbol(dictIsSymbol)(sym), Halogen_Data_OrdBox.mkOrdBox(dictOrd)(key)))(val)(v);
+                          };
+                      };
+                  };
+              };
+          };
+      };
+  };
   var foreachSlot = function (dictApplicative) {
       return function (v) {
           return function (k) {
@@ -12141,6 +13823,9 @@ var PS = {};
   };
   var empty = Data_Map_Internal.empty;
   exports["empty"] = empty;
+  exports["lookup"] = lookup;
+  exports["insert"] = insert;
+  exports["pop"] = pop;
   exports["foreachSlot"] = foreachSlot;
 })(PS);
 (function($PS) {
@@ -12862,6 +14547,7 @@ var PS = {};
   var Data_Functor = $PS["Data.Functor"];
   var Data_Maybe = $PS["Data.Maybe"];
   var Data_Unit = $PS["Data.Unit"];
+  var Halogen_Data_Slot = $PS["Halogen.Data.Slot"];
   var Halogen_Query_HalogenM = $PS["Halogen.Query.HalogenM"];
   var Halogen_Query_HalogenQ = $PS["Halogen.Query.HalogenQ"];
   var Unsafe_Coerce = $PS["Unsafe.Coerce"];                
@@ -12909,7 +14595,8 @@ var PS = {};
           };
           throw new Error("Failed pattern match at Halogen.Component (line 182, column 15 - line 192, column 70): " + [ v.constructor.name ]);
       };
-  };                                               
+  };
+  var mkComponentSlot = Unsafe_Coerce.unsafeCoerce;
   var mkComponent = Unsafe_Coerce.unsafeCoerce;
   var defaultEval = {
       handleAction: Data_Function["const"](Control_Applicative.pure(Halogen_Query_HalogenM.applicativeHalogenM)(Data_Unit.unit)),
@@ -12918,12 +14605,37 @@ var PS = {};
       initialize: Data_Maybe.Nothing.value,
       finalize: Data_Maybe.Nothing.value
   };
+  var componentSlot = function (dictCons) {
+      return function (dictIsSymbol) {
+          return function (dictOrd) {
+              return function (label) {
+                  return function (p) {
+                      return function (comp) {
+                          return function (input) {
+                              return function (output) {
+                                  return mkComponentSlot({
+                                      get: Halogen_Data_Slot.lookup()(dictIsSymbol)(dictOrd)(label)(p),
+                                      pop: Halogen_Data_Slot.pop()(dictIsSymbol)(dictOrd)(label)(p),
+                                      set: Halogen_Data_Slot.insert()(dictIsSymbol)(dictOrd)(label)(p),
+                                      component: comp,
+                                      input: input,
+                                      output: output
+                                  });
+                              };
+                          };
+                      };
+                  };
+              };
+          };
+      };
+  };
   exports["mkComponent"] = mkComponent;
   exports["unComponent"] = unComponent;
   exports["mkEval"] = mkEval;
   exports["defaultEval"] = defaultEval;
   exports["ComponentSlot"] = ComponentSlot;
   exports["ThunkSlot"] = ThunkSlot;
+  exports["componentSlot"] = componentSlot;
   exports["unComponentSlot"] = unComponentSlot;
 })(PS);
 (function($PS) {
@@ -13344,6 +15056,8 @@ var PS = {};
   $PS["Web.HTML.Event.EventTypes"] = $PS["Web.HTML.Event.EventTypes"] || {};
   var exports = $PS["Web.HTML.Event.EventTypes"];
   var domcontentloaded = "DOMContentLoaded";
+  var change = "change";
+  exports["change"] = change;
   exports["domcontentloaded"] = domcontentloaded;
 })(PS);
 (function(exports) {
@@ -14161,6 +15875,7 @@ var PS = {};
   "use strict";
   $PS["Halogen.HTML.Core"] = $PS["Halogen.HTML.Core"] || {};
   var exports = $PS["Halogen.HTML.Core"];
+  var DOM_HTML_Indexed_InputType = $PS["DOM.HTML.Indexed.InputType"];
   var Halogen_VDom_DOM_Prop = $PS["Halogen.VDom.DOM.Prop"];
   var Halogen_VDom_Types = $PS["Halogen.VDom.Types"];          
   var IsProp = function (toPropValue) {
@@ -14168,6 +15883,9 @@ var PS = {};
   };
   var HTML = function (x) {
       return x;
+  };
+  var widget = function ($18) {
+      return HTML(Halogen_VDom_Types.Widget.create($18));
   };
   var toPropValue = function (dict) {
       return dict.toPropValue;
@@ -14185,6 +15903,9 @@ var PS = {};
       };
   }; 
   var isPropString = new IsProp(Halogen_VDom_DOM_Prop.propFromString);
+  var isPropInputType = new IsProp(function ($37) {
+      return Halogen_VDom_DOM_Prop.propFromString(DOM_HTML_Indexed_InputType.renderInputType($37));
+  });
   var isPropBoolean = new IsProp(Halogen_VDom_DOM_Prop.propFromBoolean);
   var handler = Halogen_VDom_DOM_Prop.Handler.create;
   var element = function (ns) {
@@ -14201,6 +15922,7 @@ var PS = {};
           return Halogen_VDom_DOM_Prop.Attribute.create(ns)(v);
       };
   };
+  exports["widget"] = widget;
   exports["text"] = text;
   exports["element"] = element;
   exports["prop"] = prop;
@@ -14208,6 +15930,33 @@ var PS = {};
   exports["handler"] = handler;
   exports["isPropString"] = isPropString;
   exports["isPropBoolean"] = isPropBoolean;
+  exports["isPropInputType"] = isPropInputType;
+})(PS);
+(function($PS) {
+  // Generated by purs version 0.14.1
+  "use strict";
+  $PS["Halogen.HTML"] = $PS["Halogen.HTML"] || {};
+  var exports = $PS["Halogen.HTML"];
+  var Data_Function = $PS["Data.Function"];
+  var Data_Maybe = $PS["Data.Maybe"];
+  var Halogen_Component = $PS["Halogen.Component"];
+  var Halogen_HTML_Core = $PS["Halogen.HTML.Core"];        
+  var slot_ = function (dictCons) {
+      return function (dictIsSymbol) {
+          return function (dictOrd) {
+              return function (label) {
+                  return function (p) {
+                      return function (component) {
+                          return function (input) {
+                              return Halogen_HTML_Core.widget(new Halogen_Component.ComponentSlot(Halogen_Component.componentSlot()(dictIsSymbol)(dictOrd)(label)(p)(component)(input)(Data_Function["const"](Data_Maybe.Nothing.value))));
+                          };
+                      };
+                  };
+              };
+          };
+      };
+  };
+  exports["slot_"] = slot_;
 })(PS);
 (function($PS) {
   // Generated by purs version 0.14.1
@@ -14218,28 +15967,49 @@ var PS = {};
   var Halogen_HTML_Core = $PS["Halogen.HTML.Core"];
   var element = Halogen_HTML_Core.element(Data_Maybe.Nothing.value);
   var h1 = element("h1");
-  var h1_ = h1([  ]);        
+  var h1_ = h1([  ]);
+  var h2 = element("h2");
+  var h2_ = h2([  ]);
+  var h3 = element("h3");
+  var h3_ = h3([  ]);
+  var input = function (props) {
+      return element("input")(props)([  ]);
+  };                   
+  var label = element("label");
   var li = element("li");
   var li_ = li([  ]);        
   var ol = element("ol");
   var ol_ = ol([  ]);            
   var option = element("option");
   var p = element("p");
-  var p_ = p([  ]);            
+  var p_ = p([  ]);
+  var pre = element("pre");
+  var pre_ = pre([  ]);        
   var select = element("select");
   var select_ = select([  ]);
+  var ul = element("ul");
   var div = element("div");
   var div_ = div([  ]);
   var button = element("button");
+  var a = element("a");
+  exports["a"] = a;
   exports["button"] = button;
   exports["div"] = div;
   exports["div_"] = div_;
   exports["h1_"] = h1_;
+  exports["h2_"] = h2_;
+  exports["h3_"] = h3_;
+  exports["input"] = input;
+  exports["label"] = label;
+  exports["li"] = li;
   exports["li_"] = li_;
   exports["ol_"] = ol_;
   exports["option"] = option;
+  exports["p"] = p;
   exports["p_"] = p_;
+  exports["pre_"] = pre_;
   exports["select_"] = select_;
+  exports["ul"] = ul;
 })(PS);
 (function($PS) {
   // Generated by purs version 0.14.1
@@ -14258,6 +16028,7 @@ var PS = {};
   var Halogen_HTML_Core = $PS["Halogen.HTML.Core"];
   var Halogen_Query_Input = $PS["Halogen.Query.Input"];
   var Unsafe_Coerce = $PS["Unsafe.Coerce"];
+  var Web_HTML_Event_EventTypes = $PS["Web.HTML.Event.EventTypes"];
   var Web_UIEvent_MouseEvent_EventTypes = $PS["Web.UIEvent.MouseEvent.EventTypes"];
   var mouseHandler = Unsafe_Coerce.unsafeCoerce;
   var handler = function (et) {
@@ -14266,13 +16037,15 @@ var PS = {};
               return new Data_Maybe.Just(new Halogen_Query_Input.Action(f(ev)));
           });
       };
-  };                                                       
+  };                             
+  var onChange = handler(Web_HTML_Event_EventTypes.change);
   var onClick = (function () {
       var $1 = handler(Web_UIEvent_MouseEvent_EventTypes.click);
       return function ($2) {
           return $1(mouseHandler($2));
       };
   })();
+  exports["onChange"] = onChange;
   exports["onClick"] = onClick;
 })(PS);
 (function($PS) {
@@ -14288,7 +16061,13 @@ var PS = {};
       return Halogen_HTML_Core.prop(dictIsProp);
   };                                                            
   var selected = prop(Halogen_HTML_Core.isPropBoolean)("selected");
-  var value = prop(Halogen_HTML_Core.isPropString)("value");      
+  var type_ = function (dictIsProp) {
+      return prop(dictIsProp)("type");
+  };
+  var value = prop(Halogen_HTML_Core.isPropString)("value");
+  var name = prop(Halogen_HTML_Core.isPropString)("name");
+  var href = prop(Halogen_HTML_Core.isPropString)("href");
+  var $$for = prop(Halogen_HTML_Core.isPropString)("htmlFor");    
   var disabled = prop(Halogen_HTML_Core.isPropBoolean)("disabled");
   var enabled = (function () {
       var $10 = Data_HeytingAlgebra.not(Data_HeytingAlgebra.heytingAlgebraBoolean);
@@ -14303,12 +16082,18 @@ var PS = {};
           return $16($17($18));
       };
   })();
+  var checked = prop(Halogen_HTML_Core.isPropBoolean)("checked");
   var attr = Halogen_HTML_Core.attr(Data_Maybe.Nothing.value);
   var style = attr("style");
   exports["class_"] = class_;
+  exports["for"] = $$for;
+  exports["href"] = href;
+  exports["name"] = name;
   exports["style"] = style;
+  exports["type_"] = type_;
   exports["value"] = value;
   exports["enabled"] = enabled;
+  exports["checked"] = checked;
   exports["selected"] = selected;
 })(PS);
 (function($PS) {
@@ -15283,6 +17068,375 @@ var PS = {};
 (function($PS) {
   // Generated by purs version 0.14.1
   "use strict";
+  $PS["JSONTransport"] = $PS["JSONTransport"] || {};
+  var exports = $PS["JSONTransport"];
+  var Control_Applicative = $PS["Control.Applicative"];
+  var Control_Bind = $PS["Control.Bind"];
+  var Data_Array = $PS["Data.Array"];
+  var Data_Either = $PS["Data.Either"];
+  var Data_Foldable = $PS["Data.Foldable"];
+  var Data_Functor = $PS["Data.Functor"];
+  var Data_List_Types = $PS["Data.List.Types"];
+  var Data_Map_Internal = $PS["Data.Map.Internal"];
+  var Data_Maybe = $PS["Data.Maybe"];
+  var Data_Ord = $PS["Data.Ord"];
+  var Data_Pitches_Class = $PS["Data.Pitches.Class"];
+  var Data_Pitches_Spelled = $PS["Data.Pitches.Spelled"];
+  var Data_Show = $PS["Data.Show"];
+  var Data_Symbol = $PS["Data.Symbol"];
+  var Data_Traversable = $PS["Data.Traversable"];
+  var Data_Tuple = $PS["Data.Tuple"];
+  var Data_Unfoldable = $PS["Data.Unfoldable"];
+  var Data_Variant = $PS["Data.Variant"];
+  var Folding = $PS["Folding"];
+  var Leftmost = $PS["Leftmost"];
+  var Model = $PS["Model"];
+  var Type_Proxy = $PS["Type.Proxy"];                
+  var splitToJSON = function (v) {
+      var unwrap = function (f) {
+          return function (v1) {
+              return {
+                  parent: v1.value0,
+                  children: Data_Functor.map(Data_Functor.functorArray)(function (v2) {
+                      return {
+                          child: v2.child,
+                          orn: f(v2.orn)
+                      };
+                  })(v1.value1)
+              };
+          };
+      };
+      var regToJSON = function (v1) {
+          if (v1 instanceof Data_Either.Left) {
+              return new Data_Maybe.Just("RootNote");
+          };
+          if (v1 instanceof Data_Either.Right) {
+              return Data_Functor.map(Data_Maybe.functorMaybe)(Data_Show.show(Model.showDoubleOrnament))(v1.value0);
+          };
+          throw new Error("Failed pattern match at JSONTransport (line 114, column 15 - line 116, column 26): " + [ v1.constructor.name ]);
+      };
+      return {
+          regular: Data_Functor.map(Data_Functor.functorArray)(unwrap(regToJSON))(Data_Map_Internal.toUnfoldable(Data_Unfoldable.unfoldableArray)(v.regular)),
+          passing: Data_Functor.map(Data_Functor.functorArray)(unwrap(Data_Functor.map(Data_Maybe.functorMaybe)(Data_Show.show(Model.showDoubleOrnament))))(Data_Map_Internal.toUnfoldable(Data_Unfoldable.unfoldableArray)(v.passing)),
+          fromLeft: Data_Functor.map(Data_Functor.functorArray)(unwrap(Data_Functor.map(Data_Maybe.functorMaybe)(Data_Show.show(Model.showRightOrnament))))(Data_Map_Internal.toUnfoldable(Data_Unfoldable.unfoldableArray)(v.fromLeft)),
+          fromRight: Data_Functor.map(Data_Functor.functorArray)(unwrap(Data_Functor.map(Data_Maybe.functorMaybe)(Data_Show.show(Model.showLeftOrnament))))(Data_Map_Internal.toUnfoldable(Data_Unfoldable.unfoldableArray)(v.fromRight)),
+          unexplained: v.unexplained,
+          keepLeft: v.keepLeft,
+          keepRight: v.keepRight,
+          ids: v.ids
+      };
+  };
+  var splitFromJSON = function (v) {
+      var wrap = function (read) {
+          return function (v1) {
+              var children$prime = Data_Traversable.sequence(Data_Traversable.traversableArray)(Data_Either.applicativeEither)(Data_Functor.map(Data_Functor.functorArray)(function (v2) {
+                  return Data_Functor.map(Data_Either.functorEither)(function (v3) {
+                      return {
+                          child: v2.child,
+                          orn: v3
+                      };
+                  })(read(v2.orn));
+              })(v1.children));
+              return Data_Functor.map(Data_Either.functorEither)(Data_Tuple.Tuple.create(v1.parent))(children$prime);
+          };
+      };
+      var readRightOrnament = function (v1) {
+          if (v1 instanceof Data_Maybe.Just && v1.value0 === "RightNeighbor") {
+              return Data_Either.Right.create(new Data_Maybe.Just(Model.RightNeighbor.value));
+          };
+          if (v1 instanceof Data_Maybe.Just && v1.value0 === "RightRepeat") {
+              return Data_Either.Right.create(new Data_Maybe.Just(Model.RightRepeat.value));
+          };
+          if (v1 instanceof Data_Maybe.Just) {
+              return Data_Either.Left.create("Expected right ornament type but got " + v1.value0);
+          };
+          if (v1 instanceof Data_Maybe.Nothing) {
+              return new Data_Either.Right(Data_Maybe.Nothing.value);
+          };
+          throw new Error("Failed pattern match at JSONTransport (line 203, column 23 - line 207, column 29): " + [ v1.constructor.name ]);
+      };
+      var readPassingOrnament = function (v1) {
+          if (v1 instanceof Data_Maybe.Just && v1.value0 === "PassingMid") {
+              return Data_Either.Right.create(new Data_Maybe.Just(Model.PassingMid.value));
+          };
+          if (v1 instanceof Data_Maybe.Just && v1.value0 === "PassingLeft") {
+              return Data_Either.Right.create(new Data_Maybe.Just(Model.PassingLeft.value));
+          };
+          if (v1 instanceof Data_Maybe.Just && v1.value0 === "PassingRight") {
+              return Data_Either.Right.create(new Data_Maybe.Just(Model.PassingRight.value));
+          };
+          if (v1 instanceof Data_Maybe.Just) {
+              return Data_Either.Left.create("Expected passing ornament type but got " + v1.value0);
+          };
+          if (v1 instanceof Data_Maybe.Nothing) {
+              return new Data_Either.Right(Data_Maybe.Nothing.value);
+          };
+          throw new Error("Failed pattern match at JSONTransport (line 196, column 25 - line 201, column 29): " + [ v1.constructor.name ]);
+      };
+      var readLeftOrnament = function (v1) {
+          if (v1 instanceof Data_Maybe.Just && v1.value0 === "LeftNeighbor") {
+              return Data_Either.Right.create(new Data_Maybe.Just(Model.LeftNeighbor.value));
+          };
+          if (v1 instanceof Data_Maybe.Just && v1.value0 === "LeftRepeat") {
+              return Data_Either.Right.create(new Data_Maybe.Just(Model.LeftRepeat.value));
+          };
+          if (v1 instanceof Data_Maybe.Just) {
+              return Data_Either.Left.create("Expected left ornament type but got " + v1.value0);
+          };
+          if (v1 instanceof Data_Maybe.Nothing) {
+              return new Data_Either.Right(Data_Maybe.Nothing.value);
+          };
+          throw new Error("Failed pattern match at JSONTransport (line 209, column 22 - line 213, column 29): " + [ v1.constructor.name ]);
+      };
+      var readDoubleOrnament = function (v1) {
+          if (v1 instanceof Data_Maybe.Just && v1.value0 === "RootNote") {
+              return Data_Either.Right.create(new Data_Either.Left(Leftmost.RootNote.value));
+          };
+          if (v1 instanceof Data_Maybe.Just && v1.value0 === "FullRepeat") {
+              return Data_Either.Right.create(Data_Either.Right.create(new Data_Maybe.Just(Model.FullRepeat.value)));
+          };
+          if (v1 instanceof Data_Maybe.Just && v1.value0 === "FullNeighbor") {
+              return Data_Either.Right.create(Data_Either.Right.create(new Data_Maybe.Just(Model.FullNeighbor.value)));
+          };
+          if (v1 instanceof Data_Maybe.Just && v1.value0 === "LeftRepeatOfRight") {
+              return Data_Either.Right.create(Data_Either.Right.create(new Data_Maybe.Just(Model.LeftRepeatOfRight.value)));
+          };
+          if (v1 instanceof Data_Maybe.Just && v1.value0 === "RightRepeatOfLeft") {
+              return Data_Either.Right.create(Data_Either.Right.create(new Data_Maybe.Just(Model.RightRepeatOfLeft.value)));
+          };
+          if (v1 instanceof Data_Maybe.Just) {
+              return Data_Either.Left.create("Expected double ornament type but got " + v1.value0);
+          };
+          if (v1 instanceof Data_Maybe.Nothing) {
+              return Data_Either.Right.create(new Data_Either.Right(Data_Maybe.Nothing.value));
+          };
+          throw new Error("Failed pattern match at JSONTransport (line 187, column 24 - line 194, column 37): " + [ v1.constructor.name ]);
+      };
+      return Control_Bind.bind(Data_Either.bindEither)(Data_Functor.map(Data_Either.functorEither)(Data_Map_Internal.fromFoldable(Data_Ord.ordRecord()(Data_Ord.ordRecordCons(Data_Ord.ordRecordCons(Data_Ord.ordRecordNil)()(new Data_Symbol.IsSymbol(function () {
+          return "right";
+      }))(Model.ordStartStop(Data_Ord.ordRecord()(Data_Ord.ordRecordCons(Data_Ord.ordRecordCons(Data_Ord.ordRecordNil)()(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Pitches_Class.ordPitch(Data_Pitches_Spelled.ordSInterval)))()(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Ord.ordString)))))()(new Data_Symbol.IsSymbol(function () {
+          return "left";
+      }))(Model.ordStartStop(Data_Ord.ordRecord()(Data_Ord.ordRecordCons(Data_Ord.ordRecordCons(Data_Ord.ordRecordNil)()(new Data_Symbol.IsSymbol(function () {
+          return "pitch";
+      }))(Data_Pitches_Class.ordPitch(Data_Pitches_Spelled.ordSInterval)))()(new Data_Symbol.IsSymbol(function () {
+          return "id";
+      }))(Data_Ord.ordString))))))(Data_Foldable.foldableArray))(Data_Traversable.sequence(Data_Traversable.traversableArray)(Data_Either.applicativeEither)(Data_Functor.map(Data_Functor.functorArray)(wrap(readDoubleOrnament))(v.regular))))(function (regular) {
+          return Control_Bind.bind(Data_Either.bindEither)(Data_Functor.map(Data_Either.functorEither)(Data_Map_Internal.fromFoldable(Data_Ord.ordRecord()(Data_Ord.ordRecordCons(Data_Ord.ordRecordCons(Data_Ord.ordRecordNil)()(new Data_Symbol.IsSymbol(function () {
+              return "right";
+          }))(Model.ordStartStop(Data_Ord.ordRecord()(Data_Ord.ordRecordCons(Data_Ord.ordRecordCons(Data_Ord.ordRecordNil)()(new Data_Symbol.IsSymbol(function () {
+              return "pitch";
+          }))(Data_Pitches_Class.ordPitch(Data_Pitches_Spelled.ordSInterval)))()(new Data_Symbol.IsSymbol(function () {
+              return "id";
+          }))(Data_Ord.ordString)))))()(new Data_Symbol.IsSymbol(function () {
+              return "left";
+          }))(Model.ordStartStop(Data_Ord.ordRecord()(Data_Ord.ordRecordCons(Data_Ord.ordRecordCons(Data_Ord.ordRecordNil)()(new Data_Symbol.IsSymbol(function () {
+              return "pitch";
+          }))(Data_Pitches_Class.ordPitch(Data_Pitches_Spelled.ordSInterval)))()(new Data_Symbol.IsSymbol(function () {
+              return "id";
+          }))(Data_Ord.ordString))))))(Data_Foldable.foldableArray))(Data_Traversable.sequence(Data_Traversable.traversableArray)(Data_Either.applicativeEither)(Data_Functor.map(Data_Functor.functorArray)(wrap(readPassingOrnament))(v.passing))))(function (passing) {
+              return Control_Bind.bind(Data_Either.bindEither)(Data_Functor.map(Data_Either.functorEither)(Data_Map_Internal.fromFoldable(Data_Ord.ordRecord()(Data_Ord.ordRecordCons(Data_Ord.ordRecordCons(Data_Ord.ordRecordNil)()(new Data_Symbol.IsSymbol(function () {
+                  return "pitch";
+              }))(Data_Pitches_Class.ordPitch(Data_Pitches_Spelled.ordSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                  return "id";
+              }))(Data_Ord.ordString)))(Data_Foldable.foldableArray))(Data_Traversable.sequence(Data_Traversable.traversableArray)(Data_Either.applicativeEither)(Data_Functor.map(Data_Functor.functorArray)(wrap(readRightOrnament))(v.fromLeft))))(function (fromLeft) {
+                  return Control_Bind.bind(Data_Either.bindEither)(Data_Functor.map(Data_Either.functorEither)(Data_Map_Internal.fromFoldable(Data_Ord.ordRecord()(Data_Ord.ordRecordCons(Data_Ord.ordRecordCons(Data_Ord.ordRecordNil)()(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.ordPitch(Data_Pitches_Spelled.ordSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Data_Ord.ordString)))(Data_Foldable.foldableArray))(Data_Traversable.sequence(Data_Traversable.traversableArray)(Data_Either.applicativeEither)(Data_Functor.map(Data_Functor.functorArray)(wrap(readLeftOrnament))(v.fromRight))))(function (fromRight) {
+                      return Control_Applicative.pure(Data_Either.applicativeEither)({
+                          regular: regular,
+                          passing: passing,
+                          fromLeft: fromLeft,
+                          fromRight: fromRight,
+                          unexplained: v.unexplained,
+                          keepLeft: v.keepLeft,
+                          keepRight: v.keepRight,
+                          ids: v.ids
+                      });
+                  });
+              });
+          });
+      });
+  };
+  var horiToJSON = function (v) {
+      var childToJSON = function (v1) {
+          var child = (function () {
+              if (v1.value1 instanceof Leftmost.LeftChild) {
+                  return Data_Variant.inj()(new Data_Symbol.IsSymbol(function () {
+                      return "leftChild";
+                  }))(Type_Proxy["Proxy"].value)(v1.value1.value0);
+              };
+              if (v1.value1 instanceof Leftmost.RightChild) {
+                  return Data_Variant.inj()(new Data_Symbol.IsSymbol(function () {
+                      return "rightChild";
+                  }))(Type_Proxy["Proxy"].value)(v1.value1.value0);
+              };
+              if (v1.value1 instanceof Leftmost.BothChildren) {
+                  return Data_Variant.inj()(new Data_Symbol.IsSymbol(function () {
+                      return "bothChildren";
+                  }))(Type_Proxy["Proxy"].value)(v1.value1.value0);
+              };
+              if (v1.value1 instanceof Leftmost.TooManyChildren) {
+                  return Data_Variant.inj()(new Data_Symbol.IsSymbol(function () {
+                      return "tooManyChildren";
+                  }))(Type_Proxy["Proxy"].value)(v1.value1.value0);
+              };
+              throw new Error("Failed pattern match at JSONTransport (line 130, column 15 - line 134, column 70): " + [ v1.value1.constructor.name ]);
+          })();
+          return {
+              parent: v1.value0,
+              child: child
+          };
+      };
+      return {
+          midEdges: v.midEdges,
+          children: Data_Functor.map(Data_Functor.functorArray)(childToJSON)(Data_Map_Internal.toUnfoldable(Data_Unfoldable.unfoldableArray)(v.children)),
+          ids: v.ids,
+          unexplained: v.unexplained
+      };
+  };
+  var horiFromJSON = function (v) {
+      var getDist = Data_Variant.on()(new Data_Symbol.IsSymbol(function () {
+          return "tooManyChildren";
+      }))(Type_Proxy["Proxy"].value)(Leftmost.TooManyChildren.create)(Data_Variant.on()(new Data_Symbol.IsSymbol(function () {
+          return "bothChildren";
+      }))(Type_Proxy["Proxy"].value)(Leftmost.BothChildren.create)(Data_Variant.on()(new Data_Symbol.IsSymbol(function () {
+          return "rightChild";
+      }))(Type_Proxy["Proxy"].value)(Leftmost.RightChild.create)(Data_Variant.on()(new Data_Symbol.IsSymbol(function () {
+          return "leftChild";
+      }))(Type_Proxy["Proxy"].value)(Leftmost.LeftChild.create)(Data_Variant.case_))));
+      var childFromJSON = function (v1) {
+          return new Data_Tuple.Tuple(v1.parent, getDist(v1.child));
+      };
+      return Data_Either.Right.create({
+          midEdges: v.midEdges,
+          children: Data_Map_Internal.fromFoldable(Data_Ord.ordRecord()(Data_Ord.ordRecordCons(Data_Ord.ordRecordCons(Data_Ord.ordRecordNil)()(new Data_Symbol.IsSymbol(function () {
+              return "pitch";
+          }))(Data_Pitches_Class.ordPitch(Data_Pitches_Spelled.ordSInterval)))()(new Data_Symbol.IsSymbol(function () {
+              return "id";
+          }))(Data_Ord.ordString)))(Data_Foldable.foldableArray)(Data_Functor.map(Data_Functor.functorArray)(childFromJSON)(v.children)),
+          ids: v.ids,
+          unexplained: v.unexplained
+      });
+  };
+  var freezeToJSON = function (v) {
+      return v;
+  };
+  var leftmostToJSON = function (v) {
+      if (v instanceof Leftmost.LMFreezeLeft) {
+          return Data_Variant.inj()(new Data_Symbol.IsSymbol(function () {
+              return "freezeLeft";
+          }))(Type_Proxy["Proxy"].value)(freezeToJSON(v.value0));
+      };
+      if (v instanceof Leftmost.LMFreezeOnly) {
+          return Data_Variant.inj()(new Data_Symbol.IsSymbol(function () {
+              return "freezeOnly";
+          }))(Type_Proxy["Proxy"].value)(freezeToJSON(v.value0));
+      };
+      if (v instanceof Leftmost.LMSplitLeft) {
+          return Data_Variant.inj()(new Data_Symbol.IsSymbol(function () {
+              return "splitLeft";
+          }))(Type_Proxy["Proxy"].value)(splitToJSON(v.value0));
+      };
+      if (v instanceof Leftmost.LMSplitOnly) {
+          return Data_Variant.inj()(new Data_Symbol.IsSymbol(function () {
+              return "splitOnly";
+          }))(Type_Proxy["Proxy"].value)(splitToJSON(v.value0));
+      };
+      if (v instanceof Leftmost.LMSplitRight) {
+          return Data_Variant.inj()(new Data_Symbol.IsSymbol(function () {
+              return "splitRight";
+          }))(Type_Proxy["Proxy"].value)(splitToJSON(v.value0));
+      };
+      if (v instanceof Leftmost.LMHorizontalize) {
+          return Data_Variant.inj()(new Data_Symbol.IsSymbol(function () {
+              return "hori";
+          }))(Type_Proxy["Proxy"].value)(horiToJSON(v.value0));
+      };
+      throw new Error("Failed pattern match at JSONTransport (line 81, column 18 - line 87, column 66): " + [ v.constructor.name ]);
+  };
+  var reductionToJSON = function (red) {
+      var sliceToJSON = function (v) {
+          return {
+              id: v.id,
+              notes: Data_Functor.map(Model.functorStartStop)(Data_Functor.map(Data_Functor.functorArray)(function (v1) {
+                  return v1.note;
+              }))(v.notes)
+          };
+      };
+      return {
+          derivation: Data_Functor.map(Data_Functor.functorArray)(leftmostToJSON)(Folding.reductionToLeftmost(red)),
+          start: sliceToJSON(red.start),
+          topSegments: Data_Functor.map(Data_Functor.functorArray)(function (v) {
+              return {
+                  trans: v.trans,
+                  rslice: sliceToJSON(v.rslice)
+              };
+          })(Data_Array.fromFoldable(Data_List_Types.foldableList)(red.segments))
+      };
+  };
+  var freezeFromJSON = function ($109) {
+      return Data_Either.Right.create(Leftmost.FreezeOp($109));
+  };
+  var leftmostFromJSON = Data_Variant.on()(new Data_Symbol.IsSymbol(function () {
+      return "hori";
+  }))(Type_Proxy["Proxy"].value)((function () {
+      var $110 = Data_Functor.map(Data_Either.functorEither)(Leftmost.LMHorizontalize.create);
+      return function ($111) {
+          return $110(horiFromJSON($111));
+      };
+  })())(Data_Variant.on()(new Data_Symbol.IsSymbol(function () {
+      return "splitRight";
+  }))(Type_Proxy["Proxy"].value)((function () {
+      var $112 = Data_Functor.map(Data_Either.functorEither)(Leftmost.LMSplitRight.create);
+      return function ($113) {
+          return $112(splitFromJSON($113));
+      };
+  })())(Data_Variant.on()(new Data_Symbol.IsSymbol(function () {
+      return "splitOnly";
+  }))(Type_Proxy["Proxy"].value)((function () {
+      var $114 = Data_Functor.map(Data_Either.functorEither)(Leftmost.LMSplitOnly.create);
+      return function ($115) {
+          return $114(splitFromJSON($115));
+      };
+  })())(Data_Variant.on()(new Data_Symbol.IsSymbol(function () {
+      return "splitLeft";
+  }))(Type_Proxy["Proxy"].value)((function () {
+      var $116 = Data_Functor.map(Data_Either.functorEither)(Leftmost.LMSplitLeft.create);
+      return function ($117) {
+          return $116(splitFromJSON($117));
+      };
+  })())(Data_Variant.on()(new Data_Symbol.IsSymbol(function () {
+      return "freezeOnly";
+  }))(Type_Proxy["Proxy"].value)((function () {
+      var $118 = Data_Functor.map(Data_Either.functorEither)(Leftmost.LMFreezeOnly.create);
+      return function ($119) {
+          return $118(freezeFromJSON($119));
+      };
+  })())(Data_Variant.on()(new Data_Symbol.IsSymbol(function () {
+      return "freezeLeft";
+  }))(Type_Proxy["Proxy"].value)((function () {
+      var $120 = Data_Functor.map(Data_Either.functorEither)(Leftmost.LMFreezeLeft.create);
+      return function ($121) {
+          return $120(freezeFromJSON($121));
+      };
+  })())(Data_Variant.case_))))));
+  var reductionFromJSON = function (v) {
+      return Control_Bind.bind(Data_Either.bindEither)(Data_Traversable.sequence(Data_Traversable.traversableArray)(Data_Either.applicativeEither)(Data_Functor.map(Data_Functor.functorArray)(leftmostFromJSON)(v.derivation)))(function (deriv) {
+          return Folding.leftmostToReduction(v.topSegments)(deriv);
+      });
+  };
+  exports["reductionToJSON"] = reductionToJSON;
+  exports["reductionFromJSON"] = reductionFromJSON;
+})(PS);
+(function($PS) {
+  // Generated by purs version 0.14.1
+  "use strict";
   $PS["Validation"] = $PS["Validation"] || {};
   var exports = $PS["Validation"];
   var Control_Applicative = $PS["Control.Applicative"];
@@ -15351,6 +17505,9 @@ var PS = {};
       ESNotRepetition.value = new ESNotRepetition();
       return ESNotRepetition;
   })();
+  var validationIsOk = function (val) {
+      return Data_Map_Internal.isEmpty(val.notes) && (Data_Map_Internal.isEmpty(val.edges) && Data_Map_Internal.isEmpty(val.slices));
+  };
   var validateNote = function (note) {
       var err = (function () {
           if (note.expl instanceof Model.NoExpl) {
@@ -15396,7 +17553,7 @@ var PS = {};
               };
               return new Data_Maybe.Just(NSInvalidExplanation.value);
           };
-          throw new Error("Failed pattern match at Validation (line 52, column 9 - line 81, column 36): " + [ note.expl.constructor.name ]);
+          throw new Error("Failed pattern match at Validation (line 55, column 9 - line 84, column 36): " + [ note.expl.constructor.name ]);
       })();
       return Control_Bind.bind(Data_Maybe.bindMaybe)(err)(function (stat) {
           return Control_Applicative.pure(Data_Maybe.applicativeMaybe)({
@@ -15646,6 +17803,7 @@ var PS = {};
   exports["ESNotStepwise"] = ESNotStepwise;
   exports["ESNotRepetition"] = ESNotRepetition;
   exports["SSInvalidReduction"] = SSInvalidReduction;
+  exports["validationIsOk"] = validationIsOk;
   exports["validateReduction"] = validateReduction;
   exports["eqSliceError"] = eqSliceError;
 })(PS);
@@ -15688,14 +17846,12 @@ var PS = {};
   var Data_Semigroup = $PS["Data.Semigroup"];
   var Data_Show = $PS["Data.Show"];
   var Data_Symbol = $PS["Data.Symbol"];
-  var Folding = $PS["Folding"];
   var Halogen_HTML_Core = $PS["Halogen.HTML.Core"];
   var Halogen_HTML_Elements = $PS["Halogen.HTML.Elements"];
   var Halogen_HTML_Events = $PS["Halogen.HTML.Events"];
   var Halogen_HTML_Properties = $PS["Halogen.HTML.Properties"];
   var Halogen_Svg_Attributes = $PS["Halogen.Svg.Attributes"];
   var Halogen_Svg_Elements = $PS["Halogen.Svg.Elements"];
-  var Leftmost = $PS["Leftmost"];
   var Model = $PS["Model"];
   var Validation = $PS["Validation"];
   var Web_UIEvent_MouseEvent = $PS["Web.UIEvent.MouseEvent"];                
@@ -15743,16 +17899,10 @@ var PS = {};
               if (v.time instanceof Data_Either.Left) {
                   return v.time.value0;
               };
-              throw new Error("Failed pattern match at Render (line 308, column 11 - line 310, column 20): " + [ v.time.constructor.name ]);
+              throw new Error("Failed pattern match at Render (line 307, column 11 - line 309, column 20): " + [ v.time.constructor.name ]);
           })();
           return Halogen_Svg_Elements.text([ Halogen_Svg_Attributes.x(scalex(Data_Int.toNumber(i + 1 | 0))), Halogen_Svg_Attributes.y(scaley(-0.5)), Halogen_Svg_Attributes.text_anchor(Halogen_Svg_Attributes.AnchorMiddle.value), Halogen_Svg_Attributes.dominant_baseline(Halogen_Svg_Attributes.BaselineMiddle.value) ])([ Halogen_HTML_Core.text(label) ]);
       };
-  };
-  var renderLeftmost = function (red) {
-      var steps = Folding.reductionToLeftmost(red);
-      return Halogen_HTML_Elements.ol_(Data_Functor.map(Data_Functor.functorArray)(function (step) {
-          return Halogen_HTML_Elements.li_([ Halogen_HTML_Core.text(Leftmost.exportLeftmost(step)) ]);
-      })(steps));
   };
   var parentColor = selColor$prime;
   var offset = function (i) {
@@ -15788,13 +17938,10 @@ var PS = {};
       };
   };
   var lightgray = Data_Maybe.Just.create(new Halogen_Svg_Attributes.RGB(211, 211, 211));
-  var gridDiv = function (classes) {
-      return Halogen_HTML_Elements.div([ Halogen_HTML_Properties.class_(classes) ]);
-  };
   var findPitchIndex = function (v) {
       return function (v1) {
           if (v instanceof Model.Inner && v1 instanceof Model.Inner) {
-              return Data_Maybe.fromMaybe(0)(Data_Array.findIndex(function (n) {
+              return Data_Maybe.fromMaybe(-1 | 0)(Data_Array.findIndex(function (n) {
                   return Data_Eq.eq(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
                       return "pitch";
                   }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
@@ -15821,24 +17968,28 @@ var PS = {};
       };
   });                                        
   var doubleOrnaments = [ Model.FullNeighbor.value, Model.FullRepeat.value, Model.LeftRepeatOfRight.value, Model.RightRepeatOfLeft.value, Model.PassingMid.value, Model.PassingLeft.value, Model.PassingRight.value ];
+  var cursor = Halogen_Svg_Attributes.attr("cursor");
+  var class_ = function (str) {
+      return Halogen_HTML_Properties.class_(str);
+  };
   var renderNoteExplanation = function (graph) {
       return function (sel) {
-          return Halogen_HTML_Elements.div([ Halogen_HTML_Properties.style("height:30px;"), Halogen_HTML_Properties.class_("pure-g") ])((function () {
+          return Halogen_HTML_Elements.div([ class_("pure-g"), Halogen_HTML_Properties.style("height:30px;") ])((function () {
               if (sel instanceof CommonApp.SelNote) {
-                  return Data_Semigroup.append(Data_Semigroup.semigroupArray)([ gridDiv("pure-u-1-4")([ Halogen_HTML_Core.text(Data_Show.show(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval))(sel.value0.note.pitch) + (" (" + (sel.value0.note.id + ") "))) ]) ])((function () {
+                  return Data_Semigroup.append(Data_Semigroup.semigroupArray)([ Halogen_HTML_Elements.div([ class_("pure-u-1-4") ])([ Halogen_HTML_Core.text(Data_Show.show(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval))(sel.value0.note.pitch) + (" (" + (sel.value0.note.id + ") "))) ]) ])((function () {
                       if (sel.value0.expl instanceof Model.NoExpl) {
-                          return [ gridDiv("pure-u-1-4")([ Halogen_HTML_Core.text("no parents") ]) ];
+                          return [ Halogen_HTML_Elements.div([ class_("pure-u-1-4") ])([ Halogen_HTML_Core.text("no parents") ]) ];
                       };
                       if (sel.value0.expl instanceof Model.RootExpl) {
-                          return [ gridDiv("pure-u-1-4")([ Halogen_HTML_Core.text("root note") ]) ];
+                          return [ Halogen_HTML_Elements.div([ class_("pure-u-1-4") ])([ Halogen_HTML_Core.text("root note") ]) ];
                       };
                       if (sel.value0.expl instanceof Model.HoriExpl) {
-                          return [ gridDiv("pure-u-1-4")([ Halogen_HTML_Core.text("parent: " + (Data_Show.show(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval))(sel.value0.expl.value0.pitch) + (" (" + (sel.value0.expl.value0.id + ")")))), Halogen_HTML_Elements.button([ Halogen_HTML_Events.onClick(function (v) {
+                          return [ Halogen_HTML_Elements.div([ class_("pure-u-1-4") ])([ Halogen_HTML_Core.text("parent: " + (Data_Show.show(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval))(sel.value0.expl.value0.pitch) + (" (" + (sel.value0.expl.value0.id + ")")))), Halogen_HTML_Elements.button([ Halogen_HTML_Events.onClick(function (v) {
                               return CommonApp.removeParent(sel.value0.note)(sel.value0.expl)(Model.setHoriExplParent);
                           }) ])([ Halogen_HTML_Core.text("x") ]) ]) ];
                       };
                       if (sel.value0.expl instanceof Model.LeftExpl) {
-                          return [ gridDiv("pure-u-1-4")([  ]), gridDiv("pure-u-1-4")([ mkSelect(Model.showLeftOrnament)(Model.eqLeftOrnament)(function (orn$prime) {
+                          return [ Halogen_HTML_Elements.div([ class_("pure-u-1-4") ])([  ]), Halogen_HTML_Elements.div([ class_("pure-u-1-4") ])([ mkSelect(Model.showLeftOrnament)(Model.eqLeftOrnament)(function (orn$prime) {
                               return new CommonApp.SetNoteExplanation({
                                   noteId: sel.value0.note.id,
                                   expl: new Model.LeftExpl({
@@ -15846,14 +17997,14 @@ var PS = {};
                                       rightParent: sel.value0.expl.value0.rightParent
                                   })
                               });
-                          })(sel.value0.expl.value0.orn)([ Model.LeftRepeat.value, Model.LeftNeighbor.value ]) ]), gridDiv("pure-u-1-4")([ Halogen_HTML_Core.text("right parent: " + (Data_Show.show(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval))(sel.value0.expl.value0.rightParent.pitch) + (" (" + (sel.value0.expl.value0.rightParent.id + ")")))), Halogen_HTML_Elements.button([ Halogen_HTML_Events.onClick(function (v) {
+                          })(sel.value0.expl.value0.orn)([ Model.LeftRepeat.value, Model.LeftNeighbor.value ]) ]), Halogen_HTML_Elements.div([ class_("pure-u-1-4") ])([ Halogen_HTML_Core.text("right parent: " + (Data_Show.show(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval))(sel.value0.expl.value0.rightParent.pitch) + (" (" + (sel.value0.expl.value0.rightParent.id + ")")))), Halogen_HTML_Elements.button([ Halogen_HTML_Events.onClick(function (v) {
                               return CommonApp.removeParent(sel.value0.note)(sel.value0.expl)(Model.setRightExplParent);
                           }) ])([ Halogen_HTML_Core.text("x") ]) ]) ];
                       };
                       if (sel.value0.expl instanceof Model.RightExpl) {
-                          return [ gridDiv("pure-u-1-4")([ Halogen_HTML_Core.text("left parent: " + (Data_Show.show(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval))(sel.value0.expl.value0.leftParent.pitch) + (" (" + (sel.value0.expl.value0.leftParent.id + ")")))), Halogen_HTML_Elements.button([ Halogen_HTML_Events.onClick(function (v) {
+                          return [ Halogen_HTML_Elements.div([ class_("pure-u-1-4") ])([ Halogen_HTML_Core.text("left parent: " + (Data_Show.show(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval))(sel.value0.expl.value0.leftParent.pitch) + (" (" + (sel.value0.expl.value0.leftParent.id + ")")))), Halogen_HTML_Elements.button([ Halogen_HTML_Events.onClick(function (v) {
                               return CommonApp.removeParent(sel.value0.note)(sel.value0.expl)(Model.setLeftExplParent);
-                          }) ])([ Halogen_HTML_Core.text("x") ]) ]), gridDiv("pure-u-1-4")([ mkSelect(Model.showRightOrnament)(Model.eqRightOrnament)(function (orn$prime) {
+                          }) ])([ Halogen_HTML_Core.text("x") ]) ]), Halogen_HTML_Elements.div([ class_("pure-u-1-4") ])([ mkSelect(Model.showRightOrnament)(Model.eqRightOrnament)(function (orn$prime) {
                               return new CommonApp.SetNoteExplanation({
                                   noteId: sel.value0.note.id,
                                   expl: new Model.RightExpl({
@@ -15864,9 +18015,9 @@ var PS = {};
                           })(sel.value0.expl.value0.orn)([ Model.RightRepeat.value, Model.RightNeighbor.value ]) ]) ];
                       };
                       if (sel.value0.expl instanceof Model.DoubleExpl) {
-                          return [ gridDiv("pure-u-1-4")([ Halogen_HTML_Core.text("left parent: " + (Data_Show.show(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval))(sel.value0.expl.value0.leftParent.pitch) + (" (" + (sel.value0.expl.value0.leftParent.id + ")")))), Halogen_HTML_Elements.button([ Halogen_HTML_Events.onClick(function (v) {
+                          return [ Halogen_HTML_Elements.div([ class_("pure-u-1-4") ])([ Halogen_HTML_Core.text("left parent: " + (Data_Show.show(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval))(sel.value0.expl.value0.leftParent.pitch) + (" (" + (sel.value0.expl.value0.leftParent.id + ")")))), Halogen_HTML_Elements.button([ Halogen_HTML_Events.onClick(function (v) {
                               return CommonApp.removeParent(sel.value0.note)(sel.value0.expl)(Model.setLeftExplParent);
-                          }) ])([ Halogen_HTML_Core.text("x") ]) ]), gridDiv("pure-u-1-4")([ mkSelect(Model.showDoubleOrnament)(Model.eqDoubleOrnament)(function (orn$prime) {
+                          }) ])([ Halogen_HTML_Core.text("x") ]) ]), Halogen_HTML_Elements.div([ class_("pure-u-1-4") ])([ mkSelect(Model.showDoubleOrnament)(Model.eqDoubleOrnament)(function (orn$prime) {
                               return new CommonApp.SetNoteExplanation({
                                   noteId: sel.value0.note.id,
                                   expl: new Model.DoubleExpl({
@@ -15875,18 +18026,17 @@ var PS = {};
                                       rightParent: sel.value0.expl.value0.rightParent
                                   })
                               });
-                          })(sel.value0.expl.value0.orn)(doubleOrnaments) ]), gridDiv("pure-u-1-4")([ Halogen_HTML_Core.text("right parent: " + (Data_Show.show(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval))(sel.value0.expl.value0.rightParent.pitch) + (" (" + (sel.value0.expl.value0.rightParent.id + ")")))), Halogen_HTML_Elements.button([ Halogen_HTML_Events.onClick(function (v) {
+                          })(sel.value0.expl.value0.orn)(doubleOrnaments) ]), Halogen_HTML_Elements.div([ class_("pure-u-1-4") ])([ Halogen_HTML_Core.text("right parent: " + (Data_Show.show(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval))(sel.value0.expl.value0.rightParent.pitch) + (" (" + (sel.value0.expl.value0.rightParent.id + ")")))), Halogen_HTML_Elements.button([ Halogen_HTML_Events.onClick(function (v) {
                               return CommonApp.removeParent(sel.value0.note)(sel.value0.expl)(Model.setRightExplParent);
                           }) ])([ Halogen_HTML_Core.text("x") ]) ]) ];
                       };
-                      throw new Error("Failed pattern match at Render (line 371, column 12 - line 421, column 16): " + [ sel.value0.expl.constructor.name ]);
+                      throw new Error("Failed pattern match at Render (line 364, column 12 - line 414, column 16): " + [ sel.value0.expl.constructor.name ]);
                   })());
               };
-              return [ gridDiv("pure-u-1")([ Halogen_HTML_Core.text("No note selected.") ]) ];
+              return [ Halogen_HTML_Elements.div([ class_("pure-u-1") ])([ Halogen_HTML_Core.text("No note selected.") ]) ];
           })());
       };
   };
-  var cursor = Halogen_Svg_Attributes.attr("cursor");
   var black = Data_Maybe.Just.create(new Halogen_Svg_Attributes.RGB(0, 0, 0));
   var renderHori = function (selection) {
       return function (slices) {
@@ -15962,7 +18112,7 @@ var PS = {};
                                           if (valid instanceof Data_Maybe.Just && valid.value0 instanceof Validation.NSInvalidExplanation) {
                                               return warnColor;
                                           };
-                                          throw new Error("Failed pattern match at Render (line 143, column 19 - line 148, column 51): " + [ valid.constructor.name ]);
+                                          throw new Error("Failed pattern match at Render (line 142, column 19 - line 147, column 51): " + [ valid.constructor.name ]);
                                       })()) ])(text);
                                       var bg = Halogen_Svg_Elements.rect([ Halogen_Svg_Attributes.x(xcoord - scalex(0.24)), Halogen_Svg_Attributes.y(ycoord - 0.5 * offset(1)), Halogen_Svg_Attributes.width(scalex(0.48)), Halogen_Svg_Attributes.height(offset(1)), Halogen_Svg_Attributes.fill((function () {
                                           if (selStatus instanceof NotSelected) {
@@ -15974,7 +18124,7 @@ var PS = {};
                                           if (selStatus instanceof Related) {
                                               return selColor$prime;
                                           };
-                                          throw new Error("Failed pattern match at Render (line 131, column 15 - line 134, column 37): " + [ selStatus.constructor.name ]);
+                                          throw new Error("Failed pattern match at Render (line 130, column 15 - line 133, column 37): " + [ selStatus.constructor.name ]);
                                       })()) ]);
                                       return Halogen_Svg_Elements.g(attr)([ bg, label ]);
                                   };
@@ -16167,11 +18317,18 @@ var PS = {};
       };
   };
   exports["renderReduction"] = renderReduction;
-  exports["renderLeftmost"] = renderLeftmost;
+  exports["class_"] = class_;
   exports["renderNoteExplanation"] = renderNoteExplanation;
 })(PS);
 (function(exports) {
   "use strict";
+
+  exports.unsafeStringifyPretty = function(json) {
+      return JSON.stringify(json, null, 2);
+  };
+
+  exports.copyToClipboard = str => () =>
+      navigator.clipboard.writeText(str);
 
   exports.examplePieceJSON = [
       {time: "0,4,3/4", notes: [{ pitch: "D5", hold: false }]},
@@ -16308,7 +18465,14 @@ var PS = {};
   var Data_Pitches_Class = $PS["Data.Pitches.Class"];
   var Data_Pitches_Spelled = $PS["Data.Pitches.Spelled"];
   var Data_Show = $PS["Data.Show"];
-  var Data_Traversable = $PS["Data.Traversable"];                
+  var Data_Traversable = $PS["Data.Traversable"];
+  var Simple_JSON = $PS["Simple.JSON"];                
+  var writeJSONPretty = function (dictWriteForeign) {
+      var $7 = Simple_JSON.writeImpl(dictWriteForeign);
+      return function ($8) {
+          return $foreign.unsafeStringifyPretty($7($8));
+      };
+  };
   var pieceFromJSON = function (piece) {
       return Data_Traversable["for"](Data_Maybe.applicativeMaybe)(Data_Traversable.traversableArray)(piece)(function (slice) {
           var time = (function () {
@@ -16319,7 +18483,7 @@ var PS = {};
               if (v instanceof Data_Maybe.Just) {
                   return new Data_Either.Right(v.value0);
               };
-              throw new Error("Failed pattern match at Utils (line 37, column 14 - line 39, column 30): " + [ v.constructor.name ]);
+              throw new Error("Failed pattern match at Utils (line 39, column 14 - line 41, column 30): " + [ v.constructor.name ]);
           })();
           return Control_Bind.bind(Data_Maybe.bindMaybe)(Data_Traversable["for"](Data_Maybe.applicativeMaybe)(Data_Traversable.traversableArray)(slice.notes)(function (note) {
               return Data_Functor.map(Data_Maybe.functorMaybe)(function (p) {
@@ -16366,6 +18530,8 @@ var PS = {};
   var examplePiece = Data_Maybe.fromJust()(pieceFromJSON(examplePieceJSONWithIds));
   exports["examplePiece"] = examplePiece;
   exports["examplePieceLong"] = examplePieceLong;
+  exports["writeJSONPretty"] = writeJSONPretty;
+  exports["copyToClipboard"] = $foreign.copyToClipboard;
 })(PS);
 (function(exports) {
   "use strict";
@@ -16461,13 +18627,21 @@ var PS = {};
   var Control_Apply = $PS["Control.Apply"];
   var Control_Bind = $PS["Control.Bind"];
   var Control_Monad_State_Class = $PS["Control.Monad.State.Class"];
+  var DOM_HTML_Indexed_InputType = $PS["DOM.HTML.Indexed.InputType"];
   var Data_Boolean = $PS["Data.Boolean"];
   var Data_Either = $PS["Data.Either"];
+  var Data_Eq = $PS["Data.Eq"];
   var Data_Foldable = $PS["Data.Foldable"];
   var Data_Function = $PS["Data.Function"];
   var Data_Functor = $PS["Data.Functor"];
+  var Data_List = $PS["Data.List"];
+  var Data_List_Types = $PS["Data.List.Types"];
   var Data_Maybe = $PS["Data.Maybe"];
+  var Data_Ord = $PS["Data.Ord"];
+  var Data_Pitches_Class = $PS["Data.Pitches.Class"];
+  var Data_Pitches_Spelled = $PS["Data.Pitches.Spelled"];
   var Data_Show = $PS["Data.Show"];
+  var Data_Symbol = $PS["Data.Symbol"];
   var Data_Unit = $PS["Data.Unit"];
   var Effect = $PS["Effect"];
   var Effect_Aff = $PS["Effect.Aff"];
@@ -16476,6 +18650,7 @@ var PS = {};
   var Folding = $PS["Folding"];
   var Halogen_Aff_Util = $PS["Halogen.Aff.Util"];
   var Halogen_Component = $PS["Halogen.Component"];
+  var Halogen_HTML = $PS["Halogen.HTML"];
   var Halogen_HTML_Core = $PS["Halogen.HTML.Core"];
   var Halogen_HTML_Elements = $PS["Halogen.HTML.Elements"];
   var Halogen_HTML_Events = $PS["Halogen.HTML.Events"];
@@ -16483,8 +18658,12 @@ var PS = {};
   var Halogen_Query_Event = $PS["Halogen.Query.Event"];
   var Halogen_Query_HalogenM = $PS["Halogen.Query.HalogenM"];
   var Halogen_VDom_Driver = $PS["Halogen.VDom.Driver"];
+  var JSONTransport = $PS["JSONTransport"];
+  var Leftmost = $PS["Leftmost"];
   var Model = $PS["Model"];
   var Render = $PS["Render"];
+  var Simple_JSON = $PS["Simple.JSON"];
+  var Type_Proxy = $PS["Type.Proxy"];
   var Utils = $PS["Utils"];
   var Validation = $PS["Validation"];
   var Web_Event_Event = $PS["Web.Event.Event"];
@@ -16493,6 +18672,40 @@ var PS = {};
   var Web_HTML_Window = $PS["Web.HTML.Window"];
   var Web_UIEvent_KeyboardEvent = $PS["Web.UIEvent.KeyboardEvent"];
   var Web_UIEvent_KeyboardEvent_EventTypes = $PS["Web.UIEvent.KeyboardEvent.EventTypes"];                
+  var UpdateJSONInput = (function () {
+      function UpdateJSONInput(value0) {
+          this.value0 = value0;
+      };
+      UpdateJSONInput.create = function (value0) {
+          return new UpdateJSONInput(value0);
+      };
+      return UpdateJSONInput;
+  })();
+  var CopyToClipboard = (function () {
+      function CopyToClipboard(value0) {
+          this.value0 = value0;
+      };
+      CopyToClipboard.create = function (value0) {
+          return new CopyToClipboard(value0);
+      };
+      return CopyToClipboard;
+  })();
+  var TogglePretty = (function () {
+      function TogglePretty() {
+
+      };
+      TogglePretty.value = new TogglePretty();
+      return TogglePretty;
+  })();
+  var Receive = (function () {
+      function Receive(value0) {
+          this.value0 = value0;
+      };
+      Receive.create = function (value0) {
+          return new Receive(value0);
+      };
+      return Receive;
+  })();
   var tryModelAction = function (dictMonadState) {
       return function (dictMonadEffect) {
           return function (selector) {
@@ -16517,29 +18730,1799 @@ var PS = {};
                               };
                               if (v instanceof Data_Either.Right) {
                                   return Control_Monad_State_Class.put(dictMonadState)((function () {
-                                      var $28 = {};
-                                      for (var $29 in st) {
-                                          if ({}.hasOwnProperty.call(st, $29)) {
-                                              $28[$29] = st[$29];
+                                      var $43 = {};
+                                      for (var $44 in st) {
+                                          if ({}.hasOwnProperty.call(st, $44)) {
+                                              $43[$44] = st[$44];
                                           };
                                       };
-                                      $28.model = new Data_Maybe.Just(v.value0);
-                                      $28.selected = (function () {
+                                      $43.model = new Data_Maybe.Just(v.value0);
+                                      $43.selected = (function () {
                                           if (clearSel) {
                                               return CommonApp.SelNone.value;
                                           };
                                           return st.selected;
                                       })();
-                                      return $28;
+                                      return $43;
                                   })());
                               };
-                              throw new Error("Failed pattern match at Main (line 62, column 28 - line 64, column 111): " + [ v.constructor.name ]);
+                              throw new Error("Failed pattern match at Main (line 75, column 28 - line 77, column 111): " + [ v.constructor.name ]);
                           };
-                          throw new Error("Failed pattern match at Main (line 60, column 3 - line 64, column 111): " + [ modelAndSel.constructor.name ]);
+                          throw new Error("Failed pattern match at Main (line 73, column 3 - line 77, column 111): " + [ modelAndSel.constructor.name ]);
                       });
                   };
               };
           };
+      };
+  };
+  var helpText = Halogen_HTML_Elements.div([ Render.class_("tab") ])([ Halogen_HTML_Elements.h2_([ Halogen_HTML_Core.text("Manual") ]), Halogen_HTML_Elements.p_([ Halogen_HTML_Core.text("This app can be used to create protovoice analyses of pieces.") ]), Halogen_HTML_Elements.p_([ Halogen_HTML_Core.text("Load pieces or analyses using the Import tab. Save analyses using the Export tab.") ]), Halogen_HTML_Elements.p_([ Halogen_HTML_Core.text("A piece is analyzed by reducing it using outer structure operations. "), Halogen_HTML_Core.text("Reducing a slice creates a 'split' operation, reducing a transition creates a horizontalization. "), Halogen_HTML_Core.text("Select a top-level slice or transition and press Enter to reduce it. "), Halogen_HTML_Core.text("Pressing Backspace removes the operation below the selected slice or transition, if possible. ") ]), Halogen_HTML_Elements.p_([ Halogen_HTML_Core.text("The inner structure is determined by providing an \"explanation\" for every note. "), Halogen_HTML_Core.text("This done by selecting the parent(s) of a note: "), Halogen_HTML_Core.text("Click on a note in a slice below the top-level to select it. "), Halogen_HTML_Core.text("Then hold CTRL and click on a note in one of its parent slices. "), Halogen_HTML_Core.text("For notes that result from a split, you also have to provide the type of operation. "), Halogen_HTML_Core.text("This is automatically determined from to the selected pitches, but can be overriden if desired. "), Halogen_HTML_Core.text("Split notes can have either one (left/right ornament) or two parents (double-parent ornament). "), Halogen_HTML_Core.text("Double-parent ornaments create new \"mandatory edges\", which must be used in the next reduction step."), Halogen_HTML_Core.text("Correctly reduced notes are shown in grey, unreduced notes are shown in black, and inconsistencies are shown in orange or red.") ]) ]);
+  var exportComponent = function (dictMonadEffect) {
+      var render = function (v) {
+          if (v.model instanceof Data_Maybe.Nothing) {
+              return Halogen_HTML_Core.text("");
+          };
+          if (v.model instanceof Data_Maybe.Just) {
+              var val = Validation.validateReduction(v.model.value0.reduction);
+              var json = JSONTransport.reductionToJSON(v.model.value0.reduction);
+              var jsonStr = (function () {
+                  if (v.pretty) {
+                      return Utils.writeJSONPretty(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "derivation";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.writeForeignVariant()(Simple_JSON.consWriteForeignVariant(new Data_Symbol.IsSymbol(function () {
+                          return "freezeLeft";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "ties";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "left";
+                      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "right";
+                      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()()))()(Simple_JSON.consWriteForeignVariant(new Data_Symbol.IsSymbol(function () {
+                          return "freezeOnly";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "ties";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "left";
+                      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "right";
+                      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()()))()(Simple_JSON.consWriteForeignVariant(new Data_Symbol.IsSymbol(function () {
+                          return "hori";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "children";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "child";
+                      }))(Simple_JSON.writeForeignVariant()(Simple_JSON.consWriteForeignVariant(new Data_Symbol.IsSymbol(function () {
+                          return "bothChildren";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "left";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "right";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()()))()(Simple_JSON.consWriteForeignVariant(new Data_Symbol.IsSymbol(function () {
+                          return "leftChild";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))()(Simple_JSON.consWriteForeignVariant(new Data_Symbol.IsSymbol(function () {
+                          return "rightChild";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))()(Simple_JSON.consWriteForeignVariant(new Data_Symbol.IsSymbol(function () {
+                          return "tooManyChildren";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "left";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "right";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()()))()(Simple_JSON.nilWriteForeignVariant))))))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "parent";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "ids";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "left";
+                      }))(Model.writeForeignTransId)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "lslice";
+                      }))(Model.writeForeignSliceId)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "mid";
+                      }))(Model.writeForeignTransId)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "right";
+                      }))(Model.writeForeignTransId)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "rslice";
+                      }))(Model.writeForeignSliceId)(Simple_JSON.nilWriteForeignFields)()()())()()())()()())()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "midEdges";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "passing";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "left";
+                      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "right";
+                      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "regular";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "left";
+                      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "right";
+                      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "unexplained";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "left";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "right";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())()()())()()()))()(Simple_JSON.consWriteForeignVariant(new Data_Symbol.IsSymbol(function () {
+                          return "splitLeft";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "fromLeft";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "children";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "child";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "orn";
+                      }))(Simple_JSON.writeForeignMaybe(Simple_JSON.writeForeignString))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "parent";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "fromRight";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "children";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "child";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "orn";
+                      }))(Simple_JSON.writeForeignMaybe(Simple_JSON.writeForeignString))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "parent";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "ids";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "left";
+                      }))(Model.writeForeignTransId)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "right";
+                      }))(Model.writeForeignTransId)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "slice";
+                      }))(Model.writeForeignSliceId)(Simple_JSON.nilWriteForeignFields)()()())()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "keepLeft";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "left";
+                      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "right";
+                      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "keepRight";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "left";
+                      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "right";
+                      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "passing";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "children";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "child";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "orn";
+                      }))(Simple_JSON.writeForeignMaybe(Simple_JSON.writeForeignString))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "parent";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "left";
+                      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "right";
+                      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "regular";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "children";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "child";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "orn";
+                      }))(Simple_JSON.writeForeignMaybe(Simple_JSON.writeForeignString))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "parent";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "left";
+                      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "right";
+                      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "unexplained";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())()()())()()())()()())()()())()()())()()()))()(Simple_JSON.consWriteForeignVariant(new Data_Symbol.IsSymbol(function () {
+                          return "splitOnly";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "fromLeft";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "children";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "child";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "orn";
+                      }))(Simple_JSON.writeForeignMaybe(Simple_JSON.writeForeignString))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "parent";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "fromRight";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "children";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "child";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "orn";
+                      }))(Simple_JSON.writeForeignMaybe(Simple_JSON.writeForeignString))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "parent";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "ids";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "left";
+                      }))(Model.writeForeignTransId)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "right";
+                      }))(Model.writeForeignTransId)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "slice";
+                      }))(Model.writeForeignSliceId)(Simple_JSON.nilWriteForeignFields)()()())()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "keepLeft";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "left";
+                      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "right";
+                      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "keepRight";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "left";
+                      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "right";
+                      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "passing";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "children";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "child";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "orn";
+                      }))(Simple_JSON.writeForeignMaybe(Simple_JSON.writeForeignString))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "parent";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "left";
+                      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "right";
+                      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "regular";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "children";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "child";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "orn";
+                      }))(Simple_JSON.writeForeignMaybe(Simple_JSON.writeForeignString))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "parent";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "left";
+                      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "right";
+                      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "unexplained";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())()()())()()())()()())()()())()()())()()()))()(Simple_JSON.consWriteForeignVariant(new Data_Symbol.IsSymbol(function () {
+                          return "splitRight";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "fromLeft";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "children";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "child";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "orn";
+                      }))(Simple_JSON.writeForeignMaybe(Simple_JSON.writeForeignString))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "parent";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "fromRight";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "children";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "child";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "orn";
+                      }))(Simple_JSON.writeForeignMaybe(Simple_JSON.writeForeignString))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "parent";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "ids";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "left";
+                      }))(Model.writeForeignTransId)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "right";
+                      }))(Model.writeForeignTransId)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "slice";
+                      }))(Model.writeForeignSliceId)(Simple_JSON.nilWriteForeignFields)()()())()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "keepLeft";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "left";
+                      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "right";
+                      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "keepRight";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "left";
+                      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "right";
+                      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "passing";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "children";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "child";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "orn";
+                      }))(Simple_JSON.writeForeignMaybe(Simple_JSON.writeForeignString))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "parent";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "left";
+                      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "right";
+                      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "regular";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "children";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "child";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "orn";
+                      }))(Simple_JSON.writeForeignMaybe(Simple_JSON.writeForeignString))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "parent";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "left";
+                      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "right";
+                      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "unexplained";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())()()())()()())()()())()()())()()())()()()))()(Simple_JSON.nilWriteForeignVariant)))))))))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "start";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Model.writeForeignSliceId)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "notes";
+                      }))(Model.writeForeignStartStop(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "topSegments";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "rslice";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Model.writeForeignSliceId)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "notes";
+                      }))(Model.writeForeignStartStop(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "trans";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "edges";
+                      }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "passing";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "left";
+                      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "right";
+                      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "regular";
+                      }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "left";
+                      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "right";
+                      }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "pitch";
+                      }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "id";
+                      }))(Model.writeForeignTransId)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                          return "is2nd";
+                      }))(Simple_JSON.writeForeignBoolean)(Simple_JSON.nilWriteForeignFields)()()())()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())()()()));
+                  };
+                  return Simple_JSON.writeJSON(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "derivation";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.writeForeignVariant()(Simple_JSON.consWriteForeignVariant(new Data_Symbol.IsSymbol(function () {
+                      return "freezeLeft";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "ties";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "left";
+                  }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "right";
+                  }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()()))()(Simple_JSON.consWriteForeignVariant(new Data_Symbol.IsSymbol(function () {
+                      return "freezeOnly";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "ties";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "left";
+                  }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "right";
+                  }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()()))()(Simple_JSON.consWriteForeignVariant(new Data_Symbol.IsSymbol(function () {
+                      return "hori";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "children";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "child";
+                  }))(Simple_JSON.writeForeignVariant()(Simple_JSON.consWriteForeignVariant(new Data_Symbol.IsSymbol(function () {
+                      return "bothChildren";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "left";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "right";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()()))()(Simple_JSON.consWriteForeignVariant(new Data_Symbol.IsSymbol(function () {
+                      return "leftChild";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))()(Simple_JSON.consWriteForeignVariant(new Data_Symbol.IsSymbol(function () {
+                      return "rightChild";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))()(Simple_JSON.consWriteForeignVariant(new Data_Symbol.IsSymbol(function () {
+                      return "tooManyChildren";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "left";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "right";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()()))()(Simple_JSON.nilWriteForeignVariant))))))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "parent";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "ids";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "left";
+                  }))(Model.writeForeignTransId)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "lslice";
+                  }))(Model.writeForeignSliceId)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "mid";
+                  }))(Model.writeForeignTransId)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "right";
+                  }))(Model.writeForeignTransId)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "rslice";
+                  }))(Model.writeForeignSliceId)(Simple_JSON.nilWriteForeignFields)()()())()()())()()())()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "midEdges";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "passing";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "left";
+                  }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "right";
+                  }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "regular";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "left";
+                  }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "right";
+                  }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "unexplained";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "left";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "right";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())()()())()()()))()(Simple_JSON.consWriteForeignVariant(new Data_Symbol.IsSymbol(function () {
+                      return "splitLeft";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "fromLeft";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "children";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "child";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "orn";
+                  }))(Simple_JSON.writeForeignMaybe(Simple_JSON.writeForeignString))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "parent";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "fromRight";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "children";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "child";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "orn";
+                  }))(Simple_JSON.writeForeignMaybe(Simple_JSON.writeForeignString))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "parent";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "ids";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "left";
+                  }))(Model.writeForeignTransId)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "right";
+                  }))(Model.writeForeignTransId)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "slice";
+                  }))(Model.writeForeignSliceId)(Simple_JSON.nilWriteForeignFields)()()())()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "keepLeft";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "left";
+                  }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "right";
+                  }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "keepRight";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "left";
+                  }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "right";
+                  }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "passing";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "children";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "child";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "orn";
+                  }))(Simple_JSON.writeForeignMaybe(Simple_JSON.writeForeignString))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "parent";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "left";
+                  }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "right";
+                  }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "regular";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "children";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "child";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "orn";
+                  }))(Simple_JSON.writeForeignMaybe(Simple_JSON.writeForeignString))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "parent";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "left";
+                  }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "right";
+                  }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "unexplained";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())()()())()()())()()())()()())()()())()()()))()(Simple_JSON.consWriteForeignVariant(new Data_Symbol.IsSymbol(function () {
+                      return "splitOnly";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "fromLeft";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "children";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "child";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "orn";
+                  }))(Simple_JSON.writeForeignMaybe(Simple_JSON.writeForeignString))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "parent";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "fromRight";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "children";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "child";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "orn";
+                  }))(Simple_JSON.writeForeignMaybe(Simple_JSON.writeForeignString))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "parent";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "ids";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "left";
+                  }))(Model.writeForeignTransId)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "right";
+                  }))(Model.writeForeignTransId)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "slice";
+                  }))(Model.writeForeignSliceId)(Simple_JSON.nilWriteForeignFields)()()())()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "keepLeft";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "left";
+                  }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "right";
+                  }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "keepRight";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "left";
+                  }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "right";
+                  }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "passing";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "children";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "child";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "orn";
+                  }))(Simple_JSON.writeForeignMaybe(Simple_JSON.writeForeignString))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "parent";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "left";
+                  }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "right";
+                  }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "regular";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "children";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "child";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "orn";
+                  }))(Simple_JSON.writeForeignMaybe(Simple_JSON.writeForeignString))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "parent";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "left";
+                  }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "right";
+                  }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "unexplained";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())()()())()()())()()())()()())()()())()()()))()(Simple_JSON.consWriteForeignVariant(new Data_Symbol.IsSymbol(function () {
+                      return "splitRight";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "fromLeft";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "children";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "child";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "orn";
+                  }))(Simple_JSON.writeForeignMaybe(Simple_JSON.writeForeignString))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "parent";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "fromRight";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "children";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "child";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "orn";
+                  }))(Simple_JSON.writeForeignMaybe(Simple_JSON.writeForeignString))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "parent";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "ids";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "left";
+                  }))(Model.writeForeignTransId)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "right";
+                  }))(Model.writeForeignTransId)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "slice";
+                  }))(Model.writeForeignSliceId)(Simple_JSON.nilWriteForeignFields)()()())()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "keepLeft";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "left";
+                  }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "right";
+                  }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "keepRight";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "left";
+                  }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "right";
+                  }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "passing";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "children";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "child";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "orn";
+                  }))(Simple_JSON.writeForeignMaybe(Simple_JSON.writeForeignString))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "parent";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "left";
+                  }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "right";
+                  }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "regular";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "children";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "child";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "orn";
+                  }))(Simple_JSON.writeForeignMaybe(Simple_JSON.writeForeignString))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "parent";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "left";
+                  }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "right";
+                  }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "unexplained";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())()()())()()())()()())()()())()()())()()()))()(Simple_JSON.nilWriteForeignVariant)))))))))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "start";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Model.writeForeignSliceId)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "notes";
+                  }))(Model.writeForeignStartStop(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "topSegments";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "rslice";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Model.writeForeignSliceId)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "notes";
+                  }))(Model.writeForeignStartStop(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()()))))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "trans";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "edges";
+                  }))(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "passing";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "left";
+                  }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "right";
+                  }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "regular";
+                  }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "left";
+                  }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "right";
+                  }))(Model.writeForeignStartStop(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "pitch";
+                  }))(Data_Pitches_Class.writeForeignPitch(Data_Pitches_Spelled.writeForeignSPitch))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()()))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "id";
+                  }))(Model.writeForeignTransId)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return "is2nd";
+                  }))(Simple_JSON.writeForeignBoolean)(Simple_JSON.nilWriteForeignFields)()()())()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())()()()));
+              })()(json);
+              var reLoad = JSONTransport.reductionFromJSON(json);
+              return Halogen_HTML_Elements.div([ Render.class_("tab") ])([ (function () {
+                  var $53 = Validation.validationIsOk(val);
+                  if ($53) {
+                      return Halogen_HTML_Core.text("");
+                  };
+                  return Halogen_HTML_Elements.p([ Render.class_("alert") ])([ Halogen_HTML_Core.text("Warning: reduction is incomplete and/or contains errors.") ]);
+              })(), Halogen_HTML_Elements.h3_([ Halogen_HTML_Core.text("Reduction Steps") ]), Halogen_HTML_Elements.ol_(Data_Functor.map(Data_Functor.functorArray)(function (step) {
+                  return Halogen_HTML_Elements.li_([ Halogen_HTML_Core.text(Data_Show.show(Leftmost.showLeftmost(Leftmost.showSplitOp)(Leftmost.showFreezeOp)(Leftmost.showHoriOp))(step)) ]);
+              })(Folding.reductionToLeftmost(v.model.value0.reduction))), Halogen_HTML_Elements.h3_([ Halogen_HTML_Core.text("JSON String") ]), Halogen_HTML_Elements.div([ Render.class_("pure-g") ])([ Halogen_HTML_Elements.div([ Render.class_("pure-u-3-4") ])([ Halogen_HTML_Elements.input([ Halogen_HTML_Properties.type_(Halogen_HTML_Core.isPropInputType)(DOM_HTML_Indexed_InputType.InputCheckbox.value), Halogen_HTML_Properties.checked(v.pretty), Halogen_HTML_Events.onChange(function (v1) {
+                  return TogglePretty.value;
+              }), Halogen_HTML_Properties.name("prettyJSON") ]), Halogen_HTML_Elements.label([ Halogen_HTML_Properties["for"]("prettyJSON") ])([ Halogen_HTML_Core.text(" pretty") ]) ]), Halogen_HTML_Elements.button([ Render.class_("pure-button pure-button-primary pure-u-1-4"), Halogen_HTML_Events.onClick(function (v1) {
+                  return new CopyToClipboard(jsonStr);
+              }) ])([ Halogen_HTML_Core.text("Copy to Clipboard") ]) ]), Halogen_HTML_Elements.pre_([ Halogen_HTML_Core.text(jsonStr) ]), Halogen_HTML_Elements.div_((function () {
+                  if (reLoad instanceof Data_Either.Left) {
+                      return [ Halogen_HTML_Core.text("Error re-reading reduction: " + reLoad.value0) ];
+                  };
+                  if (reLoad instanceof Data_Either.Right) {
+                      var v1 = Data_Foldable.find(Data_List_Types.foldableList)(function (v2) {
+                          return Data_Eq.notEq(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                              return "trans";
+                          }))(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                              return "is2nd";
+                          }))(Data_Eq.eqBoolean))()(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Model.eqTransId))()(new Data_Symbol.IsSymbol(function () {
+                              return "edges";
+                          }))(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                              return "regular";
+                          }))(Data_Eq.eqArray(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                              return "right";
+                          }))(Model.eqStartStop(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                              return "pitch";
+                          }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Eq.eqString)))))()(new Data_Symbol.IsSymbol(function () {
+                              return "left";
+                          }))(Model.eqStartStop(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                              return "pitch";
+                          }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Eq.eqString))))))))()(new Data_Symbol.IsSymbol(function () {
+                              return "passing";
+                          }))(Data_Eq.eqArray(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                              return "right";
+                          }))(Model.eqStartStop(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                              return "pitch";
+                          }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Eq.eqString)))))()(new Data_Symbol.IsSymbol(function () {
+                              return "left";
+                          }))(Model.eqStartStop(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                              return "pitch";
+                          }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Eq.eqString))))))))))))()(new Data_Symbol.IsSymbol(function () {
+                              return "rslice";
+                          }))(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                              return "x";
+                          }))(Data_Eq.eqNumber))()(new Data_Symbol.IsSymbol(function () {
+                              return "parents";
+                          }))(Model.eqParents(Model.eqSliceId)))()(new Data_Symbol.IsSymbol(function () {
+                              return "notes";
+                          }))(Model.eqStartStop(Data_Eq.eqArray(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                              return "note";
+                          }))(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                              return "pitch";
+                          }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Eq.eqString))))()(new Data_Symbol.IsSymbol(function () {
+                              return "expl";
+                          }))(Model.eqNoteExplanation))))))()(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Model.eqSliceId))))()(new Data_Symbol.IsSymbol(function () {
+                              return "op";
+                          }))(Model.eqOp)))(v2.value0)(v2.value1);
+                      })(Data_List.zip(v.model.value0.reduction.segments)(reLoad.value0.segments));
+                      if (v1 instanceof Data_Maybe.Nothing) {
+                          var $60 = Data_Eq.eq(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                              return "start";
+                          }))(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                              return "x";
+                          }))(Data_Eq.eqNumber))()(new Data_Symbol.IsSymbol(function () {
+                              return "parents";
+                          }))(Model.eqParents(Model.eqSliceId)))()(new Data_Symbol.IsSymbol(function () {
+                              return "notes";
+                          }))(Model.eqStartStop(Data_Eq.eqArray(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                              return "note";
+                          }))(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                              return "pitch";
+                          }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Eq.eqString))))()(new Data_Symbol.IsSymbol(function () {
+                              return "expl";
+                          }))(Model.eqNoteExplanation))))))()(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Model.eqSliceId))))()(new Data_Symbol.IsSymbol(function () {
+                              return "segments";
+                          }))(Data_List_Types.eqList(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                              return "trans";
+                          }))(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                              return "is2nd";
+                          }))(Data_Eq.eqBoolean))()(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Model.eqTransId))()(new Data_Symbol.IsSymbol(function () {
+                              return "edges";
+                          }))(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                              return "regular";
+                          }))(Data_Eq.eqArray(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                              return "right";
+                          }))(Model.eqStartStop(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                              return "pitch";
+                          }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Eq.eqString)))))()(new Data_Symbol.IsSymbol(function () {
+                              return "left";
+                          }))(Model.eqStartStop(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                              return "pitch";
+                          }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Eq.eqString))))))))()(new Data_Symbol.IsSymbol(function () {
+                              return "passing";
+                          }))(Data_Eq.eqArray(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                              return "right";
+                          }))(Model.eqStartStop(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                              return "pitch";
+                          }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Eq.eqString)))))()(new Data_Symbol.IsSymbol(function () {
+                              return "left";
+                          }))(Model.eqStartStop(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                              return "pitch";
+                          }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Eq.eqString))))))))))))()(new Data_Symbol.IsSymbol(function () {
+                              return "rslice";
+                          }))(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                              return "x";
+                          }))(Data_Eq.eqNumber))()(new Data_Symbol.IsSymbol(function () {
+                              return "parents";
+                          }))(Model.eqParents(Model.eqSliceId)))()(new Data_Symbol.IsSymbol(function () {
+                              return "notes";
+                          }))(Model.eqStartStop(Data_Eq.eqArray(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                              return "note";
+                          }))(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                              return "pitch";
+                          }))(Data_Pitches_Class.eqPitch(Data_Pitches_Spelled.eqSInterval)))()(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Eq.eqString))))()(new Data_Symbol.IsSymbol(function () {
+                              return "expl";
+                          }))(Model.eqNoteExplanation))))))()(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Model.eqSliceId))))()(new Data_Symbol.IsSymbol(function () {
+                              return "op";
+                          }))(Model.eqOp)))))()(new Data_Symbol.IsSymbol(function () {
+                              return "nextTransId";
+                          }))(Model.eqTransId))()(new Data_Symbol.IsSymbol(function () {
+                              return "nextSliceId";
+                          }))(Model.eqSliceId)))(reLoad.value0)(v.model.value0.reduction);
+                          if ($60) {
+                              return [ Halogen_HTML_Core.text("roundtrip ok") ];
+                          };
+                          return [ Halogen_HTML_Core.text("roundtrip not ok (but can't find wrong segment)! original:"), Halogen_HTML_Elements.pre_([ Halogen_HTML_Core.text(Data_Show.show(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "nextSliceId";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "nextTransId";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "segments";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "start";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "notes";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "parents";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "x";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Show.showNumber))(Model.showParents(Model.showSliceId)))(Model.showStartStop(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "expl";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "note";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "pitch";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))(Model.showNoteExplanation))))))(Model.showSliceId))))(Data_List_Types.showList(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "op";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "rslice";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "trans";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "edges";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "is2nd";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Show.showBoolean))(Model.showTransId))(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "passing";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "regular";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "left";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "right";
+                          }))(Data_Show.showRecordFieldsNil)(Model.showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "pitch";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString)))))(Model.showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "pitch";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))))))(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "left";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "right";
+                          }))(Data_Show.showRecordFieldsNil)(Model.showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "pitch";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString)))))(Model.showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "pitch";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))))))))))(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "notes";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "parents";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "x";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Show.showNumber))(Model.showParents(Model.showSliceId)))(Model.showStartStop(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "expl";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "note";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "pitch";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))(Model.showNoteExplanation))))))(Model.showSliceId))))(Model.showOp)))))(Model.showTransId))(Model.showSliceId)))(v.model.value0.reduction)) ]), Halogen_HTML_Core.text("re-read:"), Halogen_HTML_Elements.pre_([ Halogen_HTML_Core.text(Data_Show.show(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "nextSliceId";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "nextTransId";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "segments";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "start";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "notes";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "parents";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "x";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Show.showNumber))(Model.showParents(Model.showSliceId)))(Model.showStartStop(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "expl";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "note";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "pitch";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))(Model.showNoteExplanation))))))(Model.showSliceId))))(Data_List_Types.showList(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "op";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "rslice";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "trans";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "edges";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "is2nd";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Show.showBoolean))(Model.showTransId))(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "passing";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "regular";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "left";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "right";
+                          }))(Data_Show.showRecordFieldsNil)(Model.showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "pitch";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString)))))(Model.showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "pitch";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))))))(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "left";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "right";
+                          }))(Data_Show.showRecordFieldsNil)(Model.showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "pitch";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString)))))(Model.showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "pitch";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))))))))))(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "notes";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "parents";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "x";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Show.showNumber))(Model.showParents(Model.showSliceId)))(Model.showStartStop(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "expl";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "note";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "pitch";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))(Model.showNoteExplanation))))))(Model.showSliceId))))(Model.showOp)))))(Model.showTransId))(Model.showSliceId)))(reLoad.value0)) ]) ];
+                      };
+                      if (v1 instanceof Data_Maybe.Just) {
+                          return [ Halogen_HTML_Core.text("roundtrip not ok! offending segment original: "), Halogen_HTML_Elements.pre_([ Halogen_HTML_Core.text(Data_Show.show(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "op";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "rslice";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "trans";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "edges";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "is2nd";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Show.showBoolean))(Model.showTransId))(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "passing";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "regular";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "left";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "right";
+                          }))(Data_Show.showRecordFieldsNil)(Model.showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "pitch";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString)))))(Model.showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "pitch";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))))))(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "left";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "right";
+                          }))(Data_Show.showRecordFieldsNil)(Model.showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "pitch";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString)))))(Model.showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "pitch";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))))))))))(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "notes";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "parents";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "x";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Show.showNumber))(Model.showParents(Model.showSliceId)))(Model.showStartStop(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "expl";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "note";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "pitch";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))(Model.showNoteExplanation))))))(Model.showSliceId))))(Model.showOp)))(v1.value0.value0)) ]), Halogen_HTML_Core.text(" re-read:"), Halogen_HTML_Elements.pre_([ Halogen_HTML_Core.text(Data_Show.show(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "op";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "rslice";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "trans";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "edges";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "is2nd";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Show.showBoolean))(Model.showTransId))(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "passing";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "regular";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "left";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "right";
+                          }))(Data_Show.showRecordFieldsNil)(Model.showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "pitch";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString)))))(Model.showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "pitch";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))))))(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "left";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "right";
+                          }))(Data_Show.showRecordFieldsNil)(Model.showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "pitch";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString)))))(Model.showStartStop(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "pitch";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))))))))))(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "notes";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "parents";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "x";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Show.showNumber))(Model.showParents(Model.showSliceId)))(Model.showStartStop(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "expl";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "note";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "id";
+                          }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
+                              return "pitch";
+                          }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))(Model.showNoteExplanation))))))(Model.showSliceId))))(Model.showOp)))(v1.value0.value1)) ]) ];
+                      };
+                      throw new Error("Failed pattern match at Main (line 315, column 27 - line 330, column 20): " + [ v1.constructor.name ]);
+                  };
+                  throw new Error("Failed pattern match at Main (line 313, column 21 - line 330, column 20): " + [ reLoad.constructor.name ]);
+              })()) ]);
+          };
+          throw new Error("Failed pattern match at Main (line 276, column 42 - line 331, column 12): " + [ v.model.constructor.name ]);
+      };
+      var initialState = function (input) {
+          return {
+              model: input,
+              pretty: false
+          };
+      };
+      var handleExportAction = function (v) {
+          if (v instanceof CopyToClipboard) {
+              return Effect_Class.liftEffect(Halogen_Query_HalogenM.monadEffectHalogenM(dictMonadEffect))(Utils.copyToClipboard(v.value0));
+          };
+          if (v instanceof TogglePretty) {
+              return Control_Monad_State_Class.modify_(Halogen_Query_HalogenM.monadStateHalogenM)(function (st) {
+                  var $70 = {};
+                  for (var $71 in st) {
+                      if ({}.hasOwnProperty.call(st, $71)) {
+                          $70[$71] = st[$71];
+                      };
+                  };
+                  $70.pretty = !st.pretty;
+                  return $70;
+              });
+          };
+          if (v instanceof Receive) {
+              return Control_Monad_State_Class.modify_(Halogen_Query_HalogenM.monadStateHalogenM)(function (st) {
+                  var $73 = {};
+                  for (var $74 in st) {
+                      if ({}.hasOwnProperty.call(st, $74)) {
+                          $73[$74] = st[$74];
+                      };
+                  };
+                  $73.model = v.value0;
+                  return $73;
+              });
+          };
+          throw new Error("Failed pattern match at Main (line 333, column 24 - line 336, column 59): " + [ v.constructor.name ]);
+      };
+      return Halogen_Component.mkComponent({
+          initialState: initialState,
+          render: render,
+          "eval": Halogen_Component.mkEval({
+              handleAction: handleExportAction,
+              handleQuery: Halogen_Component.defaultEval.handleQuery,
+              receive: function ($128) {
+                  return Data_Maybe.Just.create(Receive.create($128));
+              },
+              initialize: Halogen_Component.defaultEval.initialize,
+              finalize: Halogen_Component.defaultEval.finalize
+          })
+      });
+  };
+  var renderTabs = function (dictMonadEffect) {
+      return function (st) {
+          return Halogen_HTML_Elements.div_([ Halogen_HTML_Elements.div([ Render.class_("pure-menu pure-menu-horizontal") ])([ Halogen_HTML_Elements.ul([ Render.class_("pure-menu-list") ])([ Halogen_HTML_Elements.li([ Render.class_("pure-menu-item" + (function () {
+              var $77 = Data_Eq.eq(Data_Maybe.eqMaybe(CommonApp.eqTab))(st.tab)(new Data_Maybe.Just(CommonApp.HelpTab.value));
+              if ($77) {
+                  return " pure-menu-selected";
+              };
+              return "";
+          })()) ])([ Halogen_HTML_Elements.a([ Render.class_("pure-menu-link"), Halogen_HTML_Events.onClick(function (v) {
+              return new CommonApp.SwitchTab((function () {
+                  var $78 = Data_Eq.eq(Data_Maybe.eqMaybe(CommonApp.eqTab))(st.tab)(new Data_Maybe.Just(CommonApp.HelpTab.value));
+                  if ($78) {
+                      return Data_Maybe.Nothing.value;
+                  };
+                  return new Data_Maybe.Just(CommonApp.HelpTab.value);
+              })());
+          }), Halogen_HTML_Properties.href("javascript:;") ])([ Halogen_HTML_Core.text("Help") ]) ]), Halogen_HTML_Elements.li([ Render.class_("pure-menu-item" + (function () {
+              var $79 = Data_Eq.eq(Data_Maybe.eqMaybe(CommonApp.eqTab))(st.tab)(new Data_Maybe.Just(CommonApp.ImportTab.value));
+              if ($79) {
+                  return " pure-menu-selected";
+              };
+              return "";
+          })()) ])([ Halogen_HTML_Elements.a([ Render.class_("pure-menu-link"), Halogen_HTML_Events.onClick(function (v) {
+              return new CommonApp.SwitchTab((function () {
+                  var $80 = Data_Eq.eq(Data_Maybe.eqMaybe(CommonApp.eqTab))(st.tab)(new Data_Maybe.Just(CommonApp.ImportTab.value));
+                  if ($80) {
+                      return Data_Maybe.Nothing.value;
+                  };
+                  return new Data_Maybe.Just(CommonApp.ImportTab.value);
+              })());
+          }), Halogen_HTML_Properties.href("javascript:;") ])([ Halogen_HTML_Core.text("Import") ]) ]), Halogen_HTML_Elements.li([ Render.class_("pure-menu-item" + (function () {
+              var $81 = Data_Eq.eq(Data_Maybe.eqMaybe(CommonApp.eqTab))(st.tab)(new Data_Maybe.Just(CommonApp.ExportTab.value));
+              if ($81) {
+                  return " pure-menu-selected";
+              };
+              return "";
+          })()) ])([ Halogen_HTML_Elements.a([ Render.class_("pure-menu-link"), Halogen_HTML_Events.onClick(function (v) {
+              return new CommonApp.SwitchTab((function () {
+                  var $82 = Data_Eq.eq(Data_Maybe.eqMaybe(CommonApp.eqTab))(st.tab)(new Data_Maybe.Just(CommonApp.ExportTab.value));
+                  if ($82) {
+                      return Data_Maybe.Nothing.value;
+                  };
+                  return new Data_Maybe.Just(CommonApp.ExportTab.value);
+              })());
+          }), Halogen_HTML_Properties.href("javascript:;") ])([ Halogen_HTML_Core.text("Export") ]) ]) ]) ]), (function () {
+              if (st.tab instanceof Data_Maybe.Nothing) {
+                  return Halogen_HTML_Core.text("");
+              };
+              if (st.tab instanceof Data_Maybe.Just && st.tab.value0 instanceof CommonApp.HelpTab) {
+                  return helpText;
+              };
+              if (st.tab instanceof Data_Maybe.Just && st.tab.value0 instanceof CommonApp.ImportTab) {
+                  return Halogen_HTML_Elements.div([ Render.class_("tab") ])([ Halogen_HTML_Elements.button([ Render.class_("pure-button"), Halogen_HTML_Events.onClick(function (v) {
+                      return new CommonApp.LoadPiece(Utils.examplePiece);
+                  }) ])([ Halogen_HTML_Core.text("Load Example") ]), Halogen_HTML_Elements.button([ Render.class_("pure-button"), Halogen_HTML_Events.onClick(function (v) {
+                      return new CommonApp.LoadPiece(Utils.examplePieceLong);
+                  }) ])([ Halogen_HTML_Core.text("Load Example (Long)") ]) ]);
+              };
+              if (st.tab instanceof Data_Maybe.Just && st.tab.value0 instanceof CommonApp.ExportTab) {
+                  return Halogen_HTML.slot_()(new Data_Symbol.IsSymbol(function () {
+                      return "export";
+                  }))(Data_Ord.ordInt)(Type_Proxy["Proxy"].value)(0)(exportComponent(dictMonadEffect))(st.model);
+              };
+              throw new Error("Failed pattern match at Main (line 238, column 7 - line 246, column 88): " + [ st.tab.constructor.name ]);
+          })() ]);
       };
   };
   var removeAny = function (dictMonadEffect) {
@@ -16560,11 +20543,11 @@ var PS = {};
                   if (Data_Boolean.otherwise) {
                       return sel;
                   };
-                  throw new Error("Failed pattern match at Main (line 74, column 1 - line 74, column 88): " + [ v.constructor.name, sel.constructor.name ]);
+                  throw new Error("Failed pattern match at Main (line 87, column 1 - line 87, column 94): " + [ v.constructor.name, sel.constructor.name ]);
               };
               if (sel instanceof CommonApp.SelNote) {
-                  var $45 = sel.value0.note.id === v.noteId;
-                  if ($45) {
+                  var $97 = sel.value0.note.id === v.noteId;
+                  if ($97) {
                       return CommonApp.SelNote.create({
                           note: sel.value0.note,
                           expl: v.expl,
@@ -16587,12 +20570,24 @@ var PS = {};
               return Control_Bind.bind(Halogen_Query_HalogenM.bindHalogenM)(Effect_Class.liftEffect(Halogen_Query_HalogenM.monadEffectHalogenM(dictMonadEffect))(Control_Bind.bindFlipped(Effect.bindEffect)(Web_HTML_Window.document)(Web_HTML.window)))(function (doc) {
                   return Halogen_Query_HalogenM["subscribe'"](function (sid) {
                       return Halogen_Query_Event.eventListener(Web_UIEvent_KeyboardEvent_EventTypes.keyup)(Web_HTML_HTMLDocument.toEventTarget(doc))((function () {
-                          var $72 = Data_Functor.map(Data_Maybe.functorMaybe)(CommonApp.HandleKey.create);
-                          return function ($73) {
-                              return $72(Web_UIEvent_KeyboardEvent.fromEvent($73));
+                          var $129 = Data_Functor.map(Data_Maybe.functorMaybe)(CommonApp.HandleKey.create);
+                          return function ($130) {
+                              return $129(Web_UIEvent_KeyboardEvent.fromEvent($130));
                           };
                       })());
                   });
+              });
+          };
+          if (v instanceof CommonApp.SwitchTab) {
+              return Control_Monad_State_Class.modify_(Halogen_Query_HalogenM.monadStateHalogenM)(function (st) {
+                  var $102 = {};
+                  for (var $103 in st) {
+                      if ({}.hasOwnProperty.call(st, $103)) {
+                          $102[$103] = st[$103];
+                      };
+                  };
+                  $102.tab = v.value0;
+                  return $102;
               });
           };
           if (v instanceof CommonApp.HandleKey) {
@@ -16623,27 +20618,28 @@ var PS = {};
           };
           if (v instanceof CommonApp.Select) {
               return Control_Monad_State_Class.modify_(Halogen_Query_HalogenM.monadStateHalogenM)(function (st) {
-                  var $52 = {};
-                  for (var $53 in st) {
-                      if ({}.hasOwnProperty.call(st, $53)) {
-                          $52[$53] = st[$53];
+                  var $108 = {};
+                  for (var $109 in st) {
+                      if ({}.hasOwnProperty.call(st, $109)) {
+                          $108[$109] = st[$109];
                       };
                   };
-                  $52.selected = v.value0;
-                  return $52;
+                  $108.selected = v.value0;
+                  return $108;
               });
           };
           if (v instanceof CommonApp.LoadPiece) {
               return Control_Monad_State_Class.modify_(Halogen_Query_HalogenM.monadStateHalogenM)(function (st) {
-                  var $56 = {};
-                  for (var $57 in st) {
-                      if ({}.hasOwnProperty.call(st, $57)) {
-                          $56[$57] = st[$57];
+                  var $112 = {};
+                  for (var $113 in st) {
+                      if ({}.hasOwnProperty.call(st, $113)) {
+                          $112[$113] = st[$113];
                       };
                   };
-                  $56.model = Data_Maybe.Just.create(Model.loadPiece(v.value0));
-                  $56.selected = CommonApp.SelNone.value;
-                  return $56;
+                  $112.model = Data_Maybe.Just.create(Model.loadPiece(v.value0));
+                  $112.selected = CommonApp.SelNone.value;
+                  $112.tab = Data_Maybe.Nothing.value;
+                  return $112;
               });
           };
           if (v instanceof CommonApp.MergeAtSelected) {
@@ -16669,18 +20665,18 @@ var PS = {};
                   return Model.noteSetExplanation(v1.noteId)(v1.expl);
               })(false))(function () {
                   return Control_Monad_State_Class.modify_(Halogen_Query_HalogenM.monadStateHalogenM)(function (st) {
-                      var $63 = {};
-                      for (var $64 in st) {
-                          if ({}.hasOwnProperty.call(st, $64)) {
-                              $63[$64] = st[$64];
+                      var $119 = {};
+                      for (var $120 in st) {
+                          if ({}.hasOwnProperty.call(st, $120)) {
+                              $119[$120] = st[$120];
                           };
                       };
-                      $63.selected = updateSelection(v.value0)(st.selected);
-                      return $63;
+                      $119.selected = updateSelection(v.value0)(st.selected);
+                      return $119;
                   });
               });
           };
-          throw new Error("Failed pattern match at Main (line 83, column 16 - line 114, column 70): " + [ v.constructor.name ]);
+          throw new Error("Failed pattern match at Main (line 96, column 16 - line 128, column 70): " + [ v.constructor.name ]);
       };
   };
   var combineAny = function (dictMonadEffect) {
@@ -16696,13 +20692,9 @@ var PS = {};
   };
   var appComponent = function (dictMonadEffect) {
       var render = function (st) {
-          return Halogen_HTML_Elements.div([  ])([ Halogen_HTML_Elements.h1_([ Halogen_HTML_Core.text("Proto-Voice Annotation") ]), Halogen_HTML_Elements.button([ Halogen_HTML_Events.onClick(function (v) {
-              return new CommonApp.LoadPiece(Utils.examplePiece);
-          }) ])([ Halogen_HTML_Core.text("Load Example") ]), Halogen_HTML_Elements.button([ Halogen_HTML_Events.onClick(function (v) {
-              return new CommonApp.LoadPiece(Utils.examplePieceLong);
-          }) ])([ Halogen_HTML_Core.text("Load Example (Long)") ]), Halogen_HTML_Elements.button([ Halogen_HTML_Events.onClick(function (v) {
+          return Halogen_HTML_Elements.div([  ])([ Halogen_HTML_Elements.h1_([ Halogen_HTML_Core.text("Proto-Voice Annotation Tool") ]), renderTabs(dictMonadEffect)(st), Halogen_HTML_Elements.h2_([ Halogen_HTML_Core.text("Annotation") ]), Halogen_HTML_Elements.button([ Render.class_("pure-button"), Halogen_HTML_Events.onClick(function (v) {
               return CommonApp.CombineAny.value;
-          }), Halogen_HTML_Properties.enabled(CommonApp.outerSelected(st.selected)) ])([ Halogen_HTML_Core.text("Combine (Enter)") ]), Halogen_HTML_Elements.button([ Halogen_HTML_Events.onClick(function (v) {
+          }), Halogen_HTML_Properties.enabled(CommonApp.outerSelected(st.selected)) ])([ Halogen_HTML_Core.text("Combine (Enter)") ]), Halogen_HTML_Elements.button([ Render.class_("pure-button"), Halogen_HTML_Events.onClick(function (v) {
               return CommonApp.RemoveAny.value;
           }), Halogen_HTML_Properties.enabled(CommonApp.outerSelected(st.selected)) ])([ Halogen_HTML_Core.text("Remove (Backspace)") ]), (function () {
               if (st.model instanceof Data_Maybe.Nothing) {
@@ -16711,15 +20703,16 @@ var PS = {};
               if (st.model instanceof Data_Maybe.Just) {
                   var valid = Validation.validateReduction(st.model.value0.reduction);
                   var graph = Folding.evalGraph(st.model.value0.reduction);
-                  return Halogen_HTML_Elements.div_([ Halogen_HTML_Elements.p_([ Render.renderNoteExplanation(graph)(st.selected) ]), Render.renderReduction(st.model.value0.piece)(graph)(valid)(st.selected), Render.renderLeftmost(st.model.value0.reduction) ]);
+                  return Halogen_HTML_Elements.div_([ Halogen_HTML_Elements.p_([ Render.renderNoteExplanation(graph)(st.selected) ]), Render.renderReduction(st.model.value0.piece)(graph)(valid)(st.selected) ]);
               };
-              throw new Error("Failed pattern match at Main (line 141, column 9 - line 152, column 16): " + [ st.model.constructor.name ]);
-          })(), Halogen_HTML_Elements.p_([ Halogen_HTML_Core.text("Selection: "), Halogen_HTML_Core.text(Data_Show.show(CommonApp.showOuterSelection)(st.selected)) ]) ]);
+              throw new Error("Failed pattern match at Main (line 161, column 9 - line 171, column 16): " + [ st.model.constructor.name ]);
+          })() ]);
       };
       var initialState = function (v) {
           return {
               selected: CommonApp.SelNone.value,
-              model: Data_Maybe.Nothing.value
+              model: Data_Maybe.Nothing.value,
+              tab: new Data_Maybe.Just(CommonApp.ImportTab.value)
           };
       };
       return Halogen_Component.mkComponent({
@@ -16745,5 +20738,12 @@ var PS = {};
   exports["removeAny"] = removeAny;
   exports["handleAction"] = handleAction;
   exports["appComponent"] = appComponent;
+  exports["helpText"] = helpText;
+  exports["renderTabs"] = renderTabs;
+  exports["UpdateJSONInput"] = UpdateJSONInput;
+  exports["CopyToClipboard"] = CopyToClipboard;
+  exports["TogglePretty"] = TogglePretty;
+  exports["Receive"] = Receive;
+  exports["exportComponent"] = exportComponent;
 })(PS);
 PS["Main"].main();
