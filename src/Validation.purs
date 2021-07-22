@@ -33,6 +33,9 @@ type Validation
     , slices :: M.Map SliceId SliceError
     }
 
+validationIsOk :: Validation -> Boolean
+validationIsOk val = M.isEmpty val.notes && M.isEmpty val.edges && M.isEmpty val.slices
+
 -- TODO: check that every hori parent note is pointed to at least once
 validateSlice :: Slice -> Validation -> Validation
 validateSlice slice st =

@@ -1,5 +1,12 @@
 "use strict";
 
+exports.unsafeStringifyPretty = function(json) {
+    return JSON.stringify(json, null, 2);
+};
+
+exports.copyToClipboard = str => () =>
+    navigator.clipboard.writeText(str);
+
 exports.examplePieceJSON = [
     {time: "0,4,3/4", notes: [{ pitch: "D5", hold: false }]},
     {time: "1,1,0", notes: [

@@ -7,11 +7,12 @@ import Data.Array as A
 import Data.Either (Either(..))
 import Data.Foldable (class Foldable, foldl)
 import Data.List (List(..), (:))
+import Data.List as L
 import Data.Map as M
 import Data.Maybe (Maybe(..))
 import Data.Tuple (Tuple(..))
-import Leftmost (FreezeOp(..), HoriChildren(..), HoriOp(..), Leftmost(..), RootOrnament(..), SplitOp(..))
-import Model (DoubleOrnament(..), Edge, Edges, EndSegment, LeftOrnament, Note, NoteExplanation(..), Op(..), Reduction, RightOrnament, Segment, Slice, SliceId(..), StartStop(..), TransId, Transition, attachSegment, getInnerNotes)
+import Leftmost (FreezeOp(..), HoriChildren(..), HoriOp(..), Leftmost(..), RootOrnament(..), SplitOp(..), horiLeftChildren, horiRightChildren, splitGetChildNotes)
+import Model (DoubleOrnament(..), Edges, EndSegment, Note, NoteExplanation(..), Notes, Op(..), Parents(..), Reduction, Segment, Slice, SliceId(..), StartStop(..), TransId(..), Transition, attachSegment, detachSegment, getInnerNotes, incS, incT, parentEdges, vertEdgesLeft, vertEdgesRight)
 
 type AgendaItem a
   = { seg :: Segment, more :: a }
@@ -252,6 +253,8 @@ reductionToLeftmost reduction = A.reverse $ A.fromFoldable $ flip ST.execState N
     , hori
     }
     where
+    getUnexplained slice = map _.note $ A.filter (\{ expl } -> expl == NoExpl) $ getInnerNotes slice
+
     mkFreeze seg = FreezeOp { ties: seg.trans.edges.regular }
 
     mkSplit seg childl childr =
@@ -263,18 +266,20 @@ reductionToLeftmost reduction = A.reverse $ A.fromFoldable $ flip ST.execState N
           , passing: M.fromFoldableWith (<>) n
           , fromLeft: M.fromFoldableWith (<>) r
           , fromRight: M.fromFoldableWith (<>) l
+          , unexplained: getUnexplained childl.rslice
           , keepLeft: childl.trans.edges.regular
           , keepRight: childr.trans.edges.regular
+          , ids: { left: childl.trans.id, slice: childl.rslice.id, right: childr.trans.id }
           }
       where
       getElaboration n = case n.expl of
-        DoubleExpl { orn: Just orn, leftParent, rightParent } ->
-          if orn == PassingLeft || orn == PassingRight || orn == PassingMid then
+        DoubleExpl { orn: orn, leftParent, rightParent } ->
+          if orn == Just PassingLeft || orn == Just PassingRight || orn == Just PassingMid then
             Just $ EN $ Tuple { left: Inner leftParent, right: Inner rightParent } [ { child: n.note, orn } ]
           else
             Just $ ET $ Tuple { left: Inner leftParent, right: Inner rightParent } [ { child: n.note, orn: Right orn } ]
-        RightExpl { orn: Just orn, leftParent } -> Just $ ER $ Tuple leftParent [ { child: n.note, orn } ]
-        LeftExpl { orn: Just orn, rightParent } -> Just $ EL $ Tuple rightParent [ { child: n.note, orn } ]
+        RightExpl { orn: orn, leftParent } -> Just $ ER $ Tuple leftParent [ { child: n.note, orn } ]
+        LeftExpl { orn: orn, rightParent } -> Just $ EL $ Tuple rightParent [ { child: n.note, orn } ]
         RootExpl -> Just $ ET $ Tuple { left: Start, right: Stop } [ { child: n.note, orn: Left RootNote } ]
         _ -> Nothing
 
@@ -285,6 +290,8 @@ reductionToLeftmost reduction = A.reverse $ A.fromFoldable $ flip ST.execState N
         HoriOp
           { children: M.fromFoldableWith (<>) children
           , midEdges: childm.trans.edges
+          , ids: { left: childl.trans.id, lslice: childl.rslice.id, mid: childm.trans.id, rslice: childm.rslice.id, right: childr.trans.id }
+          , unexplained: { left: getUnexplained childl.rslice, right: getUnexplained childm.rslice }
           }
       where
       horiChild wrapper { note, expl } = case expl of
@@ -310,3 +317,137 @@ reductionToLeftmost reduction = A.reverse $ A.fromFoldable $ flip ST.execState N
     hori _ { seg } { childl, childm, childr } = do
       ST.modify_ (Cons $ LMHorizontalize $ mkHori seg childl childm childr)
       pure $ nothingMore <$> childl : childm : attachSegment childr seg.rslice : Nil
+
+leftmostToReduction ::
+  Array { trans :: Transition, rslice :: { id :: SliceId, notes :: StartStop (Array Note) } } ->
+  Array (Leftmost SplitOp FreezeOp HoriOp) ->
+  Either String Reduction
+leftmostToReduction topSegments deriv = do
+  (Tuple segments st) <-
+    ST.runStateT
+      (go startSlice (L.fromFoldable $ prepareTop <$> topSegments) (L.fromFoldable deriv))
+      { maxS: SliceId 0, maxT: TransId 0, x: 0.0 }
+  pure
+    { start: startSlice
+    , segments
+    , nextSliceId: incS st.maxS
+    , nextTransId: incT st.maxT
+    }
+  where
+  startSlice = { id: SliceId 0, x: 0.0, notes: Start, parents: NoParents }
+
+  prepareTop { trans, rslice: { id, notes } } =
+    { transId: trans.id
+    , rslice:
+        { id
+        , parents: NoParents
+        , notes: map (\note -> { note, expl: NoExpl }) <$> notes
+        }
+    }
+
+  go ::
+    Slice ->
+    List { transId :: TransId, rslice :: { id :: SliceId, notes :: StartStop Notes, parents :: Parents SliceId } } ->
+    List (Leftmost SplitOp FreezeOp HoriOp) ->
+    ST.StateT { maxS :: SliceId, maxT :: TransId, x :: Number } (Either String) (List Segment)
+  go _ Nil Nil = pure Nil
+
+  go leftSlice (Cons top tops) (Cons op ops) = case tops of
+    -- two or more tops left
+    Cons top2 tops2 -> case op of
+      LMFreezeLeft (FreezeOp f) -> do
+        top' <- freeze f.ties top
+        Cons top' <$> go top'.rslice tops ops
+      LMSplitLeft split -> do
+        { childlTop, childrTop } <- prepareSplit leftSlice.id top split
+        segs <- go leftSlice (Cons childlTop $ Cons childrTop tops) ops
+        case segs of
+          Cons childl (Cons childr rest) -> pure $ Cons (completeSplit top childl childr) rest
+          _ -> ST.lift $ Left "Operations after splitLeft do not fit!"
+      LMSplitRight split -> do
+        { childlTop, childrTop } <- prepareSplit top.rslice.id top2 split
+        segs <- go leftSlice (Cons top $ Cons childlTop $ Cons childrTop tops2) ops
+        case segs of
+          Cons top' (Cons childl (Cons childr rest)) -> pure $ Cons top' $ Cons (completeSplit top2 childl childr) rest
+          _ -> ST.lift $ Left "Operations after splitRight do not fit!"
+      LMHorizontalize hori -> do
+        { childlTop, childmTop, childrTop } <- prepareHori top top2 hori
+        segs <- go leftSlice (Cons childlTop $ Cons childmTop $ Cons childrTop tops2) ops
+        case segs of
+          Cons childl (Cons childm (Cons childr rest)) -> do
+            { segl, segr } <- ST.lift $ completeHori top top2 childl childm childr
+            pure $ Cons segl $ Cons segr rest
+          _ -> ST.lift $ Left "Operations after hori do not fit!"
+      _ -> ST.lift $ Left "Applying a single-transition operation while several transitions are left!"
+    -- only a single top left
+    Nil -> case op of
+      LMFreezeOnly (FreezeOp f) -> do
+        seg <- freeze f.ties top
+        pure $ Cons seg Nil
+      LMSplitOnly split -> do
+        { childlTop, childrTop } <- prepareSplit leftSlice.id top split
+        segs <- go leftSlice (Cons childlTop $ Cons childrTop Nil) ops
+        case segs of
+          Cons childl (Cons childr Nil) -> pure $ Cons (completeSplit top childl childr) Nil
+          _ -> ST.lift $ Left "Operations after splitOnly do not fit!"
+      _ -> ST.lift $ Left "Applying a non-single operation to a single transition!"
+
+  go _ _ _ = ST.lift $ Left "Lengths of top-level and derivation do not match!"
+
+  freeze ties { transId: tid, rslice: { id: sid, notes, parents } } = do
+    st <- ST.modify \st -> st { x = st.x + 1.0, maxT = max st.maxT tid, maxS = max st.maxS sid }
+    pure $ { trans: { id: tid, edges: { passing: [], regular: ties }, is2nd: false }, rslice: { id: sid, notes, parents, x: st.x }, op: Freeze }
+
+  prepareSplit leftSliceId top split@(SplitOp s) = do
+    ST.modify_ \st -> st { maxT = max st.maxT top.transId }
+    childNotes <- ST.lift $ splitGetChildNotes split
+    let
+      childSlice = { id: s.ids.slice, notes: Inner childNotes, parents: MergeParents { left: leftSliceId, right: top.rslice.id } }
+
+      childlTop = { transId: s.ids.left, rslice: childSlice }
+
+      childrTop = { transId: s.ids.right, rslice: top.rslice }
+    pure { childlTop, childrTop }
+
+  completeSplit top childl childr =
+    { trans: { id: top.transId, edges: parentEdges childl.rslice, is2nd: childl.trans.is2nd }
+    , rslice: childr.rslice
+    , op: Split { childl, childr: detachSegment childr }
+    }
+
+  prepareHori topl topr hori@(HoriOp h) = do
+    ST.modify_ \st -> st { maxT = max st.maxT (max topl.transId topr.transId), maxS = max st.maxS topl.rslice.id }
+    let
+      childlTop =
+        { transId: h.ids.left
+        , rslice: { id: h.ids.lslice, notes: Inner $ horiLeftChildren hori, parents: VertParent topl.rslice.id }
+        }
+
+      childmTop =
+        { transId: h.ids.mid
+        , rslice: { id: h.ids.rslice, notes: Inner $ horiRightChildren hori, parents: VertParent topl.rslice.id }
+        }
+
+      childrTop = { transId: h.ids.right, rslice: topr.rslice }
+    pure { childlTop, childmTop, childrTop }
+
+  completeHori topl topr childl childm childr = do
+    edgesL <- vertEdgesLeft childl.trans.edges childl.rslice
+    edgesR <- vertEdgesRight childr.trans.edges childm.rslice
+    let
+      segl =
+        { trans: { id: topl.transId, edges: edgesL, is2nd: false }
+        , rslice: topSlice
+        , op: Hori { childl, childm, childr: detachSegment childr }
+        }
+
+      segr =
+        { trans: { id: topr.transId, edges: edgesR, is2nd: true }
+        , rslice: childr.rslice
+        , op: Freeze
+        }
+    pure { segl, segr }
+    where
+    { id, notes, parents } = topl.rslice
+
+    topSlice = { id, notes, parents, x: (childl.rslice.x + childm.rslice.x) / 2.0 }

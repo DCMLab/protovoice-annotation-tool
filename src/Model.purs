@@ -2,7 +2,7 @@ module Model where
 
 import Prelude
 import Common (MBS)
-import Data.Array (catMaybes, filter)
+import Data.Array (filter)
 import Data.Array as A
 import Data.Either (Either(..))
 import Data.Foldable (find, foldl, for_, intercalate)
@@ -17,6 +17,7 @@ import Data.Pitches (class Interval, Pitch, SPitch, direction, ic, isStep, pc, p
 import Data.Show.Generic (genericShow)
 import Data.Traversable (scanl)
 import Data.Tuple (Tuple(..))
+import Debug (spyWith)
 import Effect (Effect)
 import Effect.Console (log, logShow)
 import Simple.JSON (writeImpl)
@@ -273,9 +274,13 @@ newtype SliceId
 instance showSliceId :: Show SliceId where
   show (SliceId i) = "s" <> show i
 
-derive instance eqSliceId :: Eq SliceId
+derive newtype instance eqSliceId :: Eq SliceId
 
-derive instance ordSliceId :: Ord SliceId
+derive newtype instance ordSliceId :: Ord SliceId
+
+derive newtype instance readForeignSliceId :: JSON.ReadForeign SliceId
+
+derive newtype instance writeForeignSliceId :: JSON.WriteForeign SliceId
 
 incS :: SliceId -> SliceId
 incS (SliceId i) = SliceId $ i + 1
@@ -286,9 +291,13 @@ newtype TransId
 instance showTransId :: Show TransId where
   show (TransId i) = "t" <> show i
 
-derive instance eqTransId :: Eq TransId
+derive newtype instance eqTransId :: Eq TransId
 
-derive instance ordTransId :: Ord TransId
+derive newtype instance ordTransId :: Ord TransId
+
+derive newtype instance readForeignTransId :: JSON.ReadForeign TransId
+
+derive newtype instance writeForeignTransId :: JSON.WriteForeign TransId
 
 incT :: TransId -> TransId
 incT (TransId i) = TransId $ i + 1
@@ -445,7 +454,7 @@ thawTrans ties id slice =
 thawSlice :: Array { note :: Note, hold :: Boolean } -> Int -> Slice
 thawSlice slice id =
   { id: SliceId id
-  , notes: Inner $ map (\n -> { note: n.note, expl: NoExpl }) slice
+  , notes: Inner $ map (\n -> { note: n.note, expl: NoExpl }) $ A.sortWith _.note slice
   , x: toNumber id
   , parents: NoParents
   }
@@ -538,21 +547,21 @@ setParents p seg = case p of
     , Inner rnotes <- rightSlice.notes =
       let
         rightExpls =
-          catMaybes do
+          A.catMaybes do
             { note: ln } <- lnotes
             pure do
               orn <- findRightOrn child.note.pitch ln
               pure $ RightExpl { orn: Just orn, leftParent: ln }
 
         leftExpls =
-          catMaybes do
+          A.catMaybes do
             { note: rn } <- rnotes
             pure do
               orn <- findLeftOrn child.note.pitch rn
               pure $ LeftExpl { orn: Just orn, rightParent: rn }
 
         doubleExpls =
-          catMaybes do
+          A.catMaybes do
             { note: ln } <- lnotes
             { note: rn } <- rnotes
             pure do
@@ -657,7 +666,7 @@ mkVert tid sid l@{ rslice: { notes: Inner notesl } } m@{ rslice: { notes: Inner 
     mkLeftParent lfound = do
       let
         childl = setParents (VertParent topSlice) (attachSegment lfound l.rslice)
-      leftEdges <- vertEdgesLeft lfound.trans.edges childl.rslice
+      leftEdges <- spyWith "vertL" show $ vertEdgesLeft lfound.trans.edges childl.rslice
       pure
         { trans: { id: tid, is2nd: false, edges: leftEdges }
         , op: Hori { childl, childm, childr: detachSegment r }
@@ -668,12 +677,12 @@ mkVert _ _ _ _ _ = Left "Cannot vert an outer slice!"
 -- | Applies a verticalization at transition 'transId', if it exists on the reduction surface.
 vertAtMid :: TransId -> Model -> Either String Model
 vertAtMid transId model = case doVert model.reduction.start model.reduction.segments of
-  Right { tail': segments', dangling } -> case dangling of
+  Right { seg', tail', dangling } -> case dangling of
     Nothing ->
       Right
         model
           { reduction
-            { segments = segments'
+            { segments = Cons seg' tail'
             , nextTransId = incT $ incT nextTId
             , nextSliceId = incS nextSId
             }
@@ -691,16 +700,16 @@ vertAtMid transId model = case doVert model.reduction.start model.reduction.segm
   doVert ::
     Slice ->
     List Segment ->
-    Either String { tail' :: List Segment, dangling :: Maybe { dist :: Int, mkLeftParent :: EndSegment -> Either String EndSegment, topSlice :: Slice } }
+    Either String { seg' :: Segment, tail' :: List Segment, dangling :: Maybe { dist :: Int, mkLeftParent :: EndSegment -> Either String EndSegment, topSlice :: Slice } }
   doVert leftSlice (Cons l tail@(Cons m (Cons r rest)))
     | m.trans.id == transId = do
       { mkLeftParent, rightParent, topSlice } <- mkVert nextTId nextSId l m r
-      tryInsert 0 topSlice mkLeftParent leftSlice (l { rslice = topSlice }) $ Cons rightParent rest
+      tryInsert 0 topSlice mkLeftParent leftSlice (l { rslice = topSlice }) rightParent rest
     | otherwise = do
-      { tail', dangling } <- doVert l.rslice tail
+      { seg': m', tail': tailm', dangling } <- doVert l.rslice tail
       case dangling of
-        Nothing -> Right { tail': Cons l tail', dangling: Nothing }
-        Just { dist, mkLeftParent, topSlice } -> tryInsert dist topSlice mkLeftParent leftSlice l tail'
+        Nothing -> Right { seg': l, tail': Cons m' tailm', dangling: Nothing }
+        Just { dist, mkLeftParent, topSlice } -> tryInsert dist topSlice mkLeftParent leftSlice l m' tailm'
 
   doVert _ _ = Left $ "Cannot hori at " <> show transId
 
@@ -712,15 +721,15 @@ vertAtMid transId model = case doVert model.reduction.start model.reduction.segm
     (EndSegment -> Either String EndSegment) ->
     Slice ->
     Segment ->
+    Segment ->
     List Segment ->
-    Either String { tail' :: List Segment, dangling :: Maybe { dist :: Int, mkLeftParent :: EndSegment -> Either String EndSegment, topSlice :: Slice } }
-  tryInsert dist topSlice mkLeftParent leftSlice l t' = do
-    { seg': l', leftover } <- insertDangling dist topSlice mkLeftParent leftSlice (detachSegment l)
-    let
-      tail' = Cons (attachSegment l' l.rslice) t'
+    Either String { seg' :: Segment, tail' :: List Segment, dangling :: Maybe { dist :: Int, mkLeftParent :: EndSegment -> Either String EndSegment, topSlice :: Slice } }
+  tryInsert dist topSlice mkLeftParent leftSlice segl segr tail = do
+    { segl', segr', tail', leftover } <-
+      insertDangling dist topSlice mkLeftParent leftSlice segl segr tail
     pure case leftover of
-      Nothing -> { tail', dangling: Nothing }
-      Just n -> { tail', dangling: Just { dist: dist + 1 + n, mkLeftParent, topSlice } }
+      Nothing -> { seg': segl', tail': Cons segr' tail', dangling: Nothing }
+      Just n -> { seg': segl', tail': Cons segr' tail', dangling: Just { dist: dist + 1 + n, mkLeftParent, topSlice } }
 
   -- Insert the operation as deep as possible into the graph, until a suitable place is found.
   -- If the place is not found, return the leftovers,
@@ -731,53 +740,105 @@ vertAtMid transId model = case doVert model.reduction.start model.reduction.segm
     Slice ->
     (EndSegment -> Either String EndSegment) ->
     Slice ->
-    EndSegment ->
-    Either String { seg' :: EndSegment, leftover :: Maybe Int }
-  insertDangling dist topSlice mkLeftParent leftSlice seg
+    Segment ->
+    Segment ->
+    List Segment ->
+    Either String { segl' :: Segment, segr' :: Segment, tail' :: List Segment, leftover :: Maybe Int }
+  insertDangling dist topSlice mkLeftParent leftSlice segl segr tail
     -- can be inserted here: return update segment (no leftovers)
-    | dist == 0, not seg.trans.is2nd = do
-      seg' <- mkLeftParent seg
-      pure { seg', leftover: Nothing }
+    | dist == 0, not segl.trans.is2nd = do
+      segl' <- mkLeftParent (detachSegment segl)
+      pure { segl': attachSegment segl' segl.rslice, segr': segr, tail': tail, leftover: Nothing }
     -- cannot be inserted here: descend and return updated segment + leftovers
-    | otherwise = case seg.op of
+    | otherwise = case segl.op of
       -- freeze: cannot descend -> introduce leftovers
-      Freeze -> Right { seg': seg, leftover: Just 0 }
+      Freeze -> Right { segl': segl, segr': segr, tail': tail, leftover: Just 0 }
       -- split: first try to descend on childr, then on childl; pass on remaining leftovers
       Split { childl, childr } -> do
-        { seg': childr', leftover: lor } <- insertDangling dist topSlice mkLeftParent childl.rslice childr
+        -- try inserting under right child
+        { segl': childr', segr', tail', leftover: lor } <-
+          insertDangling dist topSlice mkLeftParent childl.rslice (attachSegment childr segl.rslice) segr tail
+        -- fix the parent of childl after inserting under childr
         childlFixed <-
           if dist == 0 then case childl.rslice.parents of
-            MergeParents { left } -> Right $ resetExpls $ setParents (MergeParents { left: leftSlice, right: topSlice }) childl
+            MergeParents { left } -> Right $ setParents (MergeParents { left: leftSlice, right: topSlice }) $ resetExpls childl
             _ -> Left "invalid derivation structure: non-merge parents on merge slice"
           else
             pure childl
-        case lor of
-          Nothing -> pure $ { seg': seg { op = Split { childl: childlFixed, childr: childr' } }, leftover: Nothing }
-          Just nlor -> do
-            { seg': childl'End, leftover: lol } <- insertDangling (dist + nlor + 1) topSlice mkLeftParent leftSlice (detachSegment childlFixed)
-            let
-              childl' = attachSegment childl'End childlFixed.rslice
-
-              seg' = seg { op = Split { childl: childl', childr: childr' } }
-            pure $ { seg', leftover: (_ + 1) <$> lol }
-      -- hori: first try to descend on childr, then childm, then childl; pass on remaining leftovers
-      Hori { childl, childm, childr } -> do
-        { seg': childr', leftover: lor } <- insertDangling (dist - 1) topSlice mkLeftParent childm.rslice childr
-        case lor of
-          Nothing -> pure { seg': seg { op = Hori { childl, childm, childr: childr' } }, leftover: Nothing }
-          Just nlor -> do
-            { seg': childm'End, leftover: lom } <- insertDangling (dist + nlor) topSlice mkLeftParent childl.rslice (detachSegment childm)
-            let
-              childm' = attachSegment childm'End childm.rslice
-            case lom of
-              Nothing -> pure { seg': seg { op = Hori { childl, childm: childm', childr: childr' } }, leftover: Nothing }
-              Just nlom -> do
-                { seg': childl'End, leftover: lol } <- insertDangling (dist + 1 + nlom) topSlice mkLeftParent leftSlice (detachSegment childl)
+        case lor of -- check if inserting under right child was complete
+          Nothing ->  -- yes? return updated segments
+            pure
+              $ { segl':
+                    segl
+                      { op = Split { childl: childlFixed, childr: detachSegment childr' }
+                      , trans { edges = parentEdges childlFixed.rslice }
+                      }
+                , segr'
+                , tail'
+                , leftover: Nothing
+                }
+          Just nlor -> do -- no? try inserting under left child
+            { segl': childl', segr': childr'', tail': ltail, leftover: lol } <-
+              insertDangling (dist + nlor + 1) topSlice mkLeftParent leftSlice childlFixed childr' (Cons segr' tail')
+            case ltail of
+              Cons segr'' tail'' -> do
                 let
-                  childl' = attachSegment childl'End childl.rslice
-
-                  seg' = seg { op = Hori { childl: childl', childm: childm', childr: childr' } }
-                pure { seg', leftover: (_ + 2) <$> lol }
+                  segl' = segl { op = Split { childl: childl', childr: detachSegment childr'' } }
+                pure $ { segl', segr': segr'', tail': tail'', leftover: (_ + 1) <$> lol }
+              _ -> Left "Returned tail too short (splitLeft). This is a bug!"
+      -- hori: first try to descend on childr, then childm, then childl; pass on remaining leftovers
+      Hori { childl, childm, childr } -> case segr.op of -- right split before hori?
+        Hori _ -> Left "Not a leftmost derivation (Hori right of Hori)!"
+        -- right split: recur using left child, then update it
+        Split s -> do
+          { segl', segr': splitChildl', tail': remTail, leftover } <-
+            insertDangling dist topSlice mkLeftParent leftSlice segl s.childl (Cons (attachSegment s.childr segr.rslice) tail)
+          case remTail of
+            Cons splitChildr' tail' -> do
+              let
+                splitOp' = Split { childl: splitChildl', childr: detachSegment splitChildr' }
+              pure { segl', segr': segr { op = splitOp' }, tail', leftover }
+            _ -> Left "Returned tail too short (splitRight). This is a bug!"
+        -- no right split: process hori itself
+        Freeze -> case tail of
+          Nil -> Left "Tail too short (hori). This is a bug!"
+          Cons nextsegr rtail -> do
+            -- try inserting under right child
+            { segl': childr'r, segr': nextsegr', tail': rtail', leftover: lor } <-
+              insertDangling (dist - 1) topSlice mkLeftParent childm.rslice (attachSegment childr segl.rslice) nextsegr rtail
+            let
+              tail'r = Cons nextsegr' rtail'
+            case lor of -- insertion under right child complete?
+              Nothing -> do
+                let
+                  op' = Hori { childl, childm, childr: detachSegment childr'r }
+                segr'r <- fixRight childm childr'r
+                pure { segl': segl { op = op' }, segr': segr'r, tail': tail'r, leftover: Nothing }
+              Just nlor -> do
+                -- try inserting under middle child
+                { segl': childm'm, segr': childr'm, tail': tail'm, leftover: lom } <-
+                  insertDangling (dist + nlor) topSlice mkLeftParent childl.rslice childm childr'r tail'r
+                case lom of -- insertion under middle child complete?
+                  Nothing -> do
+                    let
+                      op' = Hori { childl, childm: childm'm, childr: detachSegment childr'm }
+                    segr'm <- fixRight childm'm childr'm
+                    pure { segl': segl { op = op' }, segr': segr'm, tail': tail'm, leftover: Nothing }
+                  Just nlom -> do
+                    -- try inserting under left child
+                    { segl': childl'l, segr': childm'l, tail': tailAndChildr'l, leftover: lol } <-
+                      insertDangling (dist + 1 + nlom) topSlice mkLeftParent leftSlice childl childm'm (Cons childr'm tail'm)
+                    case tailAndChildr'l of
+                      Nil -> Left "Returned tail too short (hori). This is a bug!"
+                      Cons childr'l tail'l -> do
+                        let
+                          op' = Hori { childl: childl'l, childm: childm'l, childr: detachSegment childr'l }
+                        segr'l <- fixRight childm'l childr'l
+                        pure { segl': segl { op = op' }, segr': segr'l, tail': tail'l, leftover: (_ + 2) <$> lol }
+      where
+      fixRight childm childr = do
+        edges' <- vertEdgesRight childr.trans.edges childm.rslice
+        pure segr { trans { edges = edges' } }
 
 -- | Undoes a merge at transition 'transId', if it exists, restoring its children.
 undoMergeAtTrans :: TransId -> Model -> Either String Model

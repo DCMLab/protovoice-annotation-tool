@@ -1,16 +1,20 @@
 module Leftmost where
 
 import Prelude
+import Data.Array (sortWith)
+import Data.Array as A
 import Data.Either (Either(..))
 import Data.Generic.Rep (class Generic)
 import Data.Map as M
+import Data.Maybe (Maybe)
 import Data.Show.Generic (genericShow)
-import Data.Symbol (SProxy(..))
+import Data.Traversable (sequence)
 import Data.Tuple (Tuple(..))
-import Data.Variant (Variant, inj)
-import Model (DoubleOrnament, Edge, Edges, LeftOrnament, Note, RightOrnament)
-import Simple.JSON (writeJSON)
+import Model (DoubleOrnament, Edge, Edges, LeftOrnament, Note, NoteExplanation(..), Notes, RightOrnament, SliceId, StartStop(..), TransId)
 
+----------------
+-- operations --
+----------------
 data Leftmost s f h
   = LMSplitLeft s
   | LMFreezeLeft f
@@ -24,21 +28,67 @@ derive instance genericLeftmost :: Generic (Leftmost s f h) _
 instance showLeftmost :: (Show s, Show f, Show h) => Show (Leftmost s f h) where
   show lm = genericShow lm
 
-----------------
--- operations --
-----------------
 data RootOrnament
   = RootNote
 
 newtype SplitOp
   = SplitOp
-  { regular :: M.Map Edge (Array { child :: Note, orn :: Either RootOrnament DoubleOrnament })
-  , passing :: M.Map Edge (Array { child :: Note, orn :: DoubleOrnament })
-  , fromLeft :: M.Map Note (Array { child :: Note, orn :: RightOrnament })
-  , fromRight :: M.Map Note (Array { child :: Note, orn :: LeftOrnament })
+  { regular :: M.Map Edge (Array { child :: Note, orn :: Either RootOrnament (Maybe DoubleOrnament) })
+  , passing :: M.Map Edge (Array { child :: Note, orn :: Maybe DoubleOrnament })
+  , fromLeft :: M.Map Note (Array { child :: Note, orn :: Maybe RightOrnament })
+  , fromRight :: M.Map Note (Array { child :: Note, orn :: Maybe LeftOrnament })
+  , unexplained :: Array Note
   , keepLeft :: Array Edge
   , keepRight :: Array Edge
+  , ids :: { left :: TransId, slice :: SliceId, right :: TransId }
   }
+
+leftEdges :: forall o. M.Map Edge (Array { child :: Note | o }) -> Array Edge
+leftEdges splits = do
+  Tuple parent children <- M.toUnfoldable splits
+  child <- children
+  pure { left: parent.left, right: Inner child.child }
+
+rightEdges :: forall o. M.Map Edge (Array { child :: Note | o }) -> Array Edge
+rightEdges splits = do
+  Tuple parent children <- M.toUnfoldable splits
+  child <- children
+  pure { left: Inner child.child, right: parent.right }
+
+extractChildNotes ::
+  forall p o.
+  M.Map p (Array { child :: Note, orn :: o }) ->
+  (p -> o -> Either String NoteExplanation) ->
+  Either String Notes
+extractChildNotes splits f =
+  sequence do
+    Tuple parent children <- M.toUnfoldable splits
+    child <- children
+    pure case f parent child.orn of
+      Left err -> Left err
+      Right expl -> Right { note: child.child, expl }
+
+splitGetChildNotes :: SplitOp -> Either String Notes
+splitGetChildNotes (SplitOp s) = do
+  regular <-
+    extractChildNotes s.regular \p o -> case o of
+      Left RootNote -> Right RootExpl
+      Right orn -> case p.left of
+        Inner leftParent -> case p.right of
+          Inner rightParent -> Right $ DoubleExpl { leftParent, rightParent, orn }
+          _ -> Left "Parent note cannot be Start or Stop!"
+        _ -> Left "Parent note cannot be Start or Stop!"
+  passing <-
+    extractChildNotes s.passing \p orn -> case p.left of
+      Inner leftParent -> case p.right of
+        Inner rightParent -> Right $ DoubleExpl { leftParent, rightParent, orn }
+        _ -> Left "Parent note cannot be Start or Stop!"
+      _ -> Left "Parent note cannot be Start or Stop!"
+  fromLeft <- extractChildNotes s.fromLeft \p orn -> Right $ RightExpl { leftParent: p, orn }
+  fromRight <- extractChildNotes s.fromRight \p orn -> Right $ LeftExpl { rightParent: p, orn }
+  let
+    unexplained = map (\note -> { note, expl: NoExpl }) s.unexplained
+  pure $ sortWith _.note $ regular <> passing <> fromLeft <> fromRight <> unexplained
 
 newtype FreezeOp
   = FreezeOp { ties :: Array Edge }
@@ -47,23 +97,64 @@ data HoriChildren
   = LeftChild Note
   | RightChild Note
   | BothChildren { left :: Note, right :: Note }
-  | TooManyChildren
+  | TooManyChildren { left :: Array Note, right :: Array Note }
 
 instance semigroupHoriChildren :: Semigroup HoriChildren where
   append a b = case a of
-    LeftChild left -> case b of
-      RightChild right -> BothChildren { left, right }
-      _ -> TooManyChildren
-    RightChild right -> case b of
-      LeftChild left -> BothChildren { left, right }
-      _ -> TooManyChildren
-    _ -> TooManyChildren
+    LeftChild l -> case b of
+      LeftChild left -> TooManyChildren { left: [ l, left ], right: [] }
+      RightChild right -> BothChildren { left: l, right }
+      BothChildren { left, right } -> TooManyChildren { left: [ l, left ], right: [ right ] }
+      TooManyChildren { left, right } -> TooManyChildren { left: A.cons l left, right }
+    RightChild r -> case b of
+      LeftChild left -> BothChildren { left, right: r }
+      RightChild right -> TooManyChildren { left: [], right: [ r, right ] }
+      BothChildren { left, right } -> TooManyChildren { left: [ left ], right: [ r, right ] }
+      TooManyChildren { left, right } -> TooManyChildren { left, right: A.cons r right }
+    BothChildren { left: l, right: r } -> case b of
+      LeftChild left -> TooManyChildren { left: [ l, left ], right: [ r ] }
+      RightChild right -> TooManyChildren { left: [ l ], right: [ r, right ] }
+      BothChildren { left, right } -> TooManyChildren { left: [ l, left ], right: [ r, right ] }
+      TooManyChildren { left, right } -> TooManyChildren { left: A.cons l left, right: A.cons r right }
+    TooManyChildren { left: l, right: r } -> case b of
+      LeftChild left -> TooManyChildren { left: A.snoc l left, right: r }
+      RightChild right -> TooManyChildren { left: l, right: A.snoc r right }
+      BothChildren { left, right } -> TooManyChildren { left: A.snoc l left, right: A.snoc r right }
+      TooManyChildren { left, right } -> TooManyChildren { left: l <> left, right: r <> right }
 
 newtype HoriOp
   = HoriOp
   { children :: M.Map Note HoriChildren
+  , unexplained :: { left :: Array Note, right :: Array Note }
   , midEdges :: Edges
+  , ids :: { left :: TransId, lslice :: SliceId, mid :: TransId, rslice :: SliceId, right :: TransId }
   }
+
+horiLeftChildren :: HoriOp -> Notes
+horiLeftChildren (HoriOp { children, unexplained }) = sortWith _.note $ unexpl <> explained
+  where
+  unexpl = (\note -> { note, expl: NoExpl }) <$> unexplained.left
+
+  explained = A.concatMap getChild $ M.toUnfoldable children
+
+  getChild (Tuple parent dist) = case dist of
+    LeftChild note -> [ { note, expl: HoriExpl parent } ]
+    RightChild _ -> []
+    BothChildren { left } -> [ { note: left, expl: HoriExpl parent } ]
+    TooManyChildren { left } -> map { note: _, expl: HoriExpl parent } left
+
+horiRightChildren :: HoriOp -> Notes
+horiRightChildren (HoriOp { children, unexplained }) = sortWith _.note $ unexpl <> explained
+  where
+  unexpl = (\note -> { note, expl: NoExpl }) <$> unexplained.right
+
+  explained = A.concatMap getChild $ M.toUnfoldable children
+
+  getChild (Tuple parent dist) = case dist of
+    RightChild note -> [ { note, expl: HoriExpl parent } ]
+    LeftChild _ -> []
+    BothChildren { right } -> [ { note: right, expl: HoriExpl parent } ]
+    TooManyChildren { right } -> map { note: _, expl: HoriExpl parent } right
 
 -- boring instances
 -- ----------------
@@ -91,98 +182,3 @@ derive instance genericHoriOp :: Generic HoriOp _
 
 instance showHoriOp :: Show HoriOp where
   show ho = genericShow ho
-
-----------
--- JSON --
-----------
-type LeftmostJSON
-  = Variant
-      ( freezeLeft :: FreezeJSON
-      , freezeOnly :: FreezeJSON
-      , splitLeft :: SplitJSON
-      , splitRight :: SplitJSON
-      , splitOnly :: SplitJSON
-      , hori :: HoriJSON
-      )
-
-type FreezeJSON
-  = { ties :: Array Edge }
-
-type SplitJSON
-  = { regular :: Array { parent :: Edge, children :: Array { child :: Note, orn :: String } }
-    , passing :: Array { parent :: Edge, children :: Array { child :: Note, orn :: String } }
-    , fromLeft :: Array { parent :: Note, children :: Array { child :: Note, orn :: String } }
-    , fromRight :: Array { parent :: Note, children :: Array { child :: Note, orn :: String } }
-    , keepLeft :: Array Edge
-    , keepRight :: Array Edge
-    }
-
-type HoriJSON
-  = { children ::
-        Array
-          { parent :: Note
-          , child ::
-              Variant
-                ( leftChild :: Note
-                , rightChild :: Note
-                , bothChildren :: { left :: Note, right :: Note }
-                , invalidChildren :: String
-                )
-          }
-    , midEdges :: Edges
-    }
-
-leftmostToJSON :: Leftmost SplitOp FreezeOp HoriOp -> LeftmostJSON
-leftmostToJSON = case _ of
-  LMFreezeLeft f -> inj (SProxy :: SProxy "freezeLeft") $ freezeToJSON f
-  LMFreezeOnly f -> inj (SProxy :: SProxy "freezeOnly") $ freezeToJSON f
-  LMSplitLeft s -> inj (SProxy :: SProxy "splitLeft") $ splitToJSON s
-  LMSplitOnly s -> inj (SProxy :: SProxy "splitOnly") $ splitToJSON s
-  LMSplitRight s -> inj (SProxy :: SProxy "splitRight") $ splitToJSON s
-  LMHorizontalize h -> inj (SProxy :: SProxy "hori") $ horiToJSON h
-
-freezeToJSON :: FreezeOp -> FreezeJSON
-freezeToJSON (FreezeOp ties) = ties
-
-splitToJSON :: SplitOp -> SplitJSON
-splitToJSON (SplitOp split) =
-  { regular: unwrap regToJSON <$> M.toUnfoldable split.regular
-  , passing: unwrap show <$> M.toUnfoldable split.passing
-  , fromLeft: unwrap show <$> M.toUnfoldable split.fromLeft
-  , fromRight: unwrap show <$> M.toUnfoldable split.fromRight
-  , keepLeft: split.keepLeft
-  , keepRight: split.keepRight
-  }
-  where
-  unwrap ::
-    forall o p.
-    (o -> String) ->
-    Tuple p (Array { child :: Note, orn :: o }) ->
-    { parent :: p, children :: Array { child :: Note, orn :: String } }
-  unwrap f (Tuple parent children) =
-    { parent
-    , children: (\{ child, orn } -> { child, orn: f orn }) <$> children
-    }
-
-  regToJSON = case _ of
-    Left RootNote -> "RootNote"
-    Right o -> show o
-
-horiToJSON :: HoriOp -> HoriJSON
-horiToJSON (HoriOp { midEdges, children }) =
-  { midEdges
-  , children: childToJSON <$> M.toUnfoldable children
-  }
-  where
-  childToJSON (Tuple parent dist) =
-    let
-      child = case dist of
-        LeftChild l -> inj (SProxy :: SProxy "leftChild") l
-        RightChild r -> inj (SProxy :: SProxy "rightChild") r
-        BothChildren b -> inj (SProxy :: SProxy "bothChildren") b
-        TooManyChildren -> inj (SProxy :: SProxy "invalidChildren") "invalid"
-    in
-      { parent, child }
-
-exportLeftmost :: Leftmost SplitOp FreezeOp HoriOp -> String
-exportLeftmost = leftmostToJSON >>> writeJSON

@@ -9,15 +9,14 @@ import Data.Int (toNumber)
 import Data.Map as M
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Ratio ((%))
-import Folding (Graph, GraphTransition, GraphSlice, reductionToLeftmost)
+import Folding (Graph, GraphSlice, GraphTransition)
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HA
 import Halogen.HTML.Properties as HP
 import Halogen.Svg.Attributes as SA
 import Halogen.Svg.Elements as SE
-import Leftmost (exportLeftmost, leftmostToJSON)
-import Model (DoubleOrnament(..), Edge, LeftOrnament(..), Note, NoteExplanation(..), Notes, Piece, Reduction, RightOrnament(..), SliceId, StartStop(..), explHasParent, getInnerNotes, getParents, setHoriExplParent, setLeftExplParent, setRightExplParent)
+import Model (DoubleOrnament(..), Edge, LeftOrnament(..), Note, NoteExplanation(..), Notes, Piece, RightOrnament(..), SliceId, StartStop(..), explHasParent, getInnerNotes, getParents, setHoriExplParent, setLeftExplParent, setRightExplParent)
 import Validation (EdgeError(..), NoteError(..), SliceError(..), Validation)
 import Web.UIEvent.MouseEvent (ctrlKey)
 
@@ -32,7 +31,7 @@ offset i = toNumber i * 20.0
 
 findPitchIndex :: StartStop Note -> StartStop Notes -> Int
 findPitchIndex (Inner note) (Inner notes) =
-  fromMaybe 0
+  fromMaybe (-1)
     $ findIndex
         (\n -> n.note == note)
         notes
@@ -335,13 +334,8 @@ renderReduction piece graph validation selection =
 
   svgAxis = mapWithIndex renderTime piece
 
-renderLeftmost :: forall p. Reduction -> HH.HTML p GraphAction
-renderLeftmost red = HH.ol_ $ map (\step -> HH.li_ [ HH.text $ exportLeftmost step ]) steps
-  where
-  steps = reductionToLeftmost red
-
-gridDiv :: forall p. String -> Array (HH.HTML p GraphAction) -> HH.HTML p GraphAction
-gridDiv classes = HH.div [ HA.class_ $ HH.ClassName classes ]
+class_ :: forall r i. String -> HH.IProp ( class :: String | r ) i
+class_ str = HA.class_ $ HH.ClassName str
 
 mkOption :: forall o p. (Maybe o -> GraphAction) -> { k :: Maybe o, v :: String, s :: Boolean } -> HH.HTML p GraphAction
 mkOption updateAction { k, v, s } = HH.option [ HA.value v, HA.selected s, HE.onClick \_ -> updateAction k ] [ HH.text v ]
@@ -364,59 +358,58 @@ doubleOrnaments =
 
 renderNoteExplanation :: forall p. Graph -> Selection -> HH.HTML p GraphAction
 renderNoteExplanation graph sel =
-  HH.div
-    [ HA.style "height:30px;", HA.class_ $ HH.ClassName "pure-g" ] case sel of
+  HH.div [ class_ "pure-g", HA.style "height:30px;" ] case sel of
     SelNote { note, parents, expl } ->
-      [ gridDiv "pure-u-1-4" [ HH.text $ show note.pitch <> " (" <> note.id <> ") " ] ]
+      [ HH.div [ class_ "pure-u-1-4" ] [ HH.text $ show note.pitch <> " (" <> note.id <> ") " ] ]
         <> case expl of
-            NoExpl -> [ gridDiv "pure-u-1-4" [ HH.text "no parents" ] ]
-            RootExpl -> [ gridDiv "pure-u-1-4" [ HH.text "root note" ] ]
+            NoExpl -> [ HH.div [ class_ "pure-u-1-4" ] [ HH.text "no parents" ] ]
+            RootExpl -> [ HH.div [ class_ "pure-u-1-4" ] [ HH.text "root note" ] ]
             HoriExpl n ->
-              [ gridDiv "pure-u-1-4"
+              [ HH.div [ class_ "pure-u-1-4" ]
                   [ HH.text $ "parent: " <> show n.pitch <> " (" <> n.id <> ")"
                   , HH.button [ HE.onClick $ \_ -> removeParent note expl setHoriExplParent ] [ HH.text "x" ]
                   ]
               ]
             LeftExpl lxpl@{ orn, rightParent } ->
-              [ gridDiv "pure-u-1-4" []
-              , gridDiv "pure-u-1-4"
+              [ HH.div [ class_ "pure-u-1-4" ] []
+              , HH.div [ class_ "pure-u-1-4" ]
                   [ mkSelect (\orn' -> SetNoteExplanation { noteId: note.id, expl: LeftExpl lxpl { orn = orn' } })
                       orn
                       [ LeftRepeat, LeftNeighbor ]
                   ]
-              , gridDiv "pure-u-1-4"
+              , HH.div [ class_ "pure-u-1-4" ]
                   [ HH.text $ "right parent: " <> show rightParent.pitch <> " (" <> rightParent.id <> ")"
                   , HH.button [ HE.onClick $ \_ -> removeParent note expl setRightExplParent ] [ HH.text "x" ]
                   ]
               ]
             RightExpl rxpl@{ orn, leftParent } ->
-              [ gridDiv "pure-u-1-4"
+              [ HH.div [ class_ "pure-u-1-4" ]
                   [ HH.text $ "left parent: " <> show leftParent.pitch <> " (" <> leftParent.id <> ")"
                   , HH.button [ HE.onClick $ \_ -> removeParent note expl setLeftExplParent ] [ HH.text "x" ]
                   ]
-              , gridDiv "pure-u-1-4"
+              , HH.div [ class_ "pure-u-1-4" ]
                   [ mkSelect (\orn' -> SetNoteExplanation { noteId: note.id, expl: RightExpl rxpl { orn = orn' } })
                       orn
                       [ RightRepeat, RightNeighbor ]
                   ]
               ]
             DoubleExpl dxpl@{ orn, rightParent, leftParent } ->
-              [ gridDiv "pure-u-1-4"
+              [ HH.div [ class_ "pure-u-1-4" ]
                   [ HH.text $ "left parent: " <> show leftParent.pitch <> " (" <> leftParent.id <> ")"
                   , HH.button
                       [ HE.onClick $ \_ -> removeParent note expl setLeftExplParent ]
                       [ HH.text "x" ]
                   ]
-              , gridDiv "pure-u-1-4"
+              , HH.div [ class_ "pure-u-1-4" ]
                   [ mkSelect (\orn' -> SetNoteExplanation { noteId: note.id, expl: DoubleExpl dxpl { orn = orn' } })
                       orn
                       doubleOrnaments
                   ]
-              , gridDiv "pure-u-1-4"
+              , HH.div [ class_ "pure-u-1-4" ]
                   [ HH.text $ "right parent: " <> show rightParent.pitch <> " (" <> rightParent.id <> ")"
                   , HH.button
                       [ HE.onClick $ \_ -> removeParent note expl setRightExplParent ]
                       [ HH.text "x" ]
                   ]
               ]
-    _ -> [ gridDiv "pure-u-1" [ HH.text "No note selected." ] ]
+    _ -> [ HH.div [ class_ "pure-u-1" ] [ HH.text "No note selected." ] ]

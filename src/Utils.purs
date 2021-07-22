@@ -7,8 +7,10 @@ import Data.Either (Either(..))
 import Data.Maybe (Maybe(..), fromJust)
 import Data.Pitches (parseNotation)
 import Data.Traversable (for)
+import Effect (Effect)
 import Model (Note, Piece)
 import Partial.Unsafe (unsafePartial)
+import Simple.JSON as JSON
 
 type JSONPiece n
   = Array { time :: String, notes :: Array { pitch :: String, hold :: Boolean | n } }
@@ -47,3 +49,10 @@ examplePiece = unsafePartial $ fromJust $ pieceFromJSON examplePieceJSONWithIds
 
 examplePieceLong :: Array { time :: Either String MBS, notes :: Array { hold :: Boolean, note :: Note } }
 examplePieceLong = unsafePartial $ fromJust $ pieceFromJSON examplePieceJSONLongWithIds
+
+foreign import unsafeStringifyPretty :: forall a. a -> String
+
+writeJSONPretty :: forall a. JSON.WriteForeign a => a -> String
+writeJSONPretty = unsafeStringifyPretty <<< JSON.writeImpl
+
+foreign import copyToClipboard :: String -> Effect Unit

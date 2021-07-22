@@ -80,12 +80,20 @@ removeParent note expl setParent = maybe NoOp mkAction $ setParent note.pitch No
   where
   mkAction e' = SetNoteExplanation { noteId: note.id, expl: e' }
 
+data Tab
+  = HelpTab
+  | ImportTab
+  | ExportTab
+
+derive instance eqTab :: Eq Tab
+
 data GraphAction
   = NoOp
   | Init
+  | LoadPiece Piece
+  | SwitchTab (Maybe Tab)
   | HandleKey KeyboardEvent
   | Select Selection
-  | LoadPiece Piece
   | MergeAtSelected
   | VertAtSelected
   | UnMergeAtSelected
