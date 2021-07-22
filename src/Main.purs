@@ -23,7 +23,7 @@ import JSONTransport (reductionFromJSON, reductionToJSON)
 import Model (Model, loadPiece, mergeAtSlice, noteSetExplanation, undoMergeAtTrans, undoVertAtSlice, vertAtMid)
 import Render (class_, renderNoteExplanation, renderReduction)
 import Simple.JSON as JSON
-import Type.Prelude (Proxy(..))
+import Type.Proxy (Proxy(..))
 import Utils (copyToClipboard, examplePiece, examplePieceLong, writeJSONPretty)
 import Validation (validateReduction, validationIsOk)
 import Web.DOM.ParentNode (QuerySelector(..))
@@ -246,6 +246,13 @@ renderTabs st =
         Just ExportTab -> HH.slot_ (Proxy :: Proxy "export") 0 exportComponent st.model
     ]
 
+-- import component
+-- ----------------
+data ImportAction
+  = UpdateJSONInput String
+
+-- export component
+-- ----------------
 data ExportAction
   = CopyToClipboard String
   | TogglePretty
