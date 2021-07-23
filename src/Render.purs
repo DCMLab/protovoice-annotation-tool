@@ -311,7 +311,7 @@ renderTime i { time } =
 renderReduction :: forall p. Piece -> Graph -> Validation -> Selection -> HH.HTML p GraphAction
 renderReduction piece graph validation selection =
   HH.div
-    [ HP.style "overflow-x: scroll;" ]
+    [ HP.style "overflow-x: scroll; max-width: max-content;" ]
     [ SE.svg
         [ SA.width width
         , SA.height height

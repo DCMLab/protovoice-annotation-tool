@@ -148,23 +148,24 @@ appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultE
   initialState _ = { selected: SelNone, model: Nothing, tab: Just ImportTab }
 
   render st =
-    HH.div
-      []
-      [ HH.h1_ [ HH.text "Proto-Voice Annotation Tool" ]
-      , renderTabs st
-      , HH.h2_ [ HH.text "Annotation" ]
-      , HH.button
-          [ class_ "pure-button"
-          , HE.onClick $ \_ -> CombineAny
-          , HP.enabled (outerSelected st.selected)
+    HH.div_
+      [ HH.div [ class_ "content" ]
+          [ HH.h1_ [ HH.text "Proto-Voice Annotation Tool" ]
+          , renderTabs st
+          , HH.h2_ [ HH.text "Annotation" ]
+          , HH.button
+              [ class_ "pure-button"
+              , HE.onClick $ \_ -> CombineAny
+              , HP.enabled (outerSelected st.selected)
+              ]
+              [ HH.text "Combine (Enter)" ]
+          , HH.button
+              [ class_ "pure-button"
+              , HE.onClick $ \_ -> RemoveAny
+              , HP.enabled (outerSelected st.selected)
+              ]
+              [ HH.text "Remove (Backspace)" ]
           ]
-          [ HH.text "Combine (Enter)" ]
-      , HH.button
-          [ class_ "pure-button"
-          , HE.onClick $ \_ -> RemoveAny
-          , HP.enabled (outerSelected st.selected)
-          ]
-          [ HH.text "Remove (Backspace)" ]
       , case st.model of
           Nothing -> HH.text ""
           Just model -> do
@@ -173,8 +174,8 @@ appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultE
 
               valid = validateReduction model.reduction
             HH.div_
-              [ HH.p_ [ renderNoteExplanation graph st.selected ]
-              , renderReduction model.piece graph valid st.selected
+              [ HH.p [ class_ "content" ] [ renderNoteExplanation graph st.selected ]
+              , HH.div [ class_ "wide" ] [ renderReduction model.piece graph valid st.selected ]
               ]
       ]
 
