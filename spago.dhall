@@ -11,6 +11,7 @@ You can edit this file as you like.
   , "effect"
   , "either"
   , "foldable-traversable"
+  , "foreign"
   , "halogen"
   , "halogen-svg-elems"
   , "integers"
