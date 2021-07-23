@@ -202,9 +202,9 @@ renderTabs st =
   HH.div_
     [ HH.div [ class_ "pure-menu pure-menu-horizontal" ]
         [ HH.ul [ class_ "pure-menu-list" ]
-            [ tabHandle st HelpTab "Help"
-            , tabHandle st ImportTab "Import"
+            [ tabHandle st ImportTab "Import"
             , tabHandle st ExportTab "Export"
+            , tabHandle st HelpTab "Help"
             , tabHandle st DebugTab "Debug"
             ]
         ]
@@ -279,12 +279,19 @@ importComponent = H.mkComponent { initialState, render, eval: H.mkEval H.default
               HH.text ""
             else case pieceEither of
               Left err -> HH.p [ class_ "alert" ] [ HH.text $ "Invalid input:  ", HH.pre_ [ HH.text err ] ]
-              Right model ->
-                HH.div_
-                  [ HH.p_ [ HH.text "Input valid!" ]
-                  , HH.button [ class_ "pure-button pure-button-primary", HE.onClick $ const $ ImportLoadModel model ]
-                      [ HH.text "Import Piece" ]
-                  ]
+              Right model -> case model of
+                Left modelWithNewIds ->
+                  HH.div_
+                    [ HH.p_ [ HH.text "Input valid, but no (or not all) IDs were given. Use generated IDs?" ]
+                    , HH.button [ class_ "pure-button pure-button-primary", HE.onClick $ const $ ImportLoadModel modelWithNewIds ]
+                        [ HH.text "Import Piece (New IDs)" ]
+                    ]
+                Right modelWithGivenIds ->
+                  HH.div_
+                    [ HH.p_ [ HH.text "Input valid!" ]
+                    , HH.button [ class_ "pure-button pure-button-primary", HE.onClick $ const $ ImportLoadModel modelWithGivenIds ]
+                        [ HH.text "Import Piece" ]
+                    ]
           ]
       , HH.div_
           [ HH.h3_ [ HH.text "Import Analysis" ]
@@ -312,17 +319,18 @@ importComponent = H.mkComponent { initialState, render, eval: H.mkEval H.default
           ]
       ]
     where
+    showErrors :: forall a. _ -> Either String a
     showErrors errs = Left $ "Errors parsing JSON:\n  " <> intercalate "\n  " (renderForeignError <$> errs)
 
     pieceEither = case readJSON pieceText of
       Right json -> case pieceFromJSON json of
-        Just piece -> Right $ loadPiece piece
+        Just piece -> Right $ Right $ loadPiece piece
         Nothing -> Left "Invalid piece!"
       Left errs1 -> case readJSON pieceText of
         Right jsonNoIds -> case pieceFromJSON (addJSONIds jsonNoIds) of
-          Just pieceNewIds -> Right $ loadPiece pieceNewIds
+          Just pieceNewIds -> Right $ Left $ loadPiece pieceNewIds
           Nothing -> Left "Invalid piece!"
-        Left errs2 -> showErrors (errs1 <> errs2)
+        Left errs2 -> showErrors (if errs1 == errs2 then errs1 else errs1 <> errs2)
 
     modelEither = either showErrors modelFromJSON $ readJSON modelText
 
