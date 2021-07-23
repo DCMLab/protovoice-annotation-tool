@@ -9,7 +9,7 @@
     "build": "spago build",
     "test": "spago test",
     "serve": "parcel dev/index.html --open",
-    "build-prod": "rm -rf dist && mkdir -p prod && cp dev/index.html prod/ && cp -r dev/css prod/ && spago build && parcel build prod/index.html"
+    "build-prod": "rm -rf dist prod && mkdir -p prod && cp dev/index.html prod/ && cp dev/index.js prod/ && cp -r dev/css prod/ && spago build && parcel build prod/index.html --public-url \"./\""
   },
   "dependencies": {
     "downloadjs": "^1.4.7"
