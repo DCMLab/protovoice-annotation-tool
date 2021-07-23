@@ -8,6 +8,7 @@ You can edit this file as you like.
   , "console"
   , "control"
   , "debug"
+  , "downloadjs"
   , "effect"
   , "either"
   , "foldable-traversable"

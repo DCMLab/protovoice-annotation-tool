@@ -23,12 +23,13 @@ import Halogen.VDom.Driver (runUI)
 import JSONTransport (reductionFromJSON, reductionToJSON)
 import Model (Model, Piece, loadPiece, mergeAtSlice, noteSetExplanation, undoMergeAtTrans, undoVertAtSlice, vertAtMid)
 import Render (class_, renderNoteExplanation, renderReduction)
-import Simple.JSON (readJSON, readJSON_)
+import Simple.JSON (readJSON)
 import Simple.JSON as JSON
 import Type.Proxy (Proxy(..))
 import Utils (addJSONIds, copyToClipboard, examplePiece, examplePieceLong, pieceFromJSON, writeJSONPretty)
 import Validation (validateReduction, validationIsOk)
 import Web.DOM.ParentNode (QuerySelector(..))
+import Web.DownloadJs (download)
 import Web.Event.Event as E
 import Web.HTML (window)
 import Web.HTML.HTMLDocument (toEventTarget)
@@ -308,6 +309,7 @@ importComponent = H.mkComponent { initialState, render, eval: H.mkEval H.default
 -- ----------------
 data ExportAction
   = CopyToClipboard String
+  | DownloadJSON String String
   | TogglePretty
   | Receive (Maybe Model)
 
@@ -348,7 +350,7 @@ exportComponent =
               Right jsonStr ->
                 HH.div_
                   [ HH.div [ class_ "pure-g" ]
-                      [ HH.div [ class_ "pure-u-3-4" ]
+                      [ HH.div [ class_ "pure-u-3-5" ]
                           [ HH.input
                               [ HP.type_ $ HP.InputCheckbox
                               , HP.checked pretty
@@ -358,10 +360,15 @@ exportComponent =
                           , HH.label [ HP.for "prettyJSON" ] [ HH.text " pretty" ]
                           ]
                       , HH.button
-                          [ class_ "pure-button pure-button-primary pure-u-1-4"
+                          [ class_ "pure-button pure-u-1-5"
                           , HE.onClick \_ -> CopyToClipboard jsonStr
                           ]
                           [ HH.text "Copy to Clipboard" ]
+                      , HH.button
+                          [ class_ "pure-button pure-button-primary pure-u-1-5"
+                          , HE.onClick \_ -> DownloadJSON "analysis.json" jsonStr
+                          ]
+                          [ HH.text "Download" ]
                       ]
                   , HH.pre_ [ HH.text $ jsonStr ]
                   ]
@@ -394,6 +401,9 @@ exportComponent =
 
   handleExportAction = case _ of
     CopyToClipboard str -> liftEffect $ copyToClipboard str
+    DownloadJSON filename json -> do
+      _ <- liftEffect $ download json filename "application/json"
+      pure unit
     TogglePretty -> H.modify_ \st -> st { pretty = not st.pretty }
     Receive model -> H.modify_ \st -> st { model = model }
 
