@@ -43,7 +43,12 @@
     z-index: -1;
 }
 
-
+textarea {
+    width: 100%;
+    max-width: 100%;
+    min-width: 100%;
+    min-height: 100px;
+}
 
 .button-danger {
     background: #d62728;

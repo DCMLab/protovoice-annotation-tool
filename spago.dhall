@@ -8,6 +8,8 @@ You can edit this file as you like.
   , "console"
   , "control"
   , "debug"
+  , "dom-filereader"
+  , "dom-indexed"
   , "downloadjs"
   , "effect"
   , "either"
@@ -32,6 +34,7 @@ You can edit this file as you like.
   , "variant"
   , "web-dom"
   , "web-events"
+  , "web-file"
   , "web-html"
   , "web-uievents"
   ]

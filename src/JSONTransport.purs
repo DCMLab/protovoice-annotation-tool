@@ -2,23 +2,27 @@ module JSONTransport where
 
 import Prelude
 import Common (parseTime)
-import Data.Array (fromFoldable)
+import Data.Array (fromFoldable, mapWithIndex)
 import Data.Either (Either(..), either)
 import Data.Map as M
 import Data.Maybe (Maybe(..))
-import Data.Show (show)
-import Data.Traversable (sequence)
+import Data.Pitches (parseNotation)
+import Data.Traversable (for, sequence)
 import Data.Tuple (Tuple(..))
 import Data.Variant (Variant, case_, inj, on)
 import Folding (leftmostToReduction, reductionToLeftmost)
 import Leftmost (FreezeOp(..), HoriChildren(..), HoriOp(..), Leftmost(..), RootOrnament(..), SplitOp(..))
-import Model (DoubleOrnament(..), Edge, Edges, LeftOrnament(..), Note, Reduction, RightOrnament(..), SliceId(..), StartStop, TransId(..), Transition, Model)
+import Model (DoubleOrnament(..), Edge, Edges, LeftOrnament(..), Model, Note, Piece, RightOrnament(..), SliceId(..), StartStop, TransId(..), Transition)
 import Type.Proxy (Proxy(..))
+import Simple.JSON as JSON
 
 ----------
 -- JSON --
 ----------
-type ReductionJSON
+type PieceJSON n
+  = Array { time :: String, notes :: Array { pitch :: String, hold :: Boolean | n } }
+
+type ModelJSON
   = { derivation :: Array LeftmostJSON
     , start :: SliceJSON
     , topSegments :: Array { trans :: Transition, rslice :: SliceJSON }
@@ -72,8 +76,13 @@ type HoriJSON
 
 -- encoding JSON
 -- -------------
-reductionToJSON :: Model -> Either String ReductionJSON
-reductionToJSON model = do
+pieceToJSON :: Piece -> PieceJSON ( id :: String )
+pieceToJSON = map \{ notes, time } -> { time: either identity show time, notes: noteToJSON <$> notes }
+  where
+  noteToJSON { note, hold } = { hold, id: note.id, pitch: show note.pitch }
+
+modelToJSON :: Model -> Either String ModelJSON
+modelToJSON model = do
   lm <- reductionToLeftmost model
   pure
     { derivation: leftmostToJSON <$> lm
@@ -143,8 +152,18 @@ horiToJSON (HoriOp { midEdges, children, ids, unexplained }) =
 
 -- decoding JSON
 -- -------------
-reductionFromJSON :: ReductionJSON -> Either String Model
-reductionFromJSON { topSegments, derivation } = do
+pieceFromJSON ::
+  PieceJSON ( id :: String ) ->
+  Maybe Piece
+pieceFromJSON piece =
+  for piece \slice -> do
+    notes <-
+      for slice.notes \note ->
+        (\p -> { hold: note.hold, note: { pitch: p, id: note.id } }) <$> parseNotation note.pitch
+    pure { time: parseTime slice.time, notes }
+
+modelFromJSON :: ModelJSON -> Either String Model
+modelFromJSON { topSegments, derivation } = do
   deriv <- sequence $ leftmostFromJSON <$> derivation
   leftmostToReduction topSegments deriv
 
@@ -236,3 +255,19 @@ horiFromJSON { midEdges, children, ids, unexplained } =
       # on (Proxy :: Proxy "tooManyChildren") TooManyChildren
 
   childFromJSON { parent, child } = Tuple parent (getDist child)
+
+-------------
+-- helpers --
+-------------
+addJSONIds :: PieceJSON () -> PieceJSON ( id :: String )
+addJSONIds piece = mapWithIndex (\s slice -> slice { notes = addids s slice.notes }) piece
+  where
+  addids s = mapWithIndex (\n note -> { id: "note" <> show s <> "." <> show n, pitch: note.pitch, hold: note.hold })
+
+stripJSONIds :: PieceJSON ( id :: String ) -> PieceJSON ()
+stripJSONIds = map (\{ time, notes } -> { time, notes: map (\{ hold, pitch } -> { hold, pitch }) notes })
+
+foreign import unsafeStringifyPretty :: forall a. a -> String
+
+writeJSONPretty :: forall a. JSON.WriteForeign a => a -> String
+writeJSONPretty = unsafeStringifyPretty <<< JSON.writeImpl

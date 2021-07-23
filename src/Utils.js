@@ -1,9 +1,5 @@
 "use strict";
 
-exports.unsafeStringifyPretty = function(json) {
-    return JSON.stringify(json, null, 2);
-};
-
 exports.copyToClipboard = str => () =>
     navigator.clipboard.writeText(str);
 

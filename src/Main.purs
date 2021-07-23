@@ -3,12 +3,14 @@ module Main where
 import Prelude
 import CommonApp (GraphAction(..), ImportOutput(..), Selection(..), Tab(..), getSelSlice, getSelTrans, outerSelected)
 import Control.Monad.State (class MonadState)
+import DOM.HTML.Indexed.InputAcceptType (InputAcceptTypeAtom(..))
 import Data.Either (Either(..), either)
 import Data.Foldable (for_, intercalate)
 import Data.List as L
 import Data.Maybe (Maybe(..))
 import Data.Tuple (Tuple(..))
 import Effect (Effect)
+import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Class.Console (log)
 import Folding (evalGraph, reductionToLeftmost)
@@ -20,17 +22,19 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Halogen.Query.Event (eventListener)
 import Halogen.VDom.Driver (runUI)
-import JSONTransport (reductionFromJSON, reductionToJSON)
+import JSONTransport (addJSONIds, modelFromJSON, modelToJSON, pieceFromJSON, pieceToJSON, stripJSONIds, writeJSONPretty)
 import Model (Model, Piece, loadPiece, mergeAtSlice, noteSetExplanation, undoMergeAtTrans, undoVertAtSlice, vertAtMid)
 import Render (class_, renderNoteExplanation, renderReduction)
 import Simple.JSON (readJSON)
 import Simple.JSON as JSON
 import Type.Proxy (Proxy(..))
-import Utils (addJSONIds, copyToClipboard, examplePiece, examplePieceLong, pieceFromJSON, writeJSONPretty)
+import Utils (copyToClipboard, examplePiece, examplePieceLong)
 import Validation (validateReduction, validationIsOk)
 import Web.DOM.ParentNode (QuerySelector(..))
 import Web.DownloadJs (download)
 import Web.Event.Event as E
+import Web.File.File (File, toBlob) as File
+import Web.File.FileReader.Aff (readAsText) as File
 import Web.HTML (window)
 import Web.HTML.HTMLDocument (toEventTarget)
 import Web.HTML.Window (document)
@@ -141,7 +145,7 @@ handleAction = case _ of
     , selnote.note.id == noteId = SelNote $ selnote { expl = expl }
     | otherwise = sel
 
-appComponent :: forall query input output m. (MonadEffect m) => H.Component query input output m
+appComponent :: forall query input output m. MonadEffect m => MonadAff m => H.Component query input output m
 appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultEval { handleAction = handleAction, initialize = Just Init } }
   where
   initialState :: input -> AppState
@@ -193,7 +197,7 @@ tabHandle st tab name =
         [ HH.text name ]
     ]
 
-renderTabs :: forall m. MonadEffect m => AppState -> HH.ComponentHTML GraphAction AppSlots m
+renderTabs :: forall m. MonadEffect m => MonadAff m => AppState -> HH.ComponentHTML GraphAction AppSlots m
 renderTabs st =
   HH.div_
     [ HH.div [ class_ "pure-menu pure-menu-horizontal" ]
@@ -244,10 +248,12 @@ helpText =
 data ImportAction
   = ImportUpdateModelInput String
   | ImportUpdatePieceInput String
+  | ImportUploadModel (Maybe File.File)
+  | ImportUploadPiece (Maybe File.File)
   | ImportLoadPiece Piece
   | ImportLoadModel Model
 
-importComponent :: forall query input m. H.Component query input ImportOutput m
+importComponent :: forall query input m. MonadAff m => H.Component query input ImportOutput m
 importComponent = H.mkComponent { initialState, render, eval: H.mkEval H.defaultEval { handleAction = handleImportAction } }
   where
   initialState _ = { modelText: "", pieceText: "" }
@@ -258,6 +264,16 @@ importComponent = H.mkComponent { initialState, render, eval: H.mkEval H.default
       , HH.button [ class_ "pure-button", HE.onClick $ \_ -> ImportLoadPiece examplePieceLong ] [ HH.text "Load Example (Long)" ]
       , HH.div_
           [ HH.h3_ [ HH.text "Import Piece" ]
+          , HH.div_
+              [ HH.label [ HP.for "upload-piece" ] [ HH.text "Choose a file: " ]
+              , HH.input
+                  [ HP.type_ HP.InputFile
+                  , HP.name "upload-piece"
+                  , HP.accept $ HP.InputAcceptType [ AcceptFileExtension ".json" ]
+                  , HE.onFileUpload \files -> ImportUploadPiece $ L.head files
+                  ]
+              ]
+          , HH.p_ [ HH.text "or enter JSON directly:" ]
           , HH.textarea [ HP.value pieceText, HE.onValueInput ImportUpdatePieceInput ]
           , if pieceText == "" then
               HH.text ""
@@ -272,6 +288,16 @@ importComponent = H.mkComponent { initialState, render, eval: H.mkEval H.default
           ]
       , HH.div_
           [ HH.h3_ [ HH.text "Import Analysis" ]
+          , HH.div_
+              [ HH.label [ HP.for "upload-analysis" ] [ HH.text "Choose a file: " ]
+              , HH.input
+                  [ HP.type_ HP.InputFile
+                  , HP.name "upload-analysis"
+                  , HP.accept $ HP.InputAcceptType [ AcceptFileExtension ".json" ]
+                  , HE.onFileUpload \files -> ImportUploadModel $ L.head files
+                  ]
+              ]
+          , HH.p_ [ HH.text "or enter JSON directly:" ]
           , HH.textarea [ HP.value modelText, HE.onValueInput ImportUpdateModelInput ]
           , if modelText == "" then
               HH.text ""
@@ -298,13 +324,21 @@ importComponent = H.mkComponent { initialState, render, eval: H.mkEval H.default
           Nothing -> Left "Invalid piece!"
         Left errs2 -> showErrors (errs1 <> errs2)
 
-    modelEither = either showErrors reductionFromJSON $ readJSON modelText
+    modelEither = either showErrors modelFromJSON $ readJSON modelText
 
   handleImportAction = case _ of
     ImportUpdateModelInput str -> H.modify_ \st -> st { modelText = str }
     ImportUpdatePieceInput str -> H.modify_ \st -> st { pieceText = str }
+    ImportUploadModel f -> loadFile f ImportUpdateModelInput
+    ImportUploadPiece f -> loadFile f ImportUpdatePieceInput
     ImportLoadPiece p -> H.raise $ ImportPiece p
     ImportLoadModel m -> H.raise $ ImportModel m
+    where
+    loadFile f action = case f of
+      Nothing -> pure unit
+      Just file -> do
+        str <- H.liftAff $ File.readAsText $ File.toBlob file
+        handleImportAction $ action str
 
 -- export component
 -- ----------------
@@ -333,13 +367,13 @@ exportComponent =
     Nothing -> HH.text ""
     Just model ->
       let
-        json = reductionToJSON model
+        json = modelToJSON model
 
         jsonStrOrErr = (if pretty then writeJSONPretty else JSON.writeJSON) <$> json
 
         val = validateReduction model.reduction
 
-        reLoad = reductionFromJSON =<< json
+        reLoad = modelFromJSON =<< json
       in
         HH.div [ class_ "tab" ]
           [ if validationIsOk val then
@@ -424,4 +458,14 @@ debugComponent st =
         Just model -> case reductionToLeftmost model of
           Right steps -> HH.ol_ $ map (\step -> HH.li_ [ HH.text $ show step ]) steps
           Left err -> HH.p [ class_ "alert" ] [ HH.text $ "Warning: reduction cannot be turned into leftmost derivation: " <> err ]
+    , HH.h3_ [ HH.text "Piece JSON" ]
+    , case st.model of
+        Nothing -> HH.text "No active piece."
+        Just model ->
+          HH.div_
+            [ HH.p_ [ HH.text "with IDs:" ]
+            , HH.pre_ [ HH.text $ JSON.writeJSON $ pieceToJSON model.piece ]
+            , HH.p_ [ HH.text "without IDs:" ]
+            , HH.pre_ [ HH.text $ JSON.writeJSON $ stripJSONIds $ pieceToJSON model.piece ]
+            ]
     ]
