@@ -1,10 +1,10 @@
 module Utils where
 
 import Prelude
-import Common (MBS, parseMBS)
+import Common (MBS, parseTime)
 import Data.Array (mapWithIndex)
-import Data.Either (Either(..))
-import Data.Maybe (Maybe(..), fromJust)
+import Data.Either (Either)
+import Data.Maybe (Maybe, fromJust)
 import Data.Pitches (parseNotation)
 import Data.Traversable (for)
 import Effect (Effect)
@@ -35,14 +35,10 @@ pieceFromJSON ::
   Maybe Piece
 pieceFromJSON piece =
   for piece \slice -> do
-    let
-      time = case parseMBS slice.time of
-        Nothing -> Left slice.time
-        Just mbs -> Right mbs
     notes <-
       for slice.notes \note ->
         (\p -> { hold: note.hold, note: { pitch: p, id: note.id } }) <$> parseNotation note.pitch
-    pure { time, notes }
+    pure { time: parseTime slice.time, notes }
 
 examplePiece :: Array { time :: Either String MBS, notes :: Array { hold :: Boolean, note :: Note } }
 examplePiece = unsafePartial $ fromJust $ pieceFromJSON examplePieceJSONWithIds

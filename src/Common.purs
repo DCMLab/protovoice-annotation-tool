@@ -2,17 +2,30 @@ module Common where
 
 import Prelude
 import Data.Char as C
-import Data.Either (hush)
+import Data.Either (Either(..), hush)
 import Data.Foldable (foldl)
-import Data.Maybe (Maybe(..))
-import Data.String as S
+import Data.Maybe (Maybe(..), maybe)
+import Data.Ratio (denominator, numerator)
 import Data.Rational (Rational, (%))
-import Text.Parsing.StringParser as P
-import Text.Parsing.StringParser.CodePoints as P
-import Text.Parsing.StringParser.Combinators as P
+import Data.String as S
+import Text.Parsing.StringParser (Parser, runParser) as P
+import Text.Parsing.StringParser.CodePoints (anyDigit, char) as P
+import Text.Parsing.StringParser.Combinators (many1, option) as P
 
-type MBS
-  = { m :: Int, b :: Int, s :: Rational }
+newtype MBS
+  = MBS { m :: Int, b :: Int, s :: Rational }
+
+derive newtype instance eqMBS :: Eq MBS
+
+instance showMBS :: Show MBS where
+  show (MBS { m, b, s }) =
+    show m
+      <> "."
+      <> show b
+      <> "."
+      <> show (numerator s)
+      <> "/"
+      <> show (denominator s)
 
 ascii0 :: Int
 ascii0 = C.toCharCode '0'
@@ -40,9 +53,12 @@ parseFrac = do
 
 parseMBS :: String -> Maybe MBS
 parseMBS str
-  | [ ms, bs, ss ] <- S.split (S.Pattern ",") str = do
+  | [ ms, bs, ss ] <- S.split (S.Pattern ".") str = do
     m <- hush $ P.runParser parseInt ms
     b <- hush $ P.runParser parseInt bs
     s <- hush $ P.runParser parseFrac ss
-    pure { m, b, s }
+    pure $ MBS { m, b, s }
   | otherwise = Nothing
+
+parseTime :: String -> Either String MBS
+parseTime str = maybe (Left str) Right $ parseMBS str

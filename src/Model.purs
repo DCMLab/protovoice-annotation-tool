@@ -2,6 +2,7 @@ module Model where
 
 import Prelude
 import Common (MBS)
+import Control.Alt ((<|>))
 import Data.Array (filter)
 import Data.Array as A
 import Data.Either (Either(..))
@@ -19,14 +20,21 @@ import Data.Traversable (scanl)
 import Data.Tuple (Tuple(..))
 import Effect (Effect)
 import Effect.Console (log, logShow)
-import Simple.JSON (writeImpl)
+import Foreign as F
+import Simple.JSON (readImpl, writeImpl)
 import Simple.JSON as JSON
 
 -- types
 -- -----
 --
+type Time
+  = Either String MBS
+
+type Note
+  = { pitch :: SPitch, id :: String }
+
 type Piece
-  = Array { time :: Either String MBS, notes :: Array { hold :: Boolean, note :: Note } }
+  = Array { time :: Time, notes :: Array { hold :: Boolean, note :: Note } }
 
 data RightOrnament
   = RightRepeat
@@ -218,9 +226,6 @@ explHasParent id = case _ of
   LeftExpl { rightParent } -> rightParent.id == id
   DoubleExpl { leftParent, rightParent } -> leftParent.id == id || rightParent.id == id
 
-type Note
-  = { pitch :: SPitch, id :: String }
-
 data StartStop a
   = Start
   | Inner a
@@ -247,6 +252,17 @@ instance writeForeignStartStop :: (JSON.WriteForeign a) => JSON.WriteForeign (St
     Start -> writeImpl "start"
     Stop -> writeImpl "stop"
     Inner a -> writeImpl a
+
+instance readForeignStartStop :: (JSON.ReadForeign a) => JSON.ReadForeign (StartStop a) where
+  readImpl frgn = do
+    let
+      tryOuter = do
+        str <- readImpl frgn
+        case str of
+          "start" -> pure Start
+          "stop" -> pure Stop
+          _ -> F.fail $ F.ForeignError "StartStop is neither Start nor Stop!"
+    tryOuter <|> (Inner <$> readImpl frgn)
 
 type Edge
   = { left :: StartStop Note, right :: StartStop Note }

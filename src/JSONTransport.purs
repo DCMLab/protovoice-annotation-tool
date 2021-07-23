@@ -1,16 +1,18 @@
 module JSONTransport where
 
 import Prelude
+import Common (parseTime)
 import Data.Array (fromFoldable)
-import Data.Either (Either(..))
+import Data.Either (Either(..), either)
 import Data.Map as M
 import Data.Maybe (Maybe(..))
+import Data.Show (show)
 import Data.Traversable (sequence)
 import Data.Tuple (Tuple(..))
 import Data.Variant (Variant, case_, inj, on)
 import Folding (leftmostToReduction, reductionToLeftmost)
 import Leftmost (FreezeOp(..), HoriChildren(..), HoriOp(..), Leftmost(..), RootOrnament(..), SplitOp(..))
-import Model (DoubleOrnament(..), Edge, Edges, LeftOrnament(..), Note, Reduction, RightOrnament(..), SliceId(..), StartStop, TransId(..), Transition)
+import Model (DoubleOrnament(..), Edge, Edges, LeftOrnament(..), Note, Reduction, RightOrnament(..), SliceId(..), StartStop, TransId(..), Transition, Model)
 import Type.Proxy (Proxy(..))
 
 ----------
@@ -36,7 +38,9 @@ type LeftmostJSON
       )
 
 type FreezeJSON
-  = { ties :: Array Edge }
+  = { ties :: Array Edge
+    , prevTime :: String
+    }
 
 type SplitJSON
   = { regular :: Array { parent :: Edge, children :: Array { child :: Note, orn :: Maybe String } }
@@ -68,12 +72,14 @@ type HoriJSON
 
 -- encoding JSON
 -- -------------
-reductionToJSON :: Reduction -> ReductionJSON
-reductionToJSON red =
-  { derivation: leftmostToJSON <$> reductionToLeftmost red
-  , start: sliceToJSON red.start
-  , topSegments: (\{ trans, rslice } -> { trans, rslice: sliceToJSON rslice }) <$> fromFoldable red.segments
-  }
+reductionToJSON :: Model -> Either String ReductionJSON
+reductionToJSON model = do
+  lm <- reductionToLeftmost model
+  pure
+    { derivation: leftmostToJSON <$> lm
+    , start: sliceToJSON model.reduction.start
+    , topSegments: (\{ trans, rslice } -> { trans, rslice: sliceToJSON rslice }) <$> fromFoldable model.reduction.segments
+    }
   where
   sliceToJSON { id, notes } = { id, notes: map _.note <$> notes }
 
@@ -87,7 +93,7 @@ leftmostToJSON = case _ of
   LMHorizontalize h -> inj (Proxy :: Proxy "hori") $ horiToJSON h
 
 freezeToJSON :: FreezeOp -> FreezeJSON
-freezeToJSON (FreezeOp ties) = ties
+freezeToJSON (FreezeOp { ties, prevTime }) = { ties, prevTime: either identity show prevTime }
 
 splitToJSON :: SplitOp -> SplitJSON
 splitToJSON (SplitOp split) =
@@ -137,7 +143,7 @@ horiToJSON (HoriOp { midEdges, children, ids, unexplained }) =
 
 -- decoding JSON
 -- -------------
-reductionFromJSON :: ReductionJSON -> Either String Reduction
+reductionFromJSON :: ReductionJSON -> Either String Model
 reductionFromJSON { topSegments, derivation } = do
   deriv <- sequence $ leftmostFromJSON <$> derivation
   leftmostToReduction topSegments deriv
@@ -153,7 +159,7 @@ leftmostFromJSON =
     # on (Proxy :: Proxy "hori") (map LMHorizontalize <<< horiFromJSON)
 
 freezeFromJSON :: FreezeJSON -> Either String FreezeOp
-freezeFromJSON = Right <<< FreezeOp
+freezeFromJSON { ties, prevTime } = Right $ FreezeOp { ties, prevTime: parseTime prevTime }
 
 splitFromJSON :: SplitJSON -> Either String SplitOp
 splitFromJSON json@{ unexplained, keepLeft, keepRight, ids } = do

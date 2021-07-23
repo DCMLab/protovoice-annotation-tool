@@ -88,12 +88,12 @@ validationAlg = { init, freezeLeft, freezeOnly, splitLeft, splitOnly, splitRight
   where
   init start = pure unit
 
-  freezeLeft { seg } = do
+  freezeLeft _ { seg } = do
     ST.modify_ $ validateSlice seg.rslice
 
   freezeOnly = freezeLeft
 
-  splitLeft { seg } { childl, childr } = do
+  splitLeft _ { seg } { childl, childr } = do
     -- check if mandatory edges are used
     -- TODO: check for invalid (e.g. non-stepwise) edges too
     ST.modify_ \st -> st { edges = foldl (\mp { edge, stat } -> M.insert edge stat mp) st.edges (catMaybes $ leftChildren <> rightChildren) }
@@ -119,9 +119,9 @@ validationAlg = { init, freezeLeft, freezeOnly, splitLeft, splitOnly, splitRight
 
   splitOnly = splitLeft
 
-  splitRight _ = splitLeft
+  splitRight lSlice _ = splitLeft lSlice
 
-  hori { seg: seg1 } { seg: seg2 } { childl, childm, childr } = do
+  hori _ { seg: seg1 } { seg: seg2 } { childl, childm, childr } = do
     -- check slice and its notes
     ST.modify_ (validateSlice seg1.rslice)
     -- check validity of hori reduction

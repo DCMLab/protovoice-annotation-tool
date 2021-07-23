@@ -1,7 +1,7 @@
 module Render where
 
 import Prelude
-import Common (MBS)
+import Common (MBS(..))
 import CommonApp (GraphAction(..), Selection(..), addParentToNote, noteIsSelected, removeParent)
 import Data.Array (catMaybes, elem, findIndex, fromFoldable, length, mapWithIndex)
 import Data.Either (Either(..))
@@ -305,7 +305,7 @@ renderTime i { time } =
     [ HH.text label ]
   where
   label = case time of
-    Right mbs -> if mbs.s == 0 % 1 then show mbs.m <> "." <> show mbs.b else ""
+    Right (MBS { m, b, s }) -> if s == 0 % 1 then show m <> "." <> show b else ""
     Left str -> str
 
 renderReduction :: forall p. Piece -> Graph -> Validation -> Selection -> HH.HTML p GraphAction

@@ -5,7 +5,7 @@ import Data.Generic.Rep (class Generic)
 import Data.Maybe (Maybe(..), maybe)
 import Data.Pitches (SPitch)
 import Data.Show.Generic (genericShow)
-import Model (Note, NoteExplanation, Parents(..), Piece, SliceId, StartStop(..), TransId, setHoriExplParent, setLeftExplParent, setRightExplParent)
+import Model (Model, Note, NoteExplanation, Parents(..), Piece, SliceId, StartStop(..), TransId, setHoriExplParent, setLeftExplParent, setRightExplParent)
 import Web.UIEvent.KeyboardEvent (KeyboardEvent)
 
 data Selection
@@ -84,13 +84,18 @@ data Tab
   = HelpTab
   | ImportTab
   | ExportTab
+  | DebugTab
 
 derive instance eqTab :: Eq Tab
+
+data ImportOutput
+  = ImportPiece Piece
+  | ImportModel Model
 
 data GraphAction
   = NoOp
   | Init
-  | LoadPiece Piece
+  | HandleImport ImportOutput
   | SwitchTab (Maybe Tab)
   | HandleKey KeyboardEvent
   | Select Selection

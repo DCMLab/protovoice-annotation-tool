@@ -10,7 +10,7 @@ import Data.Maybe (Maybe)
 import Data.Show.Generic (genericShow)
 import Data.Traversable (sequence)
 import Data.Tuple (Tuple(..))
-import Model (DoubleOrnament, Edge, Edges, LeftOrnament, Note, NoteExplanation(..), Notes, RightOrnament, SliceId, StartStop(..), TransId)
+import Model (DoubleOrnament, Edge, Edges, LeftOrnament, Note, NoteExplanation(..), Notes, RightOrnament, SliceId, StartStop(..), TransId, Time)
 
 ----------------
 -- operations --
@@ -91,7 +91,7 @@ splitGetChildNotes (SplitOp s) = do
   pure $ sortWith _.note $ regular <> passing <> fromLeft <> fromRight <> unexplained
 
 newtype FreezeOp
-  = FreezeOp { ties :: Array Edge }
+  = FreezeOp { ties :: Array Edge, prevTime :: Time }
 
 data HoriChildren
   = LeftChild Note

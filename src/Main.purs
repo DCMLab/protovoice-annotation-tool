@@ -1,10 +1,10 @@
 module Main where
 
 import Prelude
-import CommonApp (GraphAction(..), Selection(..), Tab(..), getSelSlice, getSelTrans, outerSelected)
+import CommonApp (GraphAction(..), ImportOutput(..), Selection(..), Tab(..), getSelSlice, getSelTrans, outerSelected)
 import Control.Monad.State (class MonadState)
-import Data.Either (Either(..))
-import Data.Foldable (for_)
+import Data.Either (Either(..), either)
+import Data.Foldable (for_, intercalate)
 import Data.List as L
 import Data.Maybe (Maybe(..))
 import Data.Tuple (Tuple(..))
@@ -12,6 +12,7 @@ import Effect (Effect)
 import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Class.Console (log)
 import Folding (evalGraph, reductionToLeftmost)
+import Foreign (renderForeignError)
 import Halogen as H
 import Halogen.Aff as HA
 import Halogen.HTML as HH
@@ -20,11 +21,12 @@ import Halogen.HTML.Properties as HP
 import Halogen.Query.Event (eventListener)
 import Halogen.VDom.Driver (runUI)
 import JSONTransport (reductionFromJSON, reductionToJSON)
-import Model (Model, loadPiece, mergeAtSlice, noteSetExplanation, undoMergeAtTrans, undoVertAtSlice, vertAtMid)
+import Model (Model, Piece, loadPiece, mergeAtSlice, noteSetExplanation, undoMergeAtTrans, undoVertAtSlice, vertAtMid)
 import Render (class_, renderNoteExplanation, renderReduction)
+import Simple.JSON (readJSON, readJSON_)
 import Simple.JSON as JSON
 import Type.Proxy (Proxy(..))
-import Utils (copyToClipboard, examplePiece, examplePieceLong, writeJSONPretty)
+import Utils (addJSONIds, copyToClipboard, examplePiece, examplePieceLong, pieceFromJSON, writeJSONPretty)
 import Validation (validateReduction, validationIsOk)
 import Web.DOM.ParentNode (QuerySelector(..))
 import Web.Event.Event as E
@@ -53,7 +55,9 @@ type AppState
     }
 
 type AppSlots
-  = ( export :: forall query. H.Slot query Void Int )
+  = ( exportTab :: forall query. H.Slot query Void Int
+    , importTab :: forall query. H.Slot query ImportOutput Int
+    )
 
 tryModelAction ::
   forall a m.
@@ -113,7 +117,9 @@ handleAction = case _ of
       removeAny
     _ -> pure unit
   Select s -> H.modify_ \st -> st { selected = s }
-  LoadPiece piece -> H.modify_ \st -> st { model = Just $ loadPiece piece, selected = SelNone, tab = Nothing }
+  HandleImport i -> case i of
+    ImportPiece piece -> H.modify_ \st -> st { model = Just $ loadPiece piece, selected = SelNone, tab = Nothing }
+    ImportModel model -> H.modify_ \st -> st { model = Just model, selected = SelNone, tab = Nothing }
   MergeAtSelected -> tryModelAction getSelSlice mergeAtSlice true
   VertAtSelected -> tryModelAction getSelTrans vertAtMid true
   UnMergeAtSelected -> tryModelAction getSelTrans undoMergeAtTrans true
@@ -169,16 +175,43 @@ appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultE
               [ HH.p_ [ renderNoteExplanation graph st.selected ]
               , renderReduction model.piece graph valid st.selected
               ]
-      -- , HH.p_
-      --     [ HH.text "Selection: "
-      --     , HH.text $ show st.selected
-      --     ]
-      --, HH.pre_ [ HH.text $ maybe "No Piece Loaded" (_.reduction >>> showReduction) st.model ]
       ]
 
 --------------------
 -- sub-components --
 --------------------
+tabHandle :: forall r p. { tab :: Maybe Tab | r } -> Tab -> String -> HH.HTML p GraphAction
+tabHandle st tab name =
+  HH.li [ class_ $ "pure-menu-item" <> if st.tab == Just tab then " pure-menu-selected" else "" ]
+    [ HH.a
+        [ class_ $ "pure-menu-link"
+        , HE.onClick \_ -> SwitchTab if st.tab == Just tab then Nothing else Just tab
+        , HP.href "javascript:;"
+        ]
+        [ HH.text name ]
+    ]
+
+renderTabs :: forall m. MonadEffect m => AppState -> HH.ComponentHTML GraphAction AppSlots m
+renderTabs st =
+  HH.div_
+    [ HH.div [ class_ "pure-menu pure-menu-horizontal" ]
+        [ HH.ul [ class_ "pure-menu-list" ]
+            [ tabHandle st HelpTab "Help"
+            , tabHandle st ImportTab "Import"
+            , tabHandle st ExportTab "Export"
+            , tabHandle st DebugTab "Debug"
+            ]
+        ]
+    , case st.tab of
+        Nothing -> HH.text ""
+        Just HelpTab -> helpText
+        Just ImportTab -> HH.slot (Proxy :: Proxy "importTab") 1 importComponent unit HandleImport
+        Just ExportTab -> HH.slot_ (Proxy :: Proxy "exportTab") 0 exportComponent st.model
+        Just DebugTab -> debugComponent st
+    ]
+
+-- help text
+-- ---------
 helpText :: forall p. HH.HTML p GraphAction
 helpText =
   HH.div [ class_ "tab" ]
@@ -204,52 +237,72 @@ helpText =
         ]
     ]
 
-renderTabs :: forall m. MonadEffect m => AppState -> HH.ComponentHTML GraphAction AppSlots m
-renderTabs st =
-  HH.div_
-    [ HH.div [ class_ "pure-menu pure-menu-horizontal" ]
-        [ HH.ul [ class_ "pure-menu-list" ]
-            [ HH.li [ class_ $ "pure-menu-item" <> if st.tab == Just HelpTab then " pure-menu-selected" else "" ]
-                [ HH.a
-                    [ class_ $ "pure-menu-link"
-                    , HE.onClick \_ -> SwitchTab if st.tab == Just HelpTab then Nothing else Just HelpTab
-                    , HP.href "javascript:;"
-                    ]
-                    [ HH.text "Help" ]
-                ]
-            , HH.li [ class_ $ "pure-menu-item" <> if st.tab == Just ImportTab then " pure-menu-selected" else "" ]
-                [ HH.a
-                    [ class_ $ "pure-menu-link"
-                    , HE.onClick \_ -> SwitchTab if st.tab == Just ImportTab then Nothing else Just ImportTab
-                    , HP.href "javascript:;"
-                    ]
-                    [ HH.text "Import" ]
-                ]
-            , HH.li [ class_ $ "pure-menu-item" <> if st.tab == Just ExportTab then " pure-menu-selected" else "" ]
-                [ HH.a
-                    [ class_ $ "pure-menu-link"
-                    , HE.onClick \_ -> SwitchTab if st.tab == Just ExportTab then Nothing else Just ExportTab
-                    , HP.href "javascript:;"
-                    ]
-                    [ HH.text "Export" ]
-                ]
-            ]
-        ]
-    , case st.tab of
-        Nothing -> HH.text ""
-        Just HelpTab -> helpText
-        Just ImportTab ->
-          HH.div [ class_ "tab" ]
-            [ HH.button [ class_ "pure-button", HE.onClick $ \_ -> LoadPiece examplePiece ] [ HH.text "Load Example" ]
-            , HH.button [ class_ "pure-button", HE.onClick $ \_ -> LoadPiece examplePieceLong ] [ HH.text "Load Example (Long)" ]
-            ]
-        Just ExportTab -> HH.slot_ (Proxy :: Proxy "export") 0 exportComponent st.model
-    ]
-
 -- import component
 -- ----------------
 data ImportAction
-  = UpdateJSONInput String
+  = ImportUpdateModelInput String
+  | ImportUpdatePieceInput String
+  | ImportLoadPiece Piece
+  | ImportLoadModel Model
+
+importComponent :: forall query input m. H.Component query input ImportOutput m
+importComponent = H.mkComponent { initialState, render, eval: H.mkEval H.defaultEval { handleAction = handleImportAction } }
+  where
+  initialState _ = { modelText: "", pieceText: "" }
+
+  render { modelText, pieceText } =
+    HH.div [ class_ "tab" ]
+      [ HH.button [ class_ "pure-button", HE.onClick $ \_ -> ImportLoadPiece examplePiece ] [ HH.text "Load Example" ]
+      , HH.button [ class_ "pure-button", HE.onClick $ \_ -> ImportLoadPiece examplePieceLong ] [ HH.text "Load Example (Long)" ]
+      , HH.div_
+          [ HH.h3_ [ HH.text "Import Piece" ]
+          , HH.textarea [ HP.value pieceText, HE.onValueInput ImportUpdatePieceInput ]
+          , if pieceText == "" then
+              HH.text ""
+            else case pieceEither of
+              Left err -> HH.p [ class_ "alert" ] [ HH.text $ "Invalid input:  ", HH.pre_ [ HH.text err ] ]
+              Right model ->
+                HH.div_
+                  [ HH.p_ [ HH.text "Input valid!" ]
+                  , HH.button [ class_ "pure-button pure-button-primary", HE.onClick $ const $ ImportLoadModel model ]
+                      [ HH.text "Import Piece" ]
+                  ]
+          ]
+      , HH.div_
+          [ HH.h3_ [ HH.text "Import Analysis" ]
+          , HH.textarea [ HP.value modelText, HE.onValueInput ImportUpdateModelInput ]
+          , if modelText == "" then
+              HH.text ""
+            else case modelEither of
+              Left err -> HH.p [ class_ "alert" ] [ HH.text $ "Invalid input:  ", HH.pre_ [ HH.text err ] ]
+              Right model ->
+                HH.div_
+                  [ HH.p_ [ HH.text "Input valid!" ]
+                  , HH.button [ class_ "pure-button pure-button-primary", HE.onClick $ const $ ImportLoadModel model ]
+                      [ HH.text "Import Analysis" ]
+                  ]
+          ]
+      ]
+    where
+    showErrors errs = Left $ "Errors parsing JSON:\n  " <> intercalate "\n  " (renderForeignError <$> errs)
+
+    pieceEither = case readJSON pieceText of
+      Right json -> case pieceFromJSON json of
+        Just piece -> Right $ loadPiece piece
+        Nothing -> Left "Invalid piece!"
+      Left errs1 -> case readJSON pieceText of
+        Right jsonNoIds -> case pieceFromJSON (addJSONIds jsonNoIds) of
+          Just pieceNewIds -> Right $ loadPiece pieceNewIds
+          Nothing -> Left "Invalid piece!"
+        Left errs2 -> showErrors (errs1 <> errs2)
+
+    modelEither = either showErrors reductionFromJSON $ readJSON modelText
+
+  handleImportAction = case _ of
+    ImportUpdateModelInput str -> H.modify_ \st -> st { modelText = str }
+    ImportUpdatePieceInput str -> H.modify_ \st -> st { pieceText = str }
+    ImportLoadPiece p -> H.raise $ ImportPiece p
+    ImportLoadModel m -> H.raise $ ImportModel m
 
 -- export component
 -- ----------------
@@ -277,60 +330,87 @@ exportComponent =
     Nothing -> HH.text ""
     Just model ->
       let
-        json = reductionToJSON model.reduction
+        json = reductionToJSON model
 
-        jsonStr = (if pretty then writeJSONPretty else JSON.writeJSON) json
+        jsonStrOrErr = (if pretty then writeJSONPretty else JSON.writeJSON) <$> json
 
         val = validateReduction model.reduction
 
-        reLoad = reductionFromJSON json
+        reLoad = reductionFromJSON =<< json
       in
         HH.div [ class_ "tab" ]
           [ if validationIsOk val then
               HH.text ""
             else
               HH.p [ class_ "alert" ] [ HH.text "Warning: reduction is incomplete and/or contains errors." ]
-          , HH.h3_ [ HH.text "Reduction Steps" ]
-          , HH.ol_ $ map (\step -> HH.li_ [ HH.text $ show step ]) $ reductionToLeftmost model.reduction
           , HH.h3_ [ HH.text "JSON String" ]
-          , HH.div [ class_ "pure-g" ]
-              [ HH.div [ class_ "pure-u-3-4" ]
-                  [ HH.input
-                      [ HP.type_ $ HP.InputCheckbox
-                      , HP.checked pretty
-                      , HE.onChange \_ -> TogglePretty
-                      , HP.name "prettyJSON"
+          , case jsonStrOrErr of
+              Right jsonStr ->
+                HH.div_
+                  [ HH.div [ class_ "pure-g" ]
+                      [ HH.div [ class_ "pure-u-3-4" ]
+                          [ HH.input
+                              [ HP.type_ $ HP.InputCheckbox
+                              , HP.checked pretty
+                              , HE.onChange \_ -> TogglePretty
+                              , HP.name "prettyJSON"
+                              ]
+                          , HH.label [ HP.for "prettyJSON" ] [ HH.text " pretty" ]
+                          ]
+                      , HH.button
+                          [ class_ "pure-button pure-button-primary pure-u-1-4"
+                          , HE.onClick \_ -> CopyToClipboard jsonStr
+                          ]
+                          [ HH.text "Copy to Clipboard" ]
                       ]
-                  , HH.label [ HP.for "prettyJSON" ] [ HH.text " pretty" ]
+                  , HH.pre_ [ HH.text $ jsonStr ]
                   ]
-              , HH.button
-                  [ class_ "pure-button pure-button-primary pure-u-1-4"
-                  , HE.onClick \_ -> CopyToClipboard jsonStr
-                  ]
-                  [ HH.text "Copy to Clipboard" ]
-              ]
-          , HH.pre_ [ HH.text $ jsonStr ]
+              Left err -> HH.p [ class_ "alert" ] [ HH.text $ "Cannot serialize reduction to JSON:" <> err ]
           , HH.div_ case reLoad of
               Left err -> [ HH.text $ "Error re-reading reduction: " <> err ]
-              Right re -> case L.find (\(Tuple a b) -> a /= b) $ L.zip model.reduction.segments re.segments of
-                Nothing ->
-                  if re == model.reduction then
-                    [ HH.text "roundtrip ok" ]
-                  else
+              Right re ->
+                if re == model then
+                  [ HH.text "roundtrip ok" ]
+                else if re.piece /= model.piece then
+                  [ HH.text "pieces are different! original"
+                  , HH.pre_ [ HH.text $ show model.piece ]
+                  , HH.text "re-read:"
+                  , HH.pre_ [ HH.text $ show re.piece ]
+                  ]
+                else case L.find (\(Tuple a b) -> a /= b) $ L.zip model.reduction.segments re.reduction.segments of
+                  Nothing ->
                     [ HH.text "roundtrip not ok (but can't find wrong segment)! original:"
-                    , HH.pre_ [ HH.text $ show model.reduction ]
+                    , HH.pre_ [ HH.text $ show model ]
                     , HH.text "re-read:"
                     , HH.pre_ [ HH.text $ show re ]
                     ]
-                Just (Tuple sorig sre) ->
-                  [ HH.text "roundtrip not ok! offending segment original: "
-                  , HH.pre_ [ HH.text $ show sorig ]
-                  , HH.text " re-read:"
-                  , HH.pre_ [ HH.text $ show sre ]
-                  ]
+                  Just (Tuple sorig sre) ->
+                    [ HH.text "roundtrip not ok! offending segment original: "
+                    , HH.pre_ [ HH.text $ show sorig ]
+                    , HH.text " re-read:"
+                    , HH.pre_ [ HH.text $ show sre ]
+                    ]
           ]
 
   handleExportAction = case _ of
     CopyToClipboard str -> liftEffect $ copyToClipboard str
     TogglePretty -> H.modify_ \st -> st { pretty = not st.pretty }
     Receive model -> H.modify_ \st -> st { model = model }
+
+-- debug component
+-- ---------------
+debugComponent :: forall p. AppState -> HH.HTML p GraphAction
+debugComponent st =
+  HH.div [ class_ "tab" ]
+    [ HH.h3_ [ HH.text "Selection" ]
+    , HH.p_
+        [ HH.text "Selection: "
+        , HH.text $ show st.selected
+        ]
+    , HH.h3_ [ HH.text "Reduction Steps" ]
+    , case st.model of
+        Nothing -> HH.text "No active reduction."
+        Just model -> case reductionToLeftmost model of
+          Right steps -> HH.ol_ $ map (\step -> HH.li_ [ HH.text $ show step ]) steps
+          Left err -> HH.p [ class_ "alert" ] [ HH.text $ "Warning: reduction cannot be turned into leftmost derivation: " <> err ]
+    ]

@@ -1,6 +1,7 @@
 module Folding where
 
 import Prelude
+import Control.Bind (bindFlipped)
 import Control.Monad.State as ST
 import Data.Array (catMaybes)
 import Data.Array as A
@@ -9,22 +10,29 @@ import Data.Foldable (class Foldable, foldl)
 import Data.List (List(..), (:))
 import Data.List as L
 import Data.Map as M
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Tuple (Tuple(..))
 import Leftmost (FreezeOp(..), HoriChildren(..), HoriOp(..), Leftmost(..), RootOrnament(..), SplitOp(..), horiLeftChildren, horiRightChildren, splitGetChildNotes)
-import Model (DoubleOrnament(..), Edges, EndSegment, Note, NoteExplanation(..), Notes, Op(..), Parents(..), Reduction, Segment, Slice, SliceId(..), StartStop(..), TransId(..), Transition, attachSegment, detachSegment, getInnerNotes, incS, incT, parentEdges, vertEdgesLeft, vertEdgesRight)
+import Model (DoubleOrnament(..), Edges, EndSegment, Model, Note, NoteExplanation(..), Notes, Op(..), Parents(..), Piece, Reduction, Segment, Slice, SliceId(..), StartStop(..), Time, TransId(..), Transition, attachSegment, detachSegment, getInnerNotes, incS, incT, parentEdges, vertEdgesLeft, vertEdgesRight)
 
 type AgendaItem a
   = { seg :: Segment, more :: a }
 
+nothingMore :: Segment -> { seg :: Segment, more :: Unit }
+nothingMore seg = { seg, more: unit }
+
 type FFreeze a s
-  = AgendaItem a -> ST.State s Unit
+  = Slice -> AgendaItem a -> ST.State s Unit
 
 type FSplit a s
-  = AgendaItem a -> { childl :: Segment, childr :: EndSegment } -> ST.State s (List (AgendaItem a))
+  = Slice -> AgendaItem a -> { childl :: Segment, childr :: EndSegment } -> ST.State s (List (AgendaItem a))
+
+type FSplitRight a s
+  = Slice -> AgendaItem a -> AgendaItem a -> { childl :: Segment, childr :: EndSegment } -> ST.State s (List (AgendaItem a))
 
 type FHori a s
-  = AgendaItem a ->
+  = Slice ->
+    AgendaItem a ->
     AgendaItem a ->
     { childl :: Segment, childm :: Segment, childr :: EndSegment } ->
     ST.State s (List (AgendaItem a))
@@ -35,46 +43,48 @@ type AgendaAlg a s
     , freezeLeft :: FFreeze a s
     , splitOnly :: FSplit a s
     , splitLeft :: FSplit a s
-    , splitRight :: AgendaItem a -> AgendaItem a -> { childl :: Segment, childr :: EndSegment } -> ST.State s (List (AgendaItem a))
+    , splitRight :: FSplitRight a s
     , hori :: FHori a s
     }
 
 foldAgenda ::
   forall a s.
   AgendaAlg a s ->
-  List (AgendaItem a) -> ST.State s Unit
+  Slice ->
+  List (AgendaItem a) ->
+  ST.State s Unit
 -- no transition left
-foldAgenda _ Nil = pure unit
+foldAgenda _ _ Nil = pure unit
 
 -- single transition left
-foldAgenda alg (Cons item Nil) = do
+foldAgenda alg leftSlice (Cons item Nil) = do
   case item.seg.op of
-    Freeze -> alg.freezeOnly item
+    Freeze -> alg.freezeOnly leftSlice item
     Split split -> do
-      children <- alg.splitOnly item split
-      foldAgenda alg children
+      children <- alg.splitOnly leftSlice item split
+      foldAgenda alg leftSlice children
     Hori _ -> pure unit -- TODO: fail in this case?
 
 -- two or more transitions left
-foldAgenda alg (Cons left agenda1@(Cons right agenda2)) = do
+foldAgenda alg leftSlice (Cons left agenda1@(Cons right agenda2)) = do
   case left.seg.op of
     -- left freeze
     Freeze -> do
-      alg.freezeLeft left
-      foldAgenda alg agenda1
+      alg.freezeLeft leftSlice left
+      foldAgenda alg left.seg.rslice agenda1
     -- left split
     Split split -> do
-      children <- alg.splitLeft left split
-      foldAgenda alg $ children <> agenda1
+      children <- alg.splitLeft leftSlice left split
+      foldAgenda alg leftSlice $ children <> agenda1
     Hori hori -> case right.seg.op of
       -- right split
       Split rsplit -> do
-        children <- alg.splitRight left right rsplit
-        foldAgenda alg $ left : children <> agenda2
+        children <- alg.splitRight leftSlice left right rsplit
+        foldAgenda alg leftSlice $ left : children <> agenda2
       -- hori
       _ -> do
-        children <- alg.hori left right hori
-        foldAgenda alg $ children <> agenda2
+        children <- alg.hori leftSlice left right hori
+        foldAgenda alg leftSlice $ children <> agenda2
   -- TODO: check for right hori and allow to fail?
   where
   midSlice = left.seg.rslice
@@ -89,7 +99,7 @@ walkGraph ::
   ST.State s Unit
 walkGraph alg start agenda = do
   alg.init start
-  foldAgenda alg agenda
+  foldAgenda alg start agenda
 
 -- evaluate a reduction to a graph (for rendering)
 -- -----------------------------------------------
@@ -107,7 +117,6 @@ type Graph
     , maxd :: Number
     , maxx :: Number
     , currentDepth :: Number
-    , leftId :: SliceId
     }
 
 addGraphSlice :: Slice -> Number -> ST.State Graph Unit
@@ -124,24 +133,21 @@ addGraphSlice slice depth = do
       , slices = M.insert slice.id gslice st.slices
       }
 
-addGraphTrans :: Transition -> SliceId -> ST.State Graph Unit
-addGraphTrans { id, edges } ir = ST.modify_ add
-  where
-  trans il = { left: il, right: ir, id, edges }
-
-  add st = st { transitions = M.insert id (trans st.leftId) st.transitions }
+addGraphTrans :: SliceId -> Transition -> SliceId -> ST.State Graph Unit
+addGraphTrans il { id, edges } ir =
+  ST.modify_ \st ->
+    st { transitions = M.insert id { left: il, right: ir, id, edges } st.transitions }
 
 addHoriEdge :: Slice -> Slice -> ST.State Graph Unit
 addHoriEdge { id: child } { id: parent } = ST.modify_ \st -> st { horis = { child, parent } : st.horis }
 
-withLeftId :: forall a. SliceId -> ST.State Graph a -> ST.State Graph a
-withLeftId id action = do
-  oldid <- ST.gets _.leftId
-  ST.modify_ \st -> st { leftId = id }
-  res <- action
-  ST.modify_ \st -> st { leftId = oldid }
-  pure res
-
+-- withLeftId :: forall a. SliceId -> ST.State Graph a -> ST.State Graph a
+-- withLeftId id action = do
+--   oldid <- ST.gets _.leftId
+--   ST.modify_ \st -> st { leftId = id }
+--   res <- action
+--   ST.modify_ \st -> st { leftId = oldid }
+--   pure res
 graphAlg :: AgendaAlg { rdepth :: Number } Graph
 graphAlg =
   { init
@@ -155,16 +161,15 @@ graphAlg =
   where
   init start = do
     addGraphSlice start 0.0
-    ST.modify_ \st -> st { leftId = start.id }
 
-  freezeTrans left = do
-    addGraphTrans left.seg.trans left.seg.rslice.id
-    addGraphSlice left.seg.rslice left.more.rdepth
-    ST.modify_ \st -> st { currentDepth = left.more.rdepth, leftId = left.seg.rslice.id }
+  freezeTrans lSlice item = do
+    addGraphTrans lSlice.id item.seg.trans item.seg.rslice.id
+    addGraphSlice item.seg.rslice item.more.rdepth
+    ST.modify_ \st -> st { currentDepth = item.more.rdepth }
 
-  splitTrans item split = do
+  splitTrans lSlice item split = do
     currentDepth <- ST.gets _.currentDepth
-    addGraphTrans item.seg.trans item.seg.rslice.id
+    addGraphTrans lSlice.id item.seg.trans item.seg.rslice.id
     pure
       $ { seg: split.childl, more: { rdepth: max currentDepth item.more.rdepth + 1.0 } }
       : { seg: attachSegment split.childr item.seg.rslice
@@ -172,9 +177,8 @@ graphAlg =
         }
       : Nil
 
-  splitRight left right split = do
-    withLeftId left.seg.rslice.id
-      $ addGraphTrans right.seg.trans right.seg.rslice.id
+  splitRight _ left right split = do
+    addGraphTrans left.seg.rslice.id right.seg.trans right.seg.rslice.id
     pure
       $ { seg: split.childl, more: { rdepth: max left.more.rdepth right.more.rdepth + 1.0 } }
       : { seg: attachSegment split.childr right.seg.rslice
@@ -182,14 +186,13 @@ graphAlg =
         }
       : Nil
 
-  hori left right { childl, childm, childr } = do
+  hori lSlice left right { childl, childm, childr } = do
     currentDepth <- ST.gets _.currentDepth
-    addGraphTrans left.seg.trans left.seg.rslice.id
+    addGraphTrans lSlice.id left.seg.trans left.seg.rslice.id
     addGraphSlice left.seg.rslice left.more.rdepth
     addHoriEdge childl.rslice left.seg.rslice
     addHoriEdge childm.rslice left.seg.rslice
-    withLeftId left.seg.rslice.id
-      $ addGraphTrans right.seg.trans right.seg.rslice.id
+    addGraphTrans left.seg.rslice.id right.seg.trans right.seg.rslice.id
     let
       dsub = max currentDepth (max left.more.rdepth right.more.rdepth) + 1.0
     pure
@@ -212,15 +215,11 @@ evalGraph reduction =
     , maxd: 0.0
     , maxx: 0.0
     , currentDepth: 0.0
-    , leftId: SliceId 0
     }
 
 -- evaluate a reduction to a leftmost derivation
 -- ---------------------------------------------
 --
-nothingMore :: Segment -> { seg :: Segment, more :: Unit }
-nothingMore seg = { seg, more: unit }
-
 data Elaboration a b c d
   = ET a
   | EN b
@@ -236,13 +235,22 @@ partitionElaborations = foldl select { t: Nil, n: Nil, r: Nil, l: Nil }
     ER r' -> { t, n, r: r' : r, l }
     EL l' -> { t, n, r, l: l' : l }
 
-reductionToLeftmost :: Reduction -> Array (Leftmost SplitOp FreezeOp HoriOp)
-reductionToLeftmost reduction = A.reverse $ A.fromFoldable $ flip ST.execState Nil $ walkGraph lmAlg reduction.start agenda
+reductionToLeftmost :: Model -> Either String (Array (Leftmost SplitOp FreezeOp HoriOp))
+reductionToLeftmost { reduction, piece } = do
+  st' <- flip ST.execState (Right { lm: Nil, piece: Cons { time: Left "", notes: [] } $ L.fromFoldable piece }) $ walkGraph lmAlg reduction.start agenda
+  pure $ A.reverse $ A.fromFoldable st'.lm
   where
   agenda :: List (AgendaItem Unit)
   agenda = map nothingMore reduction.segments
 
-  lmAlg :: AgendaAlg Unit (List (Leftmost SplitOp FreezeOp HoriOp))
+  lmAlg ::
+    AgendaAlg Unit
+      ( Either
+          String
+          { lm :: List (Leftmost SplitOp FreezeOp HoriOp)
+          , piece :: List { time :: Time, notes :: Array { hold :: Boolean, note :: Note } }
+          }
+      )
   lmAlg =
     { init: \_ -> pure unit
     , freezeOnly
@@ -255,7 +263,7 @@ reductionToLeftmost reduction = A.reverse $ A.fromFoldable $ flip ST.execState N
     where
     getUnexplained slice = map _.note $ A.filter (\{ expl } -> expl == NoExpl) $ getInnerNotes slice
 
-    mkFreeze seg = FreezeOp { ties: seg.trans.edges.regular }
+    mkFreeze seg time = FreezeOp { ties: seg.trans.edges.regular, prevTime: time }
 
     mkSplit seg childl childr =
       let
@@ -298,40 +306,54 @@ reductionToLeftmost reduction = A.reverse $ A.fromFoldable $ flip ST.execState N
         HoriExpl parent -> Just $ Tuple parent $ wrapper note
         _ -> Nothing
 
-    freezeOnly { seg } = ST.modify_ (Cons $ LMFreezeOnly $ mkFreeze seg)
+    modifyEither = ST.modify_ <<< bindFlipped
 
-    freezeLeft { seg } = ST.modify_ (Cons $ LMFreezeLeft $ mkFreeze seg)
+    freezeOnly lSlice { seg } =
+      modifyEither \st -> case st.piece of
+        Nil -> Left "Piece and reduction do not fit together: piece is too short!"
+        Cons nextSlice piece' -> Right st { lm = Cons (LMFreezeOnly $ mkFreeze seg nextSlice.time) st.lm, piece = piece' }
 
-    splitOnly { seg } { childl, childr } = do
-      ST.modify_ (Cons $ LMSplitOnly $ mkSplit seg childl childr)
+    freezeLeft lSlice { seg } =
+      modifyEither \st -> case st.piece of
+        Nil -> Left "Piece and reduction do not fit together: piece is too short!"
+        Cons nextSlice piece' -> Right st { lm = Cons (LMFreezeLeft $ mkFreeze seg nextSlice.time) st.lm, piece = piece' }
+
+    splitOnly _ { seg } { childl, childr } = do
+      modifyEither \st -> Right st { lm = Cons (LMSplitOnly $ mkSplit seg childl childr) st.lm }
       pure $ nothingMore <$> childl : attachSegment childr seg.rslice : Nil
 
-    splitLeft { seg } { childl, childr } = do
-      ST.modify_ (Cons $ LMSplitLeft $ mkSplit seg childl childr)
+    splitLeft _ { seg } { childl, childr } = do
+      modifyEither \st -> Right st { lm = Cons (LMSplitLeft $ mkSplit seg childl childr) st.lm }
       pure $ nothingMore <$> childl : attachSegment childr seg.rslice : Nil
 
-    splitRight _ { seg } { childl, childr } = do
-      ST.modify_ (Cons $ LMSplitRight $ mkSplit seg childl childr)
+    splitRight _ _ { seg } { childl, childr } = do
+      modifyEither \st -> Right st { lm = Cons (LMSplitRight $ mkSplit seg childl childr) st.lm }
       pure $ nothingMore <$> childl : attachSegment childr seg.rslice : Nil
 
-    hori _ { seg } { childl, childm, childr } = do
-      ST.modify_ (Cons $ LMHorizontalize $ mkHori seg childl childm childr)
+    hori _ _ { seg } { childl, childm, childr } = do
+      modifyEither \st -> Right st { lm = Cons (LMHorizontalize $ mkHori seg childl childm childr) st.lm }
       pure $ nothingMore <$> childl : childm : attachSegment childr seg.rslice : Nil
 
+-- unfold a leftmost derivation to a reduction
+-- -------------------------------------------
+-- 
 leftmostToReduction ::
   Array { trans :: Transition, rslice :: { id :: SliceId, notes :: StartStop (Array Note) } } ->
   Array (Leftmost SplitOp FreezeOp HoriOp) ->
-  Either String Reduction
+  Either String Model
 leftmostToReduction topSegments deriv = do
   (Tuple segments st) <-
     ST.runStateT
       (go startSlice (L.fromFoldable $ prepareTop <$> topSegments) (L.fromFoldable deriv))
-      { maxS: SliceId 0, maxT: TransId 0, x: 0.0 }
+      { maxS: SliceId 0, maxT: TransId 0, x: 0.0, piece: [] }
   pure
-    { start: startSlice
-    , segments
-    , nextSliceId: incS st.maxS
-    , nextTransId: incT st.maxT
+    { reduction:
+        { start: startSlice
+        , segments
+        , nextSliceId: incS st.maxS
+        , nextTransId: incT st.maxT
+        }
+    , piece: fromMaybe [] $ A.tail st.piece
     }
   where
   startSlice = { id: SliceId 0, x: 0.0, notes: Start, parents: NoParents }
@@ -349,14 +371,21 @@ leftmostToReduction topSegments deriv = do
     Slice ->
     List { transId :: TransId, rslice :: { id :: SliceId, notes :: StartStop Notes, parents :: Parents SliceId } } ->
     List (Leftmost SplitOp FreezeOp HoriOp) ->
-    ST.StateT { maxS :: SliceId, maxT :: TransId, x :: Number } (Either String) (List Segment)
+    ST.StateT
+      { maxS :: SliceId
+      , maxT :: TransId
+      , x :: Number
+      , piece :: Piece
+      }
+      (Either String)
+      (List Segment)
   go _ Nil Nil = pure Nil
 
   go leftSlice (Cons top tops) (Cons op ops) = case tops of
     -- two or more tops left
     Cons top2 tops2 -> case op of
-      LMFreezeLeft (FreezeOp f) -> do
-        top' <- freeze f.ties top
+      LMFreezeLeft f -> do
+        top' <- freeze leftSlice f top
         Cons top' <$> go top'.rslice tops ops
       LMSplitLeft split -> do
         { childlTop, childrTop } <- prepareSplit leftSlice.id top split
@@ -381,8 +410,8 @@ leftmostToReduction topSegments deriv = do
       _ -> ST.lift $ Left "Applying a single-transition operation while several transitions are left!"
     -- only a single top left
     Nil -> case op of
-      LMFreezeOnly (FreezeOp f) -> do
-        seg <- freeze f.ties top
+      LMFreezeOnly f -> do
+        seg <- freeze leftSlice f top
         pure $ Cons seg Nil
       LMSplitOnly split -> do
         { childlTop, childrTop } <- prepareSplit leftSlice.id top split
@@ -394,9 +423,25 @@ leftmostToReduction topSegments deriv = do
 
   go _ _ _ = ST.lift $ Left "Lengths of top-level and derivation do not match!"
 
-  freeze ties { transId: tid, rslice: { id: sid, notes, parents } } = do
-    st <- ST.modify \st -> st { x = st.x + 1.0, maxT = max st.maxT tid, maxS = max st.maxS sid }
-    pure $ { trans: { id: tid, edges: { passing: [], regular: ties }, is2nd: false }, rslice: { id: sid, notes, parents, x: st.x }, op: Freeze }
+  freeze :: Slice -> FreezeOp -> _ -> _
+  freeze lslice (FreezeOp fop) { transId: tid, rslice: { id: sid, notes, parents } } = do
+    let
+      holdNote { note } = { note, hold: A.any (\{ left } -> left == Inner note) fop.ties }
+
+      pieceNotes = holdNote <$> getInnerNotes lslice
+    st <-
+      ST.modify \st ->
+        st
+          { x = st.x + 1.0
+          , maxT = max st.maxT tid
+          , maxS = max st.maxS sid
+          , piece = A.snoc st.piece { notes: pieceNotes, time: fop.prevTime }
+          }
+    pure
+      $ { trans: { id: tid, edges: { passing: [], regular: fop.ties }, is2nd: false }
+        , rslice: { id: sid, notes, parents, x: st.x }
+        , op: Freeze
+        }
 
   prepareSplit leftSliceId top split@(SplitOp s) = do
     ST.modify_ \st -> st { maxT = max st.maxT top.transId }
