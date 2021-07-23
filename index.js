@@ -2098,9 +2098,11 @@ var PS = {};
   $PS["Data.NonEmpty"] = $PS["Data.NonEmpty"] || {};
   var exports = $PS["Data.NonEmpty"];
   var Control_Plus = $PS["Control.Plus"];
+  var Data_Eq = $PS["Data.Eq"];
   var Data_Foldable = $PS["Data.Foldable"];
   var Data_Functor = $PS["Data.Functor"];
-  var Data_Semigroup = $PS["Data.Semigroup"];                    
+  var Data_Semigroup = $PS["Data.Semigroup"];
+  var Data_Show = $PS["Data.Show"];                              
   var NonEmpty = (function () {
       function NonEmpty(value0, value1) {
           this.value0 = value0;
@@ -2116,6 +2118,13 @@ var PS = {};
   var singleton = function (dictPlus) {
       return function (a) {
           return new NonEmpty(a, Control_Plus.empty(dictPlus));
+      };
+  };
+  var showNonEmpty = function (dictShow) {
+      return function (dictShow1) {
+          return new Data_Show.Show(function (v) {
+              return "(NonEmpty " + (Data_Show.show(dictShow)(v.value0) + (" " + (Data_Show.show(dictShow1)(v.value1) + ")")));
+          });
       };
   };
   var functorNonEmpty = function (dictFunctor) {
@@ -2146,8 +2155,19 @@ var PS = {};
           };
       });
   };
+  var eqNonEmpty = function (dictEq1) {
+      return function (dictEq) {
+          return new Data_Eq.Eq(function (x) {
+              return function (y) {
+                  return Data_Eq.eq(dictEq)(x.value0)(y.value0) && Data_Eq.eq1(dictEq1)(dictEq)(x.value1)(y.value1);
+              };
+          });
+      };
+  };
   exports["NonEmpty"] = NonEmpty;
   exports["singleton"] = singleton;
+  exports["showNonEmpty"] = showNonEmpty;
+  exports["eqNonEmpty"] = eqNonEmpty;
   exports["functorNonEmpty"] = functorNonEmpty;
   exports["foldableNonEmpty"] = foldableNonEmpty;
 })(PS);
@@ -2296,9 +2316,11 @@ var PS = {};
   $PS["Data.Unfoldable"] = $PS["Data.Unfoldable"] || {};
   var exports = $PS["Data.Unfoldable"];
   var $foreign = $PS["Data.Unfoldable"];
+  var Data_Function = $PS["Data.Function"];
   var Data_Maybe = $PS["Data.Maybe"];
   var Data_Tuple = $PS["Data.Tuple"];
-  var Data_Unfoldable1 = $PS["Data.Unfoldable1"];  
+  var Data_Unfoldable1 = $PS["Data.Unfoldable1"];
+  var Data_Unit = $PS["Data.Unit"];                
   var Unfoldable = function (Unfoldable10, unfoldr) {
       this.Unfoldable10 = Unfoldable10;
       this.unfoldr = unfoldr;
@@ -2309,8 +2331,12 @@ var PS = {};
   var unfoldableArray = new Unfoldable(function () {
       return Data_Unfoldable1.unfoldable1Array;
   }, $foreign.unfoldrArrayImpl(Data_Maybe.isNothing)(Data_Maybe.fromJust())(Data_Tuple.fst)(Data_Tuple.snd));
+  var none = function (dictUnfoldable) {
+      return unfoldr(dictUnfoldable)(Data_Function["const"](Data_Maybe.Nothing.value))(Data_Unit.unit);
+  };
   exports["Unfoldable"] = Unfoldable;
   exports["unfoldr"] = unfoldr;
+  exports["none"] = none;
   exports["unfoldableArray"] = unfoldableArray;
 })(PS);
 (function($PS) {
@@ -2498,6 +2524,11 @@ var PS = {};
           };
           return "(" + (Data_Foldable.intercalate(foldableList)(Data_Monoid.monoidString)(" : ")(Data_Functor.map(functorList)(Data_Show.show(dictShow))(v)) + " : Nil)");
       });
+  };
+  var showNonEmptyList = function (dictShow) {
+      return new Data_Show.Show(function (v) {
+          return "(NonEmptyList " + (Data_Show.show(Data_NonEmpty.showNonEmpty(dictShow)(showList(dictShow)))(v) + ")");
+      });
   }; 
   var unfoldable1List = new Data_Unfoldable1.Unfoldable1(function (f) {
       return function (b) {
@@ -2600,6 +2631,9 @@ var PS = {};
   });                                                      
   var eqList = function (dictEq) {
       return new Data_Eq.Eq(Data_Eq.eq1(eq1List)(dictEq));
+  };
+  var eqNonEmptyList = function (dictEq) {
+      return Data_NonEmpty.eqNonEmpty(eq1List)(dictEq);
   }; 
   var applyList = new Control_Apply.Apply(function () {
       return functorList;
@@ -2651,6 +2685,8 @@ var PS = {};
   exports["unfoldableList"] = unfoldableList;
   exports["applicativeList"] = applicativeList;
   exports["plusList"] = plusList;
+  exports["eqNonEmptyList"] = eqNonEmptyList;
+  exports["showNonEmptyList"] = showNonEmptyList;
   exports["functorNonEmptyList"] = functorNonEmptyList;
   exports["applicativeNonEmptyList"] = applicativeNonEmptyList;
   exports["semigroupNonEmptyList"] = semigroupNonEmptyList;
@@ -4013,6 +4049,7 @@ var PS = {};
   var Data_Foldable = $PS["Data.Foldable"];
   var Data_Functor = $PS["Data.Functor"];
   var Data_List_Types = $PS["Data.List.Types"];
+  var Data_Maybe = $PS["Data.Maybe"];
   var Data_Tuple = $PS["Data.Tuple"];
   var Data_Unit = $PS["Data.Unit"];
   var reverse = (function () {
@@ -4107,6 +4144,15 @@ var PS = {};
           return acc + 1 | 0;
       };
   })(0);
+  var head = function (v) {
+      if (v instanceof Data_List_Types.Nil) {
+          return Data_Maybe.Nothing.value;
+      };
+      if (v instanceof Data_List_Types.Cons) {
+          return new Data_Maybe.Just(v.value0);
+      };
+      throw new Error("Failed pattern match at Data.List (line 234, column 1 - line 234, column 22): " + [ v.constructor.name ]);
+  };
   var fromFoldable = function (dictFoldable) {
       return Data_Foldable.foldr(dictFoldable)(Data_List_Types.Cons.create)(Data_List_Types.Nil.value);
   };
@@ -4114,6 +4160,7 @@ var PS = {};
   exports["manyRec"] = manyRec;
   exports["null"] = $$null;
   exports["length"] = length;
+  exports["head"] = head;
   exports["reverse"] = reverse;
   exports["zip"] = zip;
 })(PS);
@@ -5191,6 +5238,7 @@ var PS = {};
   var Control_Monad_Except_Trans = $PS["Control.Monad.Except.Trans"];
   var Data_Boolean = $PS["Data.Boolean"];
   var Data_Either = $PS["Data.Either"];
+  var Data_Eq = $PS["Data.Eq"];
   var Data_Function = $PS["Data.Function"];
   var Data_Functor = $PS["Data.Functor"];
   var Data_Int = $PS["Data.Int"];
@@ -5245,6 +5293,21 @@ var PS = {};
   })();
   var unsafeToForeign = Unsafe_Coerce.unsafeCoerce;
   var unsafeFromForeign = Unsafe_Coerce.unsafeCoerce;
+  var showForeignError = new Data_Show.Show(function (v) {
+      if (v instanceof ForeignError) {
+          return "(ForeignError " + (Data_Show.show(Data_Show.showString)(v.value0) + ")");
+      };
+      if (v instanceof ErrorAtIndex) {
+          return "(ErrorAtIndex " + (Data_Show.show(Data_Show.showInt)(v.value0) + (" " + (Data_Show.show(showForeignError)(v.value1) + ")")));
+      };
+      if (v instanceof ErrorAtProperty) {
+          return "(ErrorAtProperty " + (Data_Show.show(Data_Show.showString)(v.value0) + (" " + (Data_Show.show(showForeignError)(v.value1) + ")")));
+      };
+      if (v instanceof TypeMismatch) {
+          return "(TypeMismatch " + (Data_Show.show(Data_Show.showString)(v.value0) + (" " + (Data_Show.show(Data_Show.showString)(v.value1) + ")")));
+      };
+      throw new Error("Failed pattern match at Foreign (line 64, column 1 - line 68, column 89): " + [ v.constructor.name ]);
+  });
   var renderForeignError = function (v) {
       if (v instanceof ForeignError) {
           return v.value0;
@@ -5311,6 +5374,23 @@ var PS = {};
   var readString = function (dictMonad) {
       return unsafeReadTagged(dictMonad)("String");
   };
+  var eqForeignError = new Data_Eq.Eq(function (x) {
+      return function (y) {
+          if (x instanceof ForeignError && y instanceof ForeignError) {
+              return x.value0 === y.value0;
+          };
+          if (x instanceof TypeMismatch && y instanceof TypeMismatch) {
+              return x.value0 === y.value0 && x.value1 === y.value1;
+          };
+          if (x instanceof ErrorAtIndex && y instanceof ErrorAtIndex) {
+              return x.value0 === y.value0 && Data_Eq.eq(eqForeignError)(x.value1)(y.value1);
+          };
+          if (x instanceof ErrorAtProperty && y instanceof ErrorAtProperty) {
+              return x.value0 === y.value0 && Data_Eq.eq(eqForeignError)(x.value1)(y.value1);
+          };
+          return false;
+      };
+  });
   exports["ForeignError"] = ForeignError;
   exports["TypeMismatch"] = TypeMismatch;
   exports["ErrorAtIndex"] = ErrorAtIndex;
@@ -5322,6 +5402,8 @@ var PS = {};
   exports["readInt"] = readInt;
   exports["readArray"] = readArray;
   exports["fail"] = fail;
+  exports["eqForeignError"] = eqForeignError;
+  exports["showForeignError"] = showForeignError;
   exports["typeOf"] = $foreign.typeOf;
   exports["isNull"] = $foreign.isNull;
   exports["isUndefined"] = $foreign.isUndefined;
@@ -11756,6 +11838,37 @@ var PS = {};
 (function($PS) {
   // Generated by purs version 0.14.1
   "use strict";
+  $PS["Control.Parallel"] = $PS["Control.Parallel"] || {};
+  var exports = $PS["Control.Parallel"];
+  var Control_Category = $PS["Control.Category"];
+  var Control_Parallel_Class = $PS["Control.Parallel.Class"];
+  var Data_Foldable = $PS["Data.Foldable"];                      
+  var parTraverse_ = function (dictParallel) {
+      return function (dictFoldable) {
+          return function (f) {
+              var $17 = Control_Parallel_Class.sequential(dictParallel);
+              var $18 = Data_Foldable.traverse_(dictParallel.Applicative1())(dictFoldable)((function () {
+                  var $20 = Control_Parallel_Class.parallel(dictParallel);
+                  return function ($21) {
+                      return $20(f($21));
+                  };
+              })());
+              return function ($19) {
+                  return $17($18($19));
+              };
+          };
+      };
+  };
+  var parSequence_ = function (dictParallel) {
+      return function (dictFoldable) {
+          return parTraverse_(dictParallel)(dictFoldable)(Control_Category.identity(Control_Category.categoryFn));
+      };
+  };
+  exports["parSequence_"] = parSequence_;
+})(PS);
+(function($PS) {
+  // Generated by purs version 0.14.1
+  "use strict";
   $PS["Effect.Class"] = $PS["Effect.Class"] || {};
   var exports = $PS["Effect.Class"];
   var Control_Category = $PS["Control.Category"];
@@ -11786,10 +11899,14 @@ var PS = {};
   var Control_Monad = $PS["Control.Monad"];
   var Control_Monad_Error_Class = $PS["Control.Monad.Error.Class"];
   var Control_Monad_Rec_Class = $PS["Control.Monad.Rec.Class"];
+  var Control_Parallel = $PS["Control.Parallel"];
   var Control_Parallel_Class = $PS["Control.Parallel.Class"];
   var Data_Either = $PS["Data.Either"];
+  var Data_Foldable = $PS["Data.Foldable"];
   var Data_Function = $PS["Data.Function"];
   var Data_Functor = $PS["Data.Functor"];
+  var Data_Monoid = $PS["Data.Monoid"];
+  var Data_Semigroup = $PS["Data.Semigroup"];
   var Data_Unit = $PS["Data.Unit"];
   var Effect = $PS["Effect"];
   var Effect_Class = $PS["Effect.Class"];
@@ -11946,6 +12063,13 @@ var PS = {};
           return $50($51($52));
       };
   })());
+  var semigroupCanceler = new Data_Semigroup.Semigroup(function (v) {
+      return function (v1) {
+          return function (err) {
+              return Control_Parallel.parSequence_(parallelAff)(Data_Foldable.foldableArray)([ v(err), v1(err) ]);
+          };
+      };
+  });
   var monadRecAff = new Control_Monad_Rec_Class.MonadRec(function () {
       return monadAff;
   }, function (k) {
@@ -11963,6 +12087,9 @@ var PS = {};
       return go;
   });
   var nonCanceler = Data_Function["const"](Control_Applicative.pure(applicativeAff)(Data_Unit.unit));
+  var monoidCanceler = new Data_Monoid.Monoid(function () {
+      return semigroupCanceler;
+  }, nonCanceler);
   exports["runAff_"] = runAff_;
   exports["forkAff"] = forkAff;
   exports["suspendAff"] = suspendAff;
@@ -11980,6 +12107,7 @@ var PS = {};
   exports["applicativeParAff"] = applicativeParAff;
   exports["parallelAff"] = parallelAff;
   exports["functorFiber"] = functorFiber;
+  exports["monoidCanceler"] = monoidCanceler;
   exports["makeAff"] = $foreign.makeAff;
 })(PS);
 (function($PS) {
@@ -12528,33 +12656,42 @@ var PS = {};
 (function($PS) {
   // Generated by purs version 0.14.1
   "use strict";
-  $PS["Control.Parallel"] = $PS["Control.Parallel"] || {};
-  var exports = $PS["Control.Parallel"];
-  var Control_Category = $PS["Control.Category"];
-  var Control_Parallel_Class = $PS["Control.Parallel.Class"];
-  var Data_Foldable = $PS["Data.Foldable"];                      
-  var parTraverse_ = function (dictParallel) {
-      return function (dictFoldable) {
-          return function (f) {
-              var $17 = Control_Parallel_Class.sequential(dictParallel);
-              var $18 = Data_Foldable.traverse_(dictParallel.Applicative1())(dictFoldable)((function () {
-                  var $20 = Control_Parallel_Class.parallel(dictParallel);
-                  return function ($21) {
-                      return $20(f($21));
-                  };
-              })());
-              return function ($19) {
-                  return $17($18($19));
-              };
-          };
+  $PS["DOM.HTML.Indexed.InputAcceptType"] = $PS["DOM.HTML.Indexed.InputAcceptType"] || {};
+  var exports = $PS["DOM.HTML.Indexed.InputAcceptType"];
+  var Data_Functor = $PS["Data.Functor"];
+  var Data_String_Common = $PS["Data.String.Common"];                
+  var AcceptMediaType = (function () {
+      function AcceptMediaType(value0) {
+          this.value0 = value0;
       };
-  };
-  var parSequence_ = function (dictParallel) {
-      return function (dictFoldable) {
-          return parTraverse_(dictParallel)(dictFoldable)(Control_Category.identity(Control_Category.categoryFn));
+      AcceptMediaType.create = function (value0) {
+          return new AcceptMediaType(value0);
       };
+      return AcceptMediaType;
+  })();
+  var AcceptFileExtension = (function () {
+      function AcceptFileExtension(value0) {
+          this.value0 = value0;
+      };
+      AcceptFileExtension.create = function (value0) {
+          return new AcceptFileExtension(value0);
+      };
+      return AcceptFileExtension;
+  })();
+  var renderInputAcceptTypeAtom = function (v) {
+      if (v instanceof AcceptMediaType) {
+          return v.value0;
+      };
+      if (v instanceof AcceptFileExtension) {
+          return v.value0;
+      };
+      throw new Error("Failed pattern match at DOM.HTML.Indexed.InputAcceptType (line 28, column 29 - line 30, column 33): " + [ v.constructor.name ]);
   };
-  exports["parSequence_"] = parSequence_;
+  var renderInputAcceptType = function (v) {
+      return Data_String_Common.joinWith(",")(Data_Functor.map(Data_Functor.functorArray)(renderInputAcceptTypeAtom)(v));
+  };
+  exports["AcceptFileExtension"] = AcceptFileExtension;
+  exports["renderInputAcceptType"] = renderInputAcceptType;
 })(PS);
 (function($PS) {
   // Generated by purs version 0.14.1
@@ -12785,6 +12922,7 @@ var PS = {};
       throw new Error("Failed pattern match at DOM.HTML.Indexed.InputType (line 28, column 19 - line 50, column 22): " + [ v.constructor.name ]);
   };
   exports["InputCheckbox"] = InputCheckbox;
+  exports["InputFile"] = InputFile;
   exports["renderInputType"] = renderInputType;
 })(PS);
 (function($PS) {
@@ -12939,6 +13077,27 @@ var PS = {};
   exports["singleton"] = singleton;
   exports["member"] = member;
   exports["monoidSet"] = monoidSet;
+})(PS);
+(function($PS) {
+  // Generated by purs version 0.14.1
+  "use strict";
+  $PS["Effect.Aff.Class"] = $PS["Effect.Aff.Class"] || {};
+  var exports = $PS["Effect.Aff.Class"];
+  var Control_Category = $PS["Control.Category"];
+  var Effect_Aff = $PS["Effect.Aff"];                
+  var MonadAff = function (MonadEffect0, liftAff) {
+      this.MonadEffect0 = MonadEffect0;
+      this.liftAff = liftAff;
+  };
+  var monadAffAff = new MonadAff(function () {
+      return Effect_Aff.monadEffectAff;
+  }, Control_Category.identity(Control_Category.categoryFn));
+  var liftAff = function (dict) {
+      return dict.liftAff;
+  };
+  exports["liftAff"] = liftAff;
+  exports["MonadAff"] = MonadAff;
+  exports["monadAffAff"] = monadAffAff;
 })(PS);
 (function(exports) {
   "use strict";
@@ -15022,6 +15181,7 @@ var PS = {};
   var Data_Function = $PS["Data.Function"];
   var Data_Ord = $PS["Data.Ord"];
   var Data_Unit = $PS["Data.Unit"];
+  var Effect_Aff_Class = $PS["Effect.Aff.Class"];
   var Effect_Class = $PS["Effect.Class"];                                
   var SubscriptionId = function (x) {
       return x;
@@ -15164,6 +15324,16 @@ var PS = {};
           };
       })());
   };
+  var monadAffHalogenM = function (dictMonadAff) {
+      return new Effect_Aff_Class.MonadAff(function () {
+          return monadEffectHalogenM(dictMonadAff.MonadEffect0());
+      }, (function () {
+          var $143 = Effect_Aff_Class.liftAff(dictMonadAff);
+          return function ($144) {
+              return HalogenM(Control_Monad_Free.liftF(Lift.create($143($144))));
+          };
+      })());
+  };
   var functorHalogenM = Control_Monad_Free.freeFunctor;
   var bindHalogenM = Control_Monad_Free.freeBind;
   var applyHalogenM = Control_Monad_Free.freeApply;         
@@ -15187,6 +15357,7 @@ var PS = {};
   exports["applicativeHalogenM"] = applicativeHalogenM;
   exports["bindHalogenM"] = bindHalogenM;
   exports["monadEffectHalogenM"] = monadEffectHalogenM;
+  exports["monadAffHalogenM"] = monadAffHalogenM;
   exports["monadStateHalogenM"] = monadStateHalogenM;
   exports["ordSubscriptionId"] = ordSubscriptionId;
   exports["ordForkId"] = ordForkId;
@@ -16152,12 +16323,16 @@ var PS = {};
   "use strict";
   $PS["Web.HTML.Event.EventTypes"] = $PS["Web.HTML.Event.EventTypes"] || {};
   var exports = $PS["Web.HTML.Event.EventTypes"];
+  var load = "load";      
   var input = "input";
+  var error = "error";
   var domcontentloaded = "DOMContentLoaded";
   var change = "change";
   exports["change"] = change;
   exports["domcontentloaded"] = domcontentloaded;
+  exports["error"] = error;
   exports["input"] = input;
+  exports["load"] = load;
 })(PS);
 (function(exports) {
   "use strict";
@@ -16974,6 +17149,7 @@ var PS = {};
   "use strict";
   $PS["Halogen.HTML.Core"] = $PS["Halogen.HTML.Core"] || {};
   var exports = $PS["Halogen.HTML.Core"];
+  var DOM_HTML_Indexed_InputAcceptType = $PS["DOM.HTML.Indexed.InputAcceptType"];
   var DOM_HTML_Indexed_InputType = $PS["DOM.HTML.Indexed.InputType"];
   var Halogen_VDom_DOM_Prop = $PS["Halogen.VDom.DOM.Prop"];
   var Halogen_VDom_Types = $PS["Halogen.VDom.Types"];          
@@ -17005,6 +17181,9 @@ var PS = {};
   var isPropInputType = new IsProp(function ($37) {
       return Halogen_VDom_DOM_Prop.propFromString(DOM_HTML_Indexed_InputType.renderInputType($37));
   });
+  var isPropInputAcceptType = new IsProp(function ($38) {
+      return Halogen_VDom_DOM_Prop.propFromString(DOM_HTML_Indexed_InputAcceptType.renderInputAcceptType($38));
+  });
   var isPropBoolean = new IsProp(Halogen_VDom_DOM_Prop.propFromBoolean);
   var handler = Halogen_VDom_DOM_Prop.Handler.create;
   var element = function (ns) {
@@ -17030,6 +17209,7 @@ var PS = {};
   exports["isPropString"] = isPropString;
   exports["isPropBoolean"] = isPropBoolean;
   exports["isPropInputType"] = isPropInputType;
+  exports["isPropInputAcceptType"] = isPropInputAcceptType;
 })(PS);
 (function($PS) {
   // Generated by purs version 0.14.1
@@ -17141,6 +17321,10 @@ var PS = {};
     return e.currentTarget;
   };
 
+  exports._target = function (e) {
+    return e.target;
+  };
+
   exports.preventDefault = function (e) {
     return function () {
       return e.preventDefault();
@@ -17154,11 +17338,120 @@ var PS = {};
   var exports = $PS["Web.Event.Event"];
   var $foreign = $PS["Web.Event.Event"];
   var Data_Nullable = $PS["Data.Nullable"];
+  var target = function ($1) {
+      return Data_Nullable.toMaybe($foreign["_target"]($1));
+  };                                 
   var currentTarget = function ($5) {
       return Data_Nullable.toMaybe($foreign["_currentTarget"]($5));
   };
+  exports["target"] = target;
   exports["currentTarget"] = currentTarget;
   exports["preventDefault"] = $foreign.preventDefault;
+})(PS);
+(function(exports) {
+  "use strict";                                                    
+
+  exports._item = function (index) {
+    return function (fileList) {
+      return fileList.item(index);
+    };
+  };
+})(PS["Web.File.FileList"] = PS["Web.File.FileList"] || {});
+(function($PS) {
+  // Generated by purs version 0.14.1
+  "use strict";
+  $PS["Web.File.FileList"] = $PS["Web.File.FileList"] || {};
+  var exports = $PS["Web.File.FileList"];
+  var $foreign = $PS["Web.File.FileList"];
+  var Data_Function = $PS["Data.Function"];
+  var Data_Functor = $PS["Data.Functor"];
+  var Data_Maybe = $PS["Data.Maybe"];
+  var Data_Nullable = $PS["Data.Nullable"];
+  var Data_Tuple = $PS["Data.Tuple"];
+  var Data_Unfoldable = $PS["Data.Unfoldable"];                
+  var item = function (i) {
+      var $1 = $foreign["_item"](i);
+      return function ($2) {
+          return Data_Nullable.toMaybe($1($2));
+      };
+  };
+  var items = function (dictUnfoldable) {
+      return function (fl) {
+          return Data_Unfoldable.unfoldr(dictUnfoldable)(function (i) {
+              return Data_Functor.map(Data_Maybe.functorMaybe)(Data_Function.flip(Data_Tuple.Tuple.create)(i + 1 | 0))(item(i)(fl));
+          })(0);
+      };
+  };
+  exports["items"] = items;
+})(PS);
+(function(exports) {
+  "use strict";
+
+  // ----------------------------------------------------------------------------
+
+  exports._files = function (input) {
+    return function () {
+      return input.files;
+    };
+  };
+})(PS["Web.HTML.HTMLInputElement"] = PS["Web.HTML.HTMLInputElement"] || {});
+(function(exports) {
+  "use strict";
+
+  exports._unsafeReadProtoTagged = function (nothing, just, name, value) {
+    if (typeof window !== "undefined") {
+      var ty = window[name];
+      if (ty != null && value instanceof ty) {
+        return just(value);
+      }
+    }
+    var obj = value;
+    while (obj != null) {
+      var proto = Object.getPrototypeOf(obj);
+      var constructorName = proto.constructor.name;
+      if (constructorName === name) {
+        return just(value);
+      } else if (constructorName === "Object") {
+        return nothing;
+      }
+      obj = proto;
+    }
+    return nothing;
+  };
+})(PS["Web.Internal.FFI"] = PS["Web.Internal.FFI"] || {});
+(function($PS) {
+  // Generated by purs version 0.14.1
+  "use strict";
+  $PS["Web.Internal.FFI"] = $PS["Web.Internal.FFI"] || {};
+  var exports = $PS["Web.Internal.FFI"];
+  var $foreign = $PS["Web.Internal.FFI"];
+  var Data_Maybe = $PS["Data.Maybe"];                
+  var unsafeReadProtoTagged = function (name) {
+      return function (value) {
+          return $foreign["_unsafeReadProtoTagged"](Data_Maybe.Nothing.value, Data_Maybe.Just.create, name, value);
+      };
+  };
+  exports["unsafeReadProtoTagged"] = unsafeReadProtoTagged;
+})(PS);
+(function($PS) {
+  // Generated by purs version 0.14.1
+  "use strict";
+  $PS["Web.HTML.HTMLInputElement"] = $PS["Web.HTML.HTMLInputElement"] || {};
+  var exports = $PS["Web.HTML.HTMLInputElement"];
+  var $foreign = $PS["Web.HTML.HTMLInputElement"];
+  var Data_Functor = $PS["Data.Functor"];
+  var Data_Nullable = $PS["Data.Nullable"];
+  var Effect = $PS["Effect"];
+  var Web_Internal_FFI = $PS["Web.Internal.FFI"];                                  
+  var fromEventTarget = Web_Internal_FFI.unsafeReadProtoTagged("HTMLInputElement");
+  var files = (function () {
+      var $4 = Data_Functor.map(Effect.functorEffect)(Data_Nullable.toMaybe);
+      return function ($5) {
+          return $4($foreign["_files"]($5));
+      };
+  })();
+  exports["fromEventTarget"] = fromEventTarget;
+  exports["files"] = files;
 })(PS);
 (function($PS) {
   // Generated by purs version 0.14.1
@@ -17181,13 +17474,17 @@ var PS = {};
   var Data_Functor = $PS["Data.Functor"];
   var Data_Identity = $PS["Data.Identity"];
   var Data_Maybe = $PS["Data.Maybe"];
+  var Data_Unfoldable = $PS["Data.Unfoldable"];
+  var Effect_Unsafe = $PS["Effect.Unsafe"];
   var Foreign = $PS["Foreign"];
   var Foreign_Index = $PS["Foreign.Index"];
   var Halogen_HTML_Core = $PS["Halogen.HTML.Core"];
   var Halogen_Query_Input = $PS["Halogen.Query.Input"];
   var Unsafe_Coerce = $PS["Unsafe.Coerce"];
   var Web_Event_Event = $PS["Web.Event.Event"];
+  var Web_File_FileList = $PS["Web.File.FileList"];
   var Web_HTML_Event_EventTypes = $PS["Web.HTML.Event.EventTypes"];
+  var Web_HTML_HTMLInputElement = $PS["Web.HTML.HTMLInputElement"];
   var Web_UIEvent_MouseEvent_EventTypes = $PS["Web.UIEvent.MouseEvent.EventTypes"];
   var mouseHandler = Unsafe_Coerce.unsafeCoerce;
   var handler$prime = function (et) {
@@ -17210,7 +17507,20 @@ var PS = {};
       return function ($2) {
           return $1(mouseHandler($2));
       };
-  })();
+  })();                                                  
+  var onFileUpload = function (dictUnfoldable) {
+      return function (f) {
+          return handler(Web_HTML_Event_EventTypes.change)((function () {
+              var $5 = Data_Maybe.maybe(Data_Unfoldable.none(dictUnfoldable))(Web_File_FileList.items(dictUnfoldable));
+              var $6 = Control_Bind.composeKleisli(Data_Maybe.bindMaybe)(Web_Event_Event.target)(Control_Bind.composeKleisli(Data_Maybe.bindMaybe)(Web_HTML_HTMLInputElement.fromEventTarget)(function ($8) {
+                  return Effect_Unsafe.unsafePerformEffect(Web_HTML_HTMLInputElement.files($8));
+              }));
+              return function ($7) {
+                  return f($5($6($7)));
+              };
+          })());
+      };
+  };   
   var addForeignPropHandler = function (key) {
       return function (prop) {
           return function (reader) {
@@ -17229,6 +17539,7 @@ var PS = {};
   };                                                                                                                                    
   var onValueInput = addForeignPropHandler(Web_HTML_Event_EventTypes.input)("value")(Foreign.readString(Data_Identity.monadIdentity));
   exports["onChange"] = onChange;
+  exports["onFileUpload"] = onFileUpload;
   exports["onClick"] = onClick;
   exports["onValueInput"] = onValueInput;
 })(PS);
@@ -17268,7 +17579,8 @@ var PS = {};
   })();
   var checked = prop(Halogen_HTML_Core.isPropBoolean)("checked");
   var attr = Halogen_HTML_Core.attr(Data_Maybe.Nothing.value);
-  var style = attr("style");
+  var style = attr("style");                                  
+  var accept = prop(Halogen_HTML_Core.isPropInputAcceptType)("accept");
   exports["class_"] = class_;
   exports["for"] = $$for;
   exports["href"] = href;
@@ -17279,6 +17591,7 @@ var PS = {};
   exports["enabled"] = enabled;
   exports["checked"] = checked;
   exports["selected"] = selected;
+  exports["accept"] = accept;
 })(PS);
 (function($PS) {
   // Generated by purs version 0.14.1
@@ -18249,11 +18562,19 @@ var PS = {};
   };
   exports["runUI"] = runUI;
 })(PS);
+(function(exports) {
+  "use strict";
+
+  exports.unsafeStringifyPretty = function(json) {
+      return JSON.stringify(json, null, 2);
+  };
+})(PS["JSONTransport"] = PS["JSONTransport"] || {});
 (function($PS) {
   // Generated by purs version 0.14.1
   "use strict";
   $PS["JSONTransport"] = $PS["JSONTransport"] || {};
   var exports = $PS["JSONTransport"];
+  var $foreign = $PS["JSONTransport"];
   var Common = $PS["Common"];
   var Control_Applicative = $PS["Control.Applicative"];
   var Control_Bind = $PS["Control.Bind"];
@@ -18277,7 +18598,25 @@ var PS = {};
   var Folding = $PS["Folding"];
   var Leftmost = $PS["Leftmost"];
   var Model = $PS["Model"];
+  var Simple_JSON = $PS["Simple.JSON"];
   var Type_Proxy = $PS["Type.Proxy"];                
+  var writeJSONPretty = function (dictWriteForeign) {
+      var $133 = Simple_JSON.writeImpl(dictWriteForeign);
+      return function ($134) {
+          return $foreign.unsafeStringifyPretty($133($134));
+      };
+  };
+  var stripJSONIds = Data_Functor.map(Data_Functor.functorArray)(function (v) {
+      return {
+          time: v.time,
+          notes: Data_Functor.map(Data_Functor.functorArray)(function (v1) {
+              return {
+                  hold: v1.hold,
+                  pitch: v1.pitch
+              };
+          })(v.notes)
+      };
+  });
   var splitToJSON = function (v) {
       var unwrap = function (f) {
           return function (v1) {
@@ -18299,7 +18638,7 @@ var PS = {};
           if (v1 instanceof Data_Either.Right) {
               return Data_Functor.map(Data_Maybe.functorMaybe)(Data_Show.show(Model.showDoubleOrnament))(v1.value0);
           };
-          throw new Error("Failed pattern match at JSONTransport (line 120, column 15 - line 122, column 26): " + [ v1.constructor.name ]);
+          throw new Error("Failed pattern match at JSONTransport (line 129, column 15 - line 131, column 26): " + [ v1.constructor.name ]);
       };
       return {
           regular: Data_Functor.map(Data_Functor.functorArray)(unwrap(regToJSON))(Data_Map_Internal.toUnfoldable(Data_Unfoldable.unfoldableArray)(v.regular)),
@@ -18339,7 +18678,7 @@ var PS = {};
           if (v1 instanceof Data_Maybe.Nothing) {
               return new Data_Either.Right(Data_Maybe.Nothing.value);
           };
-          throw new Error("Failed pattern match at JSONTransport (line 209, column 23 - line 213, column 29): " + [ v1.constructor.name ]);
+          throw new Error("Failed pattern match at JSONTransport (line 228, column 23 - line 232, column 29): " + [ v1.constructor.name ]);
       };
       var readPassingOrnament = function (v1) {
           if (v1 instanceof Data_Maybe.Just && v1.value0 === "PassingMid") {
@@ -18357,7 +18696,7 @@ var PS = {};
           if (v1 instanceof Data_Maybe.Nothing) {
               return new Data_Either.Right(Data_Maybe.Nothing.value);
           };
-          throw new Error("Failed pattern match at JSONTransport (line 202, column 25 - line 207, column 29): " + [ v1.constructor.name ]);
+          throw new Error("Failed pattern match at JSONTransport (line 221, column 25 - line 226, column 29): " + [ v1.constructor.name ]);
       };
       var readLeftOrnament = function (v1) {
           if (v1 instanceof Data_Maybe.Just && v1.value0 === "LeftNeighbor") {
@@ -18372,7 +18711,7 @@ var PS = {};
           if (v1 instanceof Data_Maybe.Nothing) {
               return new Data_Either.Right(Data_Maybe.Nothing.value);
           };
-          throw new Error("Failed pattern match at JSONTransport (line 215, column 22 - line 219, column 29): " + [ v1.constructor.name ]);
+          throw new Error("Failed pattern match at JSONTransport (line 234, column 22 - line 238, column 29): " + [ v1.constructor.name ]);
       };
       var readDoubleOrnament = function (v1) {
           if (v1 instanceof Data_Maybe.Just && v1.value0 === "RootNote") {
@@ -18396,7 +18735,7 @@ var PS = {};
           if (v1 instanceof Data_Maybe.Nothing) {
               return Data_Either.Right.create(new Data_Either.Right(Data_Maybe.Nothing.value));
           };
-          throw new Error("Failed pattern match at JSONTransport (line 193, column 24 - line 200, column 37): " + [ v1.constructor.name ]);
+          throw new Error("Failed pattern match at JSONTransport (line 212, column 24 - line 219, column 37): " + [ v1.constructor.name ]);
       };
       return Control_Bind.bind(Data_Either.bindEither)(Data_Functor.map(Data_Either.functorEither)(Data_Map_Internal.fromFoldable(Data_Ord.ordRecord()(Data_Ord.ordRecordCons(Data_Ord.ordRecordCons(Data_Ord.ordRecordNil)()(new Data_Symbol.IsSymbol(function () {
           return "right";
@@ -18449,6 +18788,41 @@ var PS = {};
           });
       });
   };
+  var pieceToJSON = (function () {
+      var noteToJSON = function (v) {
+          return {
+              hold: v.hold,
+              id: v.note.id,
+              pitch: Data_Show.show(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval))(v.note.pitch)
+          };
+      };
+      return Data_Functor.map(Data_Functor.functorArray)(function (v) {
+          return {
+              time: Data_Either.either(Control_Category.identity(Control_Category.categoryFn))(Data_Show.show(Common.showMBS))(v.time),
+              notes: Data_Functor.map(Data_Functor.functorArray)(noteToJSON)(v.notes)
+          };
+      });
+  })();
+  var pieceFromJSON = function (piece) {
+      return Data_Traversable["for"](Data_Maybe.applicativeMaybe)(Data_Traversable.traversableArray)(piece)(function (slice) {
+          return Control_Bind.bind(Data_Maybe.bindMaybe)(Data_Traversable["for"](Data_Maybe.applicativeMaybe)(Data_Traversable.traversableArray)(slice.notes)(function (note) {
+              return Data_Functor.map(Data_Maybe.functorMaybe)(function (p) {
+                  return {
+                      hold: note.hold,
+                      note: {
+                          pitch: p,
+                          id: note.id
+                      }
+                  };
+              })(Data_Pitches_Class.parseNotation(Data_Pitches_Class.parsenotationPitch(Data_Pitches_Spelled.parsenotationSPitch))(note.pitch));
+          }))(function (notes) {
+              return Control_Applicative.pure(Data_Maybe.applicativeMaybe)({
+                  time: Common.parseTime(slice.time),
+                  notes: notes
+              });
+          });
+      });
+  };
   var horiToJSON = function (v) {
       var childToJSON = function (v1) {
           var child = (function () {
@@ -18472,7 +18846,7 @@ var PS = {};
                       return "tooManyChildren";
                   }))(Type_Proxy["Proxy"].value)(v1.value1.value0);
               };
-              throw new Error("Failed pattern match at JSONTransport (line 136, column 15 - line 140, column 70): " + [ v1.value1.constructor.name ]);
+              throw new Error("Failed pattern match at JSONTransport (line 145, column 15 - line 149, column 70): " + [ v1.value1.constructor.name ]);
           })();
           return {
               parent: v1.value0,
@@ -18547,9 +18921,9 @@ var PS = {};
               return "hori";
           }))(Type_Proxy["Proxy"].value)(horiToJSON(v.value0));
       };
-      throw new Error("Failed pattern match at JSONTransport (line 87, column 18 - line 93, column 66): " + [ v.constructor.name ]);
+      throw new Error("Failed pattern match at JSONTransport (line 96, column 18 - line 102, column 66): " + [ v.constructor.name ]);
   };
-  var reductionToJSON = function (model) {
+  var modelToJSON = function (model) {
       var sliceToJSON = function (v) {
           return {
               id: v.id,
@@ -18580,53 +18954,79 @@ var PS = {};
   var leftmostFromJSON = Data_Variant.on()(new Data_Symbol.IsSymbol(function () {
       return "hori";
   }))(Type_Proxy["Proxy"].value)((function () {
-      var $115 = Data_Functor.map(Data_Either.functorEither)(Leftmost.LMHorizontalize.create);
-      return function ($116) {
-          return $115(horiFromJSON($116));
+      var $135 = Data_Functor.map(Data_Either.functorEither)(Leftmost.LMHorizontalize.create);
+      return function ($136) {
+          return $135(horiFromJSON($136));
       };
   })())(Data_Variant.on()(new Data_Symbol.IsSymbol(function () {
       return "splitRight";
   }))(Type_Proxy["Proxy"].value)((function () {
-      var $117 = Data_Functor.map(Data_Either.functorEither)(Leftmost.LMSplitRight.create);
-      return function ($118) {
-          return $117(splitFromJSON($118));
+      var $137 = Data_Functor.map(Data_Either.functorEither)(Leftmost.LMSplitRight.create);
+      return function ($138) {
+          return $137(splitFromJSON($138));
       };
   })())(Data_Variant.on()(new Data_Symbol.IsSymbol(function () {
       return "splitOnly";
   }))(Type_Proxy["Proxy"].value)((function () {
-      var $119 = Data_Functor.map(Data_Either.functorEither)(Leftmost.LMSplitOnly.create);
-      return function ($120) {
-          return $119(splitFromJSON($120));
+      var $139 = Data_Functor.map(Data_Either.functorEither)(Leftmost.LMSplitOnly.create);
+      return function ($140) {
+          return $139(splitFromJSON($140));
       };
   })())(Data_Variant.on()(new Data_Symbol.IsSymbol(function () {
       return "splitLeft";
   }))(Type_Proxy["Proxy"].value)((function () {
-      var $121 = Data_Functor.map(Data_Either.functorEither)(Leftmost.LMSplitLeft.create);
-      return function ($122) {
-          return $121(splitFromJSON($122));
+      var $141 = Data_Functor.map(Data_Either.functorEither)(Leftmost.LMSplitLeft.create);
+      return function ($142) {
+          return $141(splitFromJSON($142));
       };
   })())(Data_Variant.on()(new Data_Symbol.IsSymbol(function () {
       return "freezeOnly";
   }))(Type_Proxy["Proxy"].value)((function () {
-      var $123 = Data_Functor.map(Data_Either.functorEither)(Leftmost.LMFreezeOnly.create);
-      return function ($124) {
-          return $123(freezeFromJSON($124));
+      var $143 = Data_Functor.map(Data_Either.functorEither)(Leftmost.LMFreezeOnly.create);
+      return function ($144) {
+          return $143(freezeFromJSON($144));
       };
   })())(Data_Variant.on()(new Data_Symbol.IsSymbol(function () {
       return "freezeLeft";
   }))(Type_Proxy["Proxy"].value)((function () {
-      var $125 = Data_Functor.map(Data_Either.functorEither)(Leftmost.LMFreezeLeft.create);
-      return function ($126) {
-          return $125(freezeFromJSON($126));
+      var $145 = Data_Functor.map(Data_Either.functorEither)(Leftmost.LMFreezeLeft.create);
+      return function ($146) {
+          return $145(freezeFromJSON($146));
       };
   })())(Data_Variant.case_))))));
-  var reductionFromJSON = function (v) {
+  var modelFromJSON = function (v) {
       return Control_Bind.bind(Data_Either.bindEither)(Data_Traversable.sequence(Data_Traversable.traversableArray)(Data_Either.applicativeEither)(Data_Functor.map(Data_Functor.functorArray)(leftmostFromJSON)(v.derivation)))(function (deriv) {
           return Folding.leftmostToReduction(v.topSegments)(deriv);
       });
   };
-  exports["reductionToJSON"] = reductionToJSON;
-  exports["reductionFromJSON"] = reductionFromJSON;
+  var addJSONIds = function (piece) {
+      var addids = function (s) {
+          return Data_Array.mapWithIndex(function (n) {
+              return function (note) {
+                  return {
+                      id: "note" + (Data_Show.show(Data_Show.showInt)(s) + ("." + Data_Show.show(Data_Show.showInt)(n))),
+                      pitch: note.pitch,
+                      hold: note.hold
+                  };
+              };
+          });
+      };
+      return Data_Array.mapWithIndex(function (s) {
+          return function (slice) {
+              return {
+                  notes: addids(s)(slice.notes),
+                  time: slice.time
+              };
+          };
+      })(piece);
+  };
+  exports["pieceToJSON"] = pieceToJSON;
+  exports["modelToJSON"] = modelToJSON;
+  exports["pieceFromJSON"] = pieceFromJSON;
+  exports["modelFromJSON"] = modelFromJSON;
+  exports["addJSONIds"] = addJSONIds;
+  exports["stripJSONIds"] = stripJSONIds;
+  exports["writeJSONPretty"] = writeJSONPretty;
 })(PS);
 (function($PS) {
   // Generated by purs version 0.14.1
@@ -19513,7 +19913,7 @@ var PS = {};
                   var svgHoris = Data_Functor.map(Data_Functor.functorArray)(renderHori(selection)(graph.slices))(Data_Array.fromFoldable(Data_List_Types.foldableList)(graph.horis));
                   var svgAxis = Data_Array.mapWithIndex(renderTime)(piece);
                   var height = scaley(graph.maxd + 4.0);
-                  return Halogen_HTML_Elements.div([ Halogen_HTML_Properties.style("overflow-x: scroll;") ])([ Halogen_Svg_Elements.svg([ Halogen_Svg_Attributes.width(width), Halogen_Svg_Attributes.height(height), Halogen_Svg_Attributes.viewBox(-scalex(1.0))(-scaley(1.0))(width)(height) ])(Data_Semigroup.append(Data_Semigroup.semigroupArray)(svgTranss)(Data_Semigroup.append(Data_Semigroup.semigroupArray)(svgHoris)(Data_Semigroup.append(Data_Semigroup.semigroupArray)(svgSlices)(svgAxis)))) ]);
+                  return Halogen_HTML_Elements.div([ Halogen_HTML_Properties.style("overflow-x: scroll; max-width: max-content;") ])([ Halogen_Svg_Elements.svg([ Halogen_Svg_Attributes.width(width), Halogen_Svg_Attributes.height(height), Halogen_Svg_Attributes.viewBox(-scalex(1.0))(-scaley(1.0))(width)(height) ])(Data_Semigroup.append(Data_Semigroup.semigroupArray)(svgTranss)(Data_Semigroup.append(Data_Semigroup.semigroupArray)(svgHoris)(Data_Semigroup.append(Data_Semigroup.semigroupArray)(svgSlices)(svgAxis)))) ]);
               };
           };
       };
@@ -19524,10 +19924,6 @@ var PS = {};
 })(PS);
 (function(exports) {
   "use strict";
-
-  exports.unsafeStringifyPretty = function(json) {
-      return JSON.stringify(json, null, 2);
-  };
 
   exports.copyToClipboard = str => () =>
       navigator.clipboard.writeText(str);
@@ -19657,74 +20053,148 @@ var PS = {};
   $PS["Utils"] = $PS["Utils"] || {};
   var exports = $PS["Utils"];
   var $foreign = $PS["Utils"];
-  var Common = $PS["Common"];
-  var Control_Applicative = $PS["Control.Applicative"];
-  var Control_Bind = $PS["Control.Bind"];
-  var Data_Array = $PS["Data.Array"];
-  var Data_Functor = $PS["Data.Functor"];
   var Data_Maybe = $PS["Data.Maybe"];
-  var Data_Pitches_Class = $PS["Data.Pitches.Class"];
-  var Data_Pitches_Spelled = $PS["Data.Pitches.Spelled"];
-  var Data_Show = $PS["Data.Show"];
-  var Data_Traversable = $PS["Data.Traversable"];
-  var Simple_JSON = $PS["Simple.JSON"];                
-  var writeJSONPretty = function (dictWriteForeign) {
-      var $4 = Simple_JSON.writeImpl(dictWriteForeign);
-      return function ($5) {
-          return $foreign.unsafeStringifyPretty($4($5));
-      };
-  };
-  var pieceFromJSON = function (piece) {
-      return Data_Traversable["for"](Data_Maybe.applicativeMaybe)(Data_Traversable.traversableArray)(piece)(function (slice) {
-          return Control_Bind.bind(Data_Maybe.bindMaybe)(Data_Traversable["for"](Data_Maybe.applicativeMaybe)(Data_Traversable.traversableArray)(slice.notes)(function (note) {
-              return Data_Functor.map(Data_Maybe.functorMaybe)(function (p) {
-                  return {
-                      hold: note.hold,
-                      note: {
-                          pitch: p,
-                          id: note.id
-                      }
-                  };
-              })(Data_Pitches_Class.parseNotation(Data_Pitches_Class.parsenotationPitch(Data_Pitches_Spelled.parsenotationSPitch))(note.pitch));
-          }))(function (notes) {
-              return Control_Applicative.pure(Data_Maybe.applicativeMaybe)({
-                  time: Common.parseTime(slice.time),
-                  notes: notes
-              });
-          });
-      });
-  };
-  var addJSONIds = function (piece) {
-      var addids = function (s) {
-          return Data_Array.mapWithIndex(function (n) {
-              return function (note) {
-                  return {
-                      id: "note" + (Data_Show.show(Data_Show.showInt)(s) + ("." + Data_Show.show(Data_Show.showInt)(n))),
-                      pitch: note.pitch,
-                      hold: note.hold
-                  };
-              };
-          });
-      };
-      return Data_Array.mapWithIndex(function (s) {
-          return function (slice) {
-              return {
-                  notes: addids(s)(slice.notes),
-                  time: slice.time
-              };
-          };
-      })(piece);
-  };
-  var examplePieceJSONLongWithIds = addJSONIds($foreign.examplePieceJSONLong);
-  var examplePieceLong = Data_Maybe.fromJust()(pieceFromJSON(examplePieceJSONLongWithIds));
-  var examplePieceJSONWithIds = addJSONIds($foreign.examplePieceJSON);
-  var examplePiece = Data_Maybe.fromJust()(pieceFromJSON(examplePieceJSONWithIds));
-  exports["addJSONIds"] = addJSONIds;
-  exports["pieceFromJSON"] = pieceFromJSON;
+  var JSONTransport = $PS["JSONTransport"];                
+  var examplePieceJSONWithIds = JSONTransport.addJSONIds($foreign.examplePieceJSON);
+  var examplePieceJSONLongWithIds = JSONTransport.addJSONIds($foreign.examplePieceJSONLong);
+  var examplePieceLong = Data_Maybe.fromJust()(JSONTransport.pieceFromJSON(examplePieceJSONLongWithIds));
+  var examplePiece = Data_Maybe.fromJust()(JSONTransport.pieceFromJSON(examplePieceJSONWithIds));
   exports["examplePiece"] = examplePiece;
   exports["examplePieceLong"] = examplePieceLong;
-  exports["writeJSONPretty"] = writeJSONPretty;
   exports["copyToClipboard"] = $foreign.copyToClipboard;
+})(PS);
+(function(exports) {
+  const download = require("downloadjs");
+
+  exports.download_ = function (data) {
+      return function (fileName) {
+          return function (mimeType) {
+              return function () {
+                  // the function returns true on success,
+                  // so we explicitly cast null to false, just in case
+                  return Boolean(download(data, fileName, mimeType));
+              }
+          }
+      }
+  };
+})(PS["Web.DownloadJs"] = PS["Web.DownloadJs"] || {});
+(function($PS) {
+  // Generated by purs version 0.14.1
+  "use strict";
+  $PS["Web.DownloadJs"] = $PS["Web.DownloadJs"] || {};
+  var exports = $PS["Web.DownloadJs"];
+  var $foreign = $PS["Web.DownloadJs"];
+  var Foreign = $PS["Foreign"];                
+  var Downloadable = function (toDownloadData) {
+      this.toDownloadData = toDownloadData;
+  };
+  var toDownloadData = function (dict) {
+      return dict.toDownloadData;
+  };
+  var download = function (dictDownloadable) {
+      return function (payload) {
+          return $foreign.download_(toDownloadData(dictDownloadable)(payload));
+      };
+  };
+  var dlString = new Downloadable(Foreign.unsafeToForeign);
+  exports["download"] = download;
+  exports["dlString"] = dlString;
+})(PS);
+(function($PS) {
+  // Generated by purs version 0.14.1
+  "use strict";
+  $PS["Web.File.File"] = $PS["Web.File.File"] || {};
+  var exports = $PS["Web.File.File"];
+  var Unsafe_Coerce = $PS["Unsafe.Coerce"];
+  var toBlob = Unsafe_Coerce.unsafeCoerce;
+  exports["toBlob"] = toBlob;
+})(PS);
+(function(exports) {
+  "use strict";
+
+  exports.fileReader = function () {
+    return new FileReader();
+  };
+
+  exports.result = function (fr) {
+    return function () {
+      return fr.result;
+    };
+  };
+
+  exports.readAsText = function (blob) {
+    return function (fr) {
+      return function () {
+        fr.readAsText(blob);
+      };
+    };
+  };
+})(PS["Web.File.FileReader"] = PS["Web.File.FileReader"] || {});
+(function($PS) {
+  // Generated by purs version 0.14.1
+  "use strict";
+  $PS["Web.File.FileReader"] = $PS["Web.File.FileReader"] || {};
+  var exports = $PS["Web.File.FileReader"];
+  var $foreign = $PS["Web.File.FileReader"];
+  var Unsafe_Coerce = $PS["Unsafe.Coerce"];                      
+  var toEventTarget = Unsafe_Coerce.unsafeCoerce;
+  exports["toEventTarget"] = toEventTarget;
+  exports["fileReader"] = $foreign.fileReader;
+  exports["result"] = $foreign.result;
+  exports["readAsText"] = $foreign.readAsText;
+})(PS);
+(function($PS) {
+  // Generated by purs version 0.14.1
+  "use strict";
+  $PS["Web.File.FileReader.Aff"] = $PS["Web.File.FileReader.Aff"] || {};
+  var exports = $PS["Web.File.FileReader.Aff"];
+  var Control_Monad_Except = $PS["Control.Monad.Except"];
+  var Data_Either = $PS["Data.Either"];
+  var Data_Identity = $PS["Data.Identity"];
+  var Data_List_Types = $PS["Data.List.Types"];
+  var Data_Monoid = $PS["Data.Monoid"];
+  var Data_Show = $PS["Data.Show"];
+  var Effect_Aff = $PS["Effect.Aff"];
+  var Effect_Exception = $PS["Effect.Exception"];
+  var Foreign = $PS["Foreign"];
+  var Web_Event_EventTarget = $PS["Web.Event.EventTarget"];
+  var Web_File_FileReader = $PS["Web.File.FileReader"];
+  var Web_HTML_Event_EventTypes = $PS["Web.HTML.Event.EventTypes"];                
+  var readAs = function (readMethod) {
+      return function (getResult) {
+          return function (blob) {
+              return Effect_Aff.makeAff(function (fun) {
+                  var succ = function ($2) {
+                      return fun(Data_Either.Right.create($2));
+                  };
+                  var err = function ($3) {
+                      return fun(Data_Either.Left.create($3));
+                  };
+                  return function __do() {
+                      var fr = Web_File_FileReader.fileReader();
+                      var et = Web_File_FileReader.toEventTarget(fr);
+                      var errorListener = Web_Event_EventTarget.eventListener(function (v) {
+                          return err(Effect_Exception.error("error"));
+                      })();
+                      var loadListener = Web_Event_EventTarget.eventListener(function (v) {
+                          return function __do() {
+                              var res = Web_File_FileReader.result(fr)();
+                              return Data_Either.either(function (errs) {
+                                  return err(Effect_Exception.error(Data_Show.show(Data_List_Types.showNonEmptyList(Foreign.showForeignError))(errs)));
+                              })(succ)(Control_Monad_Except.runExcept(readMethod(res)))();
+                          };
+                      })();
+                      Web_Event_EventTarget.addEventListener(Web_HTML_Event_EventTypes.error)(errorListener)(false)(et)();
+                      Web_Event_EventTarget.addEventListener(Web_HTML_Event_EventTypes.load)(loadListener)(false)(et)();
+                      getResult(blob)(fr)();
+                      return Data_Monoid.mempty(Effect_Aff.monoidCanceler);
+                  };
+              });
+          };
+      };
+  };                                                                                                             
+  var readAsText = readAs(Foreign.readString(Data_Identity.monadIdentity))(Web_File_FileReader.readAsText);
+  exports["readAsText"] = readAsText;
 })(PS);
 (function(exports) {
   "use strict";
@@ -19733,44 +20203,6 @@ var PS = {};
     return e.key;
   };
 })(PS["Web.UIEvent.KeyboardEvent"] = PS["Web.UIEvent.KeyboardEvent"] || {});
-(function(exports) {
-  "use strict";
-
-  exports._unsafeReadProtoTagged = function (nothing, just, name, value) {
-    if (typeof window !== "undefined") {
-      var ty = window[name];
-      if (ty != null && value instanceof ty) {
-        return just(value);
-      }
-    }
-    var obj = value;
-    while (obj != null) {
-      var proto = Object.getPrototypeOf(obj);
-      var constructorName = proto.constructor.name;
-      if (constructorName === name) {
-        return just(value);
-      } else if (constructorName === "Object") {
-        return nothing;
-      }
-      obj = proto;
-    }
-    return nothing;
-  };
-})(PS["Web.Internal.FFI"] = PS["Web.Internal.FFI"] || {});
-(function($PS) {
-  // Generated by purs version 0.14.1
-  "use strict";
-  $PS["Web.Internal.FFI"] = $PS["Web.Internal.FFI"] || {};
-  var exports = $PS["Web.Internal.FFI"];
-  var $foreign = $PS["Web.Internal.FFI"];
-  var Data_Maybe = $PS["Data.Maybe"];                
-  var unsafeReadProtoTagged = function (name) {
-      return function (value) {
-          return $foreign["_unsafeReadProtoTagged"](Data_Maybe.Nothing.value, Data_Maybe.Just.create, name, value);
-      };
-  };
-  exports["unsafeReadProtoTagged"] = unsafeReadProtoTagged;
-})(PS);
 (function($PS) {
   // Generated by purs version 0.14.1
   "use strict";
@@ -19804,6 +20236,7 @@ var PS = {};
   var Control_Apply = $PS["Control.Apply"];
   var Control_Bind = $PS["Control.Bind"];
   var Control_Monad_State_Class = $PS["Control.Monad.State.Class"];
+  var DOM_HTML_Indexed_InputAcceptType = $PS["DOM.HTML.Indexed.InputAcceptType"];
   var DOM_HTML_Indexed_InputType = $PS["DOM.HTML.Indexed.InputType"];
   var Data_Boolean = $PS["Data.Boolean"];
   var Data_Either = $PS["Data.Either"];
@@ -19824,6 +20257,7 @@ var PS = {};
   var Data_Unit = $PS["Data.Unit"];
   var Effect = $PS["Effect"];
   var Effect_Aff = $PS["Effect.Aff"];
+  var Effect_Aff_Class = $PS["Effect.Aff.Class"];
   var Effect_Class = $PS["Effect.Class"];
   var Effect_Class_Console = $PS["Effect.Class.Console"];
   var Folding = $PS["Folding"];
@@ -19846,7 +20280,10 @@ var PS = {};
   var Type_Proxy = $PS["Type.Proxy"];
   var Utils = $PS["Utils"];
   var Validation = $PS["Validation"];
+  var Web_DownloadJs = $PS["Web.DownloadJs"];
   var Web_Event_Event = $PS["Web.Event.Event"];
+  var Web_File_File = $PS["Web.File.File"];
+  var Web_File_FileReader_Aff = $PS["Web.File.FileReader.Aff"];
   var Web_HTML = $PS["Web.HTML"];
   var Web_HTML_HTMLDocument = $PS["Web.HTML.HTMLDocument"];
   var Web_HTML_Window = $PS["Web.HTML.Window"];
@@ -19869,6 +20306,24 @@ var PS = {};
           return new ImportUpdatePieceInput(value0);
       };
       return ImportUpdatePieceInput;
+  })();
+  var ImportUploadModel = (function () {
+      function ImportUploadModel(value0) {
+          this.value0 = value0;
+      };
+      ImportUploadModel.create = function (value0) {
+          return new ImportUploadModel(value0);
+      };
+      return ImportUploadModel;
+  })();
+  var ImportUploadPiece = (function () {
+      function ImportUploadPiece(value0) {
+          this.value0 = value0;
+      };
+      ImportUploadPiece.create = function (value0) {
+          return new ImportUploadPiece(value0);
+      };
+      return ImportUploadPiece;
   })();
   var ImportLoadPiece = (function () {
       function ImportLoadPiece(value0) {
@@ -19896,6 +20351,18 @@ var PS = {};
           return new CopyToClipboard(value0);
       };
       return CopyToClipboard;
+  })();
+  var DownloadJSON = (function () {
+      function DownloadJSON(value0, value1) {
+          this.value0 = value0;
+          this.value1 = value1;
+      };
+      DownloadJSON.create = function (value0) {
+          return function (value1) {
+              return new DownloadJSON(value0, value1);
+          };
+      };
+      return DownloadJSON;
   })();
   var TogglePretty = (function () {
       function TogglePretty() {
@@ -19937,25 +20404,25 @@ var PS = {};
                               };
                               if (v instanceof Data_Either.Right) {
                                   return Control_Monad_State_Class.put(dictMonadState)((function () {
-                                      var $53 = {};
-                                      for (var $54 in st) {
-                                          if ({}.hasOwnProperty.call(st, $54)) {
-                                              $53[$54] = st[$54];
+                                      var $57 = {};
+                                      for (var $58 in st) {
+                                          if ({}.hasOwnProperty.call(st, $58)) {
+                                              $57[$58] = st[$58];
                                           };
                                       };
-                                      $53.model = new Data_Maybe.Just(v.value0);
-                                      $53.selected = (function () {
+                                      $57.model = new Data_Maybe.Just(v.value0);
+                                      $57.selected = (function () {
                                           if (clearSel) {
                                               return CommonApp.SelNone.value;
                                           };
                                           return st.selected;
                                       })();
-                                      return $53;
+                                      return $57;
                                   })());
                               };
-                              throw new Error("Failed pattern match at Main (line 79, column 28 - line 81, column 111): " + [ v.constructor.name ]);
+                              throw new Error("Failed pattern match at Main (line 84, column 28 - line 86, column 111): " + [ v.constructor.name ]);
                           };
-                          throw new Error("Failed pattern match at Main (line 77, column 3 - line 81, column 111): " + [ modelAndSel.constructor.name ]);
+                          throw new Error("Failed pattern match at Main (line 82, column 3 - line 86, column 111): " + [ modelAndSel.constructor.name ]);
                       });
                   };
               };
@@ -19966,15 +20433,15 @@ var PS = {};
       return function (tab) {
           return function (name) {
               return Halogen_HTML_Elements.li([ Render.class_("pure-menu-item" + (function () {
-                  var $60 = Data_Eq.eq(Data_Maybe.eqMaybe(CommonApp.eqTab))(st.tab)(new Data_Maybe.Just(tab));
-                  if ($60) {
+                  var $64 = Data_Eq.eq(Data_Maybe.eqMaybe(CommonApp.eqTab))(st.tab)(new Data_Maybe.Just(tab));
+                  if ($64) {
                       return " pure-menu-selected";
                   };
                   return "";
               })()) ])([ Halogen_HTML_Elements.a([ Render.class_("pure-menu-link"), Halogen_HTML_Events.onClick(function (v) {
                   return new CommonApp.SwitchTab((function () {
-                      var $61 = Data_Eq.eq(Data_Maybe.eqMaybe(CommonApp.eqTab))(st.tab)(new Data_Maybe.Just(tab));
-                      if ($61) {
+                      var $65 = Data_Eq.eq(Data_Maybe.eqMaybe(CommonApp.eqTab))(st.tab)(new Data_Maybe.Just(tab));
+                      if ($65) {
                           return Data_Maybe.Nothing.value;
                       };
                       return new Data_Maybe.Just(tab);
@@ -19983,7 +20450,7 @@ var PS = {};
           };
       };
   };
-  var importComponent = (function () {
+  var importComponent = function (dictMonadAff) {
       var render = function (v) {
           var showErrors = function (errs) {
               return Data_Either.Left.create("Errors parsing JSON:\x0a  " + Data_Foldable.intercalate(Data_List_Types.foldableNonEmptyList)(Data_Monoid.monoidString)("\x0a  ")(Data_Functor.map(Data_List_Types.functorNonEmptyList)(Foreign.renderForeignError)(errs)));
@@ -20001,14 +20468,14 @@ var PS = {};
                   return "time";
               }))(Simple_JSON.readString)(Simple_JSON.readFieldsNil)()())()())))(v.pieceText);
               if (v1 instanceof Data_Either.Right) {
-                  var v2 = Utils.pieceFromJSON(v1.value0);
+                  var v2 = JSONTransport.pieceFromJSON(v1.value0);
                   if (v2 instanceof Data_Maybe.Just) {
-                      return Data_Either.Right.create(Model.loadPiece(v2.value0));
+                      return Data_Either.Right.create(Data_Either.Right.create(Model.loadPiece(v2.value0)));
                   };
                   if (v2 instanceof Data_Maybe.Nothing) {
                       return new Data_Either.Left("Invalid piece!");
                   };
-                  throw new Error("Failed pattern match at Main (line 290, column 21 - line 292, column 41): " + [ v2.constructor.name ]);
+                  throw new Error("Failed pattern match at Main (line 326, column 21 - line 328, column 41): " + [ v2.constructor.name ]);
               };
               if (v1 instanceof Data_Either.Left) {
                   var v2 = Simple_JSON.readJSON(Simple_JSON.readArray(Simple_JSON.readRecord()(Simple_JSON.readFieldsCons(new Data_Symbol.IsSymbol(function () {
@@ -20021,23 +20488,29 @@ var PS = {};
                       return "time";
                   }))(Simple_JSON.readString)(Simple_JSON.readFieldsNil)()())()())))(v.pieceText);
                   if (v2 instanceof Data_Either.Right) {
-                      var v3 = Utils.pieceFromJSON(Utils.addJSONIds(v2.value0));
+                      var v3 = JSONTransport.pieceFromJSON(JSONTransport.addJSONIds(v2.value0));
                       if (v3 instanceof Data_Maybe.Just) {
-                          return Data_Either.Right.create(Model.loadPiece(v3.value0));
+                          return Data_Either.Right.create(Data_Either.Left.create(Model.loadPiece(v3.value0)));
                       };
                       if (v3 instanceof Data_Maybe.Nothing) {
                           return new Data_Either.Left("Invalid piece!");
                       };
-                      throw new Error("Failed pattern match at Main (line 294, column 28 - line 296, column 43): " + [ v3.constructor.name ]);
+                      throw new Error("Failed pattern match at Main (line 330, column 28 - line 332, column 43): " + [ v3.constructor.name ]);
                   };
                   if (v2 instanceof Data_Either.Left) {
-                      return showErrors(Data_Semigroup.append(Data_List_Types.semigroupNonEmptyList)(v1.value0)(v2.value0));
+                      return showErrors((function () {
+                          var $75 = Data_Eq.eq(Data_List_Types.eqNonEmptyList(Foreign.eqForeignError))(v1.value0)(v2.value0);
+                          if ($75) {
+                              return v1.value0;
+                          };
+                          return Data_Semigroup.append(Data_List_Types.semigroupNonEmptyList)(v1.value0)(v2.value0);
+                      })());
                   };
-                  throw new Error("Failed pattern match at Main (line 293, column 21 - line 297, column 50): " + [ v2.constructor.name ]);
+                  throw new Error("Failed pattern match at Main (line 329, column 21 - line 333, column 84): " + [ v2.constructor.name ]);
               };
-              throw new Error("Failed pattern match at Main (line 289, column 19 - line 297, column 50): " + [ v1.constructor.name ]);
+              throw new Error("Failed pattern match at Main (line 325, column 19 - line 333, column 84): " + [ v1.constructor.name ]);
           })();
-          var modelEither = Data_Either.either(showErrors)(JSONTransport.reductionFromJSON)(Simple_JSON.readJSON(Simple_JSON.readRecord()(Simple_JSON.readFieldsCons(new Data_Symbol.IsSymbol(function () {
+          var modelEither = Data_Either.either(showErrors)(JSONTransport.modelFromJSON)(Simple_JSON.readJSON(Simple_JSON.readRecord()(Simple_JSON.readFieldsCons(new Data_Symbol.IsSymbol(function () {
               return "derivation";
           }))(Simple_JSON.readArray(Simple_JSON.readForeignVariant()(Simple_JSON.readVariantCons(new Data_Symbol.IsSymbol(function () {
               return "freezeLeft";
@@ -20642,21 +21115,31 @@ var PS = {};
               return new ImportLoadPiece(Utils.examplePiece);
           }) ])([ Halogen_HTML_Core.text("Load Example") ]), Halogen_HTML_Elements.button([ Render.class_("pure-button"), Halogen_HTML_Events.onClick(function (v1) {
               return new ImportLoadPiece(Utils.examplePieceLong);
-          }) ])([ Halogen_HTML_Core.text("Load Example (Long)") ]), Halogen_HTML_Elements.div_([ Halogen_HTML_Elements.h3_([ Halogen_HTML_Core.text("Import Piece") ]), Halogen_HTML_Elements.textarea([ Halogen_HTML_Properties.value(v.pieceText), Halogen_HTML_Events.onValueInput(ImportUpdatePieceInput.create) ]), (function () {
-              var $73 = v.pieceText === "";
-              if ($73) {
+          }) ])([ Halogen_HTML_Core.text("Load Example (Long)") ]), Halogen_HTML_Elements.div_([ Halogen_HTML_Elements.h3_([ Halogen_HTML_Core.text("Import Piece") ]), Halogen_HTML_Elements.div_([ Halogen_HTML_Elements.label([ Halogen_HTML_Properties["for"]("upload-piece") ])([ Halogen_HTML_Core.text("Choose a file: ") ]), Halogen_HTML_Elements.input([ Halogen_HTML_Properties.type_(Halogen_HTML_Core.isPropInputType)(DOM_HTML_Indexed_InputType.InputFile.value), Halogen_HTML_Properties.name("upload-piece"), Halogen_HTML_Properties.accept([ new DOM_HTML_Indexed_InputAcceptType.AcceptFileExtension(".json") ]), Halogen_HTML_Events.onFileUpload(Data_List_Types.unfoldableList)(function (files) {
+              return ImportUploadPiece.create(Data_List.head(files));
+          }) ]) ]), Halogen_HTML_Elements.p_([ Halogen_HTML_Core.text("or enter JSON directly:") ]), Halogen_HTML_Elements.textarea([ Halogen_HTML_Properties.value(v.pieceText), Halogen_HTML_Events.onValueInput(ImportUpdatePieceInput.create) ]), (function () {
+              var $78 = v.pieceText === "";
+              if ($78) {
                   return Halogen_HTML_Core.text("");
               };
               if (pieceEither instanceof Data_Either.Left) {
                   return Halogen_HTML_Elements.p([ Render.class_("alert") ])([ Halogen_HTML_Core.text("Invalid input:  "), Halogen_HTML_Elements.pre_([ Halogen_HTML_Core.text(pieceEither.value0) ]) ]);
               };
               if (pieceEither instanceof Data_Either.Right) {
-                  return Halogen_HTML_Elements.div_([ Halogen_HTML_Elements.p_([ Halogen_HTML_Core.text("Input valid!") ]), Halogen_HTML_Elements.button([ Render.class_("pure-button pure-button-primary"), Halogen_HTML_Events.onClick(Data_Function["const"](new ImportLoadModel(pieceEither.value0))) ])([ Halogen_HTML_Core.text("Import Piece") ]) ]);
+                  if (pieceEither.value0 instanceof Data_Either.Left) {
+                      return Halogen_HTML_Elements.div_([ Halogen_HTML_Elements.p_([ Halogen_HTML_Core.text("Input valid, but no (or not all) IDs were given. Use generated IDs?") ]), Halogen_HTML_Elements.button([ Render.class_("pure-button pure-button-primary"), Halogen_HTML_Events.onClick(Data_Function["const"](new ImportLoadModel(pieceEither.value0.value0))) ])([ Halogen_HTML_Core.text("Import Piece (New IDs)") ]) ]);
+                  };
+                  if (pieceEither.value0 instanceof Data_Either.Right) {
+                      return Halogen_HTML_Elements.div_([ Halogen_HTML_Elements.p_([ Halogen_HTML_Core.text("Input valid!") ]), Halogen_HTML_Elements.button([ Render.class_("pure-button pure-button-primary"), Halogen_HTML_Events.onClick(Data_Function["const"](new ImportLoadModel(pieceEither.value0.value0))) ])([ Halogen_HTML_Core.text("Import Piece") ]) ]);
+                  };
+                  throw new Error("Failed pattern match at Main (line 282, column 30 - line 294, column 22): " + [ pieceEither.value0.constructor.name ]);
               };
-              throw new Error("Failed pattern match at Main (line 262, column 18 - line 269, column 20): " + [ pieceEither.constructor.name ]);
-          })() ]), Halogen_HTML_Elements.div_([ Halogen_HTML_Elements.h3_([ Halogen_HTML_Core.text("Import Analysis") ]), Halogen_HTML_Elements.textarea([ Halogen_HTML_Properties.value(v.modelText), Halogen_HTML_Events.onValueInput(ImportUpdateModelInput.create) ]), (function () {
-              var $77 = v.modelText === "";
-              if ($77) {
+              throw new Error("Failed pattern match at Main (line 280, column 18 - line 294, column 22): " + [ pieceEither.constructor.name ]);
+          })() ]), Halogen_HTML_Elements.div_([ Halogen_HTML_Elements.h3_([ Halogen_HTML_Core.text("Import Analysis") ]), Halogen_HTML_Elements.div_([ Halogen_HTML_Elements.label([ Halogen_HTML_Properties["for"]("upload-analysis") ])([ Halogen_HTML_Core.text("Choose a file: ") ]), Halogen_HTML_Elements.input([ Halogen_HTML_Properties.type_(Halogen_HTML_Core.isPropInputType)(DOM_HTML_Indexed_InputType.InputFile.value), Halogen_HTML_Properties.name("upload-analysis"), Halogen_HTML_Properties.accept([ new DOM_HTML_Indexed_InputAcceptType.AcceptFileExtension(".json") ]), Halogen_HTML_Events.onFileUpload(Data_List_Types.unfoldableList)(function (files) {
+              return ImportUploadModel.create(Data_List.head(files));
+          }) ]) ]), Halogen_HTML_Elements.p_([ Halogen_HTML_Core.text("or enter JSON directly:") ]), Halogen_HTML_Elements.textarea([ Halogen_HTML_Properties.value(v.modelText), Halogen_HTML_Events.onValueInput(ImportUpdateModelInput.create) ]), (function () {
+              var $85 = v.modelText === "";
+              if ($85) {
                   return Halogen_HTML_Core.text("");
               };
               if (modelEither instanceof Data_Either.Left) {
@@ -20665,7 +21148,7 @@ var PS = {};
               if (modelEither instanceof Data_Either.Right) {
                   return Halogen_HTML_Elements.div_([ Halogen_HTML_Elements.p_([ Halogen_HTML_Core.text("Input valid!") ]), Halogen_HTML_Elements.button([ Render.class_("pure-button pure-button-primary"), Halogen_HTML_Events.onClick(Data_Function["const"](new ImportLoadModel(modelEither.value0))) ])([ Halogen_HTML_Core.text("Import Analysis") ]) ]);
               };
-              throw new Error("Failed pattern match at Main (line 276, column 18 - line 283, column 20): " + [ modelEither.constructor.name ]);
+              throw new Error("Failed pattern match at Main (line 311, column 18 - line 318, column 20): " + [ modelEither.constructor.name ]);
           })() ]) ]);
       };
       var initialState = function (v) {
@@ -20674,39 +21157,60 @@ var PS = {};
               pieceText: ""
           };
       };
-      var handleImportAction = function (v) {
-          if (v instanceof ImportUpdateModelInput) {
-              return Control_Monad_State_Class.modify_(Halogen_Query_HalogenM.monadStateHalogenM)(function (st) {
-                  var $84 = {};
-                  for (var $85 in st) {
-                      if ({}.hasOwnProperty.call(st, $85)) {
-                          $84[$85] = st[$85];
-                      };
+      var handleImportAction = (function () {
+          var loadFile = function (f) {
+              return function (action) {
+                  if (f instanceof Data_Maybe.Nothing) {
+                      return Control_Applicative.pure(Halogen_Query_HalogenM.applicativeHalogenM)(Data_Unit.unit);
                   };
-                  $84.modelText = v.value0;
-                  return $84;
-              });
-          };
-          if (v instanceof ImportUpdatePieceInput) {
-              return Control_Monad_State_Class.modify_(Halogen_Query_HalogenM.monadStateHalogenM)(function (st) {
-                  var $88 = {};
-                  for (var $89 in st) {
-                      if ({}.hasOwnProperty.call(st, $89)) {
-                          $88[$89] = st[$89];
-                      };
+                  if (f instanceof Data_Maybe.Just) {
+                      return Control_Bind.bind(Halogen_Query_HalogenM.bindHalogenM)(Effect_Aff_Class.liftAff(Halogen_Query_HalogenM.monadAffHalogenM(dictMonadAff))(Web_File_FileReader_Aff.readAsText(Web_File_File.toBlob(f.value0))))(function (str) {
+                          return handleImportAction(action(str));
+                      });
                   };
-                  $88.pieceText = v.value0;
-                  return $88;
-              });
+                  throw new Error("Failed pattern match at Main (line 345, column 25 - line 349, column 40): " + [ f.constructor.name ]);
+              };
           };
-          if (v instanceof ImportLoadPiece) {
-              return Halogen_Query_HalogenM.raise(new CommonApp.ImportPiece(v.value0));
+          return function (v) {
+              if (v instanceof ImportUpdateModelInput) {
+                  return Control_Monad_State_Class.modify_(Halogen_Query_HalogenM.monadStateHalogenM)(function (st) {
+                      var $94 = {};
+                      for (var $95 in st) {
+                          if ({}.hasOwnProperty.call(st, $95)) {
+                              $94[$95] = st[$95];
+                          };
+                      };
+                      $94.modelText = v.value0;
+                      return $94;
+                  });
+              };
+              if (v instanceof ImportUpdatePieceInput) {
+                  return Control_Monad_State_Class.modify_(Halogen_Query_HalogenM.monadStateHalogenM)(function (st) {
+                      var $98 = {};
+                      for (var $99 in st) {
+                          if ({}.hasOwnProperty.call(st, $99)) {
+                              $98[$99] = st[$99];
+                          };
+                      };
+                      $98.pieceText = v.value0;
+                      return $98;
+                  });
+              };
+              if (v instanceof ImportUploadModel) {
+                  return loadFile(v.value0)(ImportUpdateModelInput.create);
+              };
+              if (v instanceof ImportUploadPiece) {
+                  return loadFile(v.value0)(ImportUpdatePieceInput.create);
+              };
+              if (v instanceof ImportLoadPiece) {
+                  return Halogen_Query_HalogenM.raise(new CommonApp.ImportPiece(v.value0));
+              };
+              if (v instanceof ImportLoadModel) {
+                  return Halogen_Query_HalogenM.raise(new CommonApp.ImportModel(v.value0));
+              };
+              throw new Error("Failed pattern match at Main (line 337, column 24 - line 343, column 49): " + [ v.constructor.name ]);
           };
-          if (v instanceof ImportLoadModel) {
-              return Halogen_Query_HalogenM.raise(new CommonApp.ImportModel(v.value0));
-          };
-          throw new Error("Failed pattern match at Main (line 301, column 24 - line 305, column 49): " + [ v.constructor.name ]);
-      };
+      })();
       return Halogen_Component.mkComponent({
           initialState: initialState,
           render: render,
@@ -20718,7 +21222,7 @@ var PS = {};
               finalize: Halogen_Component.defaultEval.finalize
           })
       });
-  })();
+  };
   var helpText = Halogen_HTML_Elements.div([ Render.class_("tab") ])([ Halogen_HTML_Elements.h2_([ Halogen_HTML_Core.text("Manual") ]), Halogen_HTML_Elements.p_([ Halogen_HTML_Core.text("This app can be used to create protovoice analyses of pieces.") ]), Halogen_HTML_Elements.p_([ Halogen_HTML_Core.text("Load pieces or analyses using the Import tab. Save analyses using the Export tab.") ]), Halogen_HTML_Elements.p_([ Halogen_HTML_Core.text("A piece is analyzed by reducing it using outer structure operations. "), Halogen_HTML_Core.text("Reducing a slice creates a 'split' operation, reducing a transition creates a horizontalization. "), Halogen_HTML_Core.text("Select a top-level slice or transition and press Enter to reduce it. "), Halogen_HTML_Core.text("Pressing Backspace removes the operation below the selected slice or transition, if possible. ") ]), Halogen_HTML_Elements.p_([ Halogen_HTML_Core.text("The inner structure is determined by providing an \"explanation\" for every note. "), Halogen_HTML_Core.text("This done by selecting the parent(s) of a note: "), Halogen_HTML_Core.text("Click on a note in a slice below the top-level to select it. "), Halogen_HTML_Core.text("Then hold CTRL and click on a note in one of its parent slices. "), Halogen_HTML_Core.text("For notes that result from a split, you also have to provide the type of operation. "), Halogen_HTML_Core.text("This is automatically determined from to the selected pitches, but can be overriden if desired. "), Halogen_HTML_Core.text("Split notes can have either one (left/right ornament) or two parents (double-parent ornament). "), Halogen_HTML_Core.text("Double-parent ornaments create new \"mandatory edges\", which must be used in the next reduction step."), Halogen_HTML_Core.text("Correctly reduced notes are shown in grey, unreduced notes are shown in black, and inconsistencies are shown in orange or red.") ]) ]);
   var exportComponent = function (dictMonadEffect) {
       var render = function (v) {
@@ -20727,10 +21231,10 @@ var PS = {};
           };
           if (v.model instanceof Data_Maybe.Just) {
               var val = Validation.validateReduction(v.model.value0.reduction);
-              var json = JSONTransport.reductionToJSON(v.model.value0);
+              var json = JSONTransport.modelToJSON(v.model.value0);
               var jsonStrOrErr = Data_Functor.map(Data_Either.functorEither)((function () {
                   if (v.pretty) {
-                      return Utils.writeJSONPretty(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                      return JSONTransport.writeJSONPretty(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
                           return "derivation";
                       }))(Simple_JSON.writeForeignArray(Simple_JSON.writeForeignVariant()(Simple_JSON.consWriteForeignVariant(new Data_Symbol.IsSymbol(function () {
                           return "freezeLeft";
@@ -21934,31 +22438,33 @@ var PS = {};
                       return "is2nd";
                   }))(Simple_JSON.writeForeignBoolean)(Simple_JSON.nilWriteForeignFields)()()())()()())()()()))(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.nilWriteForeignFields)()()())()()())()()()));
               })())(json);
-              var reLoad = Control_Bind.bindFlipped(Data_Either.bindEither)(JSONTransport.reductionFromJSON)(json);
+              var reLoad = Control_Bind.bindFlipped(Data_Either.bindEither)(JSONTransport.modelFromJSON)(json);
               return Halogen_HTML_Elements.div([ Render.class_("tab") ])([ (function () {
-                  var $97 = Validation.validationIsOk(val);
-                  if ($97) {
+                  var $109 = Validation.validationIsOk(val);
+                  if ($109) {
                       return Halogen_HTML_Core.text("");
                   };
                   return Halogen_HTML_Elements.p([ Render.class_("alert") ])([ Halogen_HTML_Core.text("Warning: reduction is incomplete and/or contains errors.") ]);
               })(), Halogen_HTML_Elements.h3_([ Halogen_HTML_Core.text("JSON String") ]), (function () {
                   if (jsonStrOrErr instanceof Data_Either.Right) {
-                      return Halogen_HTML_Elements.div_([ Halogen_HTML_Elements.div([ Render.class_("pure-g") ])([ Halogen_HTML_Elements.div([ Render.class_("pure-u-3-4") ])([ Halogen_HTML_Elements.input([ Halogen_HTML_Properties.type_(Halogen_HTML_Core.isPropInputType)(DOM_HTML_Indexed_InputType.InputCheckbox.value), Halogen_HTML_Properties.checked(v.pretty), Halogen_HTML_Events.onChange(function (v1) {
+                      return Halogen_HTML_Elements.div_([ Halogen_HTML_Elements.div([ Render.class_("pure-g") ])([ Halogen_HTML_Elements.div([ Render.class_("pure-u-3-5") ])([ Halogen_HTML_Elements.input([ Halogen_HTML_Properties.type_(Halogen_HTML_Core.isPropInputType)(DOM_HTML_Indexed_InputType.InputCheckbox.value), Halogen_HTML_Properties.checked(v.pretty), Halogen_HTML_Events.onChange(function (v1) {
                           return TogglePretty.value;
-                      }), Halogen_HTML_Properties.name("prettyJSON") ]), Halogen_HTML_Elements.label([ Halogen_HTML_Properties["for"]("prettyJSON") ])([ Halogen_HTML_Core.text(" pretty") ]) ]), Halogen_HTML_Elements.button([ Render.class_("pure-button pure-button-primary pure-u-1-4"), Halogen_HTML_Events.onClick(function (v1) {
+                      }), Halogen_HTML_Properties.name("prettyJSON") ]), Halogen_HTML_Elements.label([ Halogen_HTML_Properties["for"]("prettyJSON") ])([ Halogen_HTML_Core.text(" pretty") ]) ]), Halogen_HTML_Elements.button([ Render.class_("pure-button pure-u-1-5"), Halogen_HTML_Events.onClick(function (v1) {
                           return new CopyToClipboard(jsonStrOrErr.value0);
-                      }) ])([ Halogen_HTML_Core.text("Copy to Clipboard") ]) ]), Halogen_HTML_Elements.pre_([ Halogen_HTML_Core.text(jsonStrOrErr.value0) ]) ]);
+                      }) ])([ Halogen_HTML_Core.text("Copy to Clipboard") ]), Halogen_HTML_Elements.button([ Render.class_("pure-button pure-button-primary pure-u-1-5"), Halogen_HTML_Events.onClick(function (v1) {
+                          return new DownloadJSON("analysis.json", jsonStrOrErr.value0);
+                      }) ])([ Halogen_HTML_Core.text("Download") ]) ]), Halogen_HTML_Elements.pre_([ Halogen_HTML_Core.text(jsonStrOrErr.value0) ]) ]);
                   };
                   if (jsonStrOrErr instanceof Data_Either.Left) {
                       return Halogen_HTML_Elements.p([ Render.class_("alert") ])([ Halogen_HTML_Core.text("Cannot serialize reduction to JSON:" + jsonStrOrErr.value0) ]);
                   };
-                  throw new Error("Failed pattern match at Main (line 347, column 13 - line 368, column 109): " + [ jsonStrOrErr.constructor.name ]);
+                  throw new Error("Failed pattern match at Main (line 392, column 13 - line 418, column 109): " + [ jsonStrOrErr.constructor.name ]);
               })(), Halogen_HTML_Elements.div_((function () {
                   if (reLoad instanceof Data_Either.Left) {
                       return [ Halogen_HTML_Core.text("Error re-reading reduction: " + reLoad.value0) ];
                   };
                   if (reLoad instanceof Data_Either.Right) {
-                      var $103 = Data_Eq.eq(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                      var $115 = Data_Eq.eq(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
                           return "reduction";
                       }))(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
                           return "start";
@@ -22055,10 +22561,10 @@ var PS = {};
                       }))(Data_Eq.eqString))))()(new Data_Symbol.IsSymbol(function () {
                           return "hold";
                       }))(Data_Eq.eqBoolean)))))))))(reLoad.value0)(v.model.value0);
-                      if ($103) {
+                      if ($115) {
                           return [ Halogen_HTML_Core.text("roundtrip ok") ];
                       };
-                      var $104 = Data_Eq.notEq(Data_Eq.eqArray(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
+                      var $116 = Data_Eq.notEq(Data_Eq.eqArray(Data_Eq.eqRec()(Data_Eq.eqRowCons(Data_Eq.eqRowCons(Data_Eq.eqRowNil)()(new Data_Symbol.IsSymbol(function () {
                           return "time";
                       }))(Data_Either.eqEither(Data_Eq.eqString)(Common.eqMBS)))()(new Data_Symbol.IsSymbol(function () {
                           return "notes";
@@ -22071,7 +22577,7 @@ var PS = {};
                       }))(Data_Eq.eqString))))()(new Data_Symbol.IsSymbol(function () {
                           return "hold";
                       }))(Data_Eq.eqBoolean)))))))(reLoad.value0.piece)(v.model.value0.piece);
-                      if ($104) {
+                      if ($116) {
                           return [ Halogen_HTML_Core.text("pieces are different! original"), Halogen_HTML_Elements.pre_([ Halogen_HTML_Core.text(Data_Show.show(Data_Show.showArray(Data_Show.showRecord()(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
                               return "notes";
                           }))(Data_Show.showRecordFieldsCons(new Data_Symbol.IsSymbol(function () {
@@ -22467,12 +22973,12 @@ var PS = {};
                               return "pitch";
                           }))(Data_Show.showRecordFieldsNil)(Data_Pitches_Class.showPitchInst(Data_Pitches_Spelled.showpitchSInterval)))(Data_Show.showString))))(Model.showNoteExplanation))))))(Model.showSliceId))))(Model.showOp)))(v1.value0.value1)) ]) ];
                       };
-                      throw new Error("Failed pattern match at Main (line 380, column 22 - line 392, column 22): " + [ v1.constructor.name ]);
+                      throw new Error("Failed pattern match at Main (line 430, column 22 - line 442, column 22): " + [ v1.constructor.name ]);
                   };
-                  throw new Error("Failed pattern match at Main (line 369, column 21 - line 392, column 22): " + [ reLoad.constructor.name ]);
+                  throw new Error("Failed pattern match at Main (line 419, column 21 - line 442, column 22): " + [ reLoad.constructor.name ]);
               })()) ]);
           };
-          throw new Error("Failed pattern match at Main (line 329, column 42 - line 393, column 12): " + [ v.model.constructor.name ]);
+          throw new Error("Failed pattern match at Main (line 374, column 42 - line 443, column 12): " + [ v.model.constructor.name ]);
       };
       var initialState = function (input) {
           return {
@@ -22484,31 +22990,36 @@ var PS = {};
           if (v instanceof CopyToClipboard) {
               return Effect_Class.liftEffect(Halogen_Query_HalogenM.monadEffectHalogenM(dictMonadEffect))(Utils.copyToClipboard(v.value0));
           };
+          if (v instanceof DownloadJSON) {
+              return Control_Bind.bind(Halogen_Query_HalogenM.bindHalogenM)(Effect_Class.liftEffect(Halogen_Query_HalogenM.monadEffectHalogenM(dictMonadEffect))(Web_DownloadJs.download(Web_DownloadJs.dlString)(v.value1)(v.value0)("application/json")))(function () {
+                  return Control_Applicative.pure(Halogen_Query_HalogenM.applicativeHalogenM)(Data_Unit.unit);
+              });
+          };
           if (v instanceof TogglePretty) {
               return Control_Monad_State_Class.modify_(Halogen_Query_HalogenM.monadStateHalogenM)(function (st) {
-                  var $118 = {};
-                  for (var $119 in st) {
-                      if ({}.hasOwnProperty.call(st, $119)) {
-                          $118[$119] = st[$119];
+                  var $132 = {};
+                  for (var $133 in st) {
+                      if ({}.hasOwnProperty.call(st, $133)) {
+                          $132[$133] = st[$133];
                       };
                   };
-                  $118.pretty = !st.pretty;
-                  return $118;
+                  $132.pretty = !st.pretty;
+                  return $132;
               });
           };
           if (v instanceof Receive) {
               return Control_Monad_State_Class.modify_(Halogen_Query_HalogenM.monadStateHalogenM)(function (st) {
-                  var $121 = {};
-                  for (var $122 in st) {
-                      if ({}.hasOwnProperty.call(st, $122)) {
-                          $121[$122] = st[$122];
+                  var $135 = {};
+                  for (var $136 in st) {
+                      if ({}.hasOwnProperty.call(st, $136)) {
+                          $135[$136] = st[$136];
                       };
                   };
-                  $121.model = v.value0;
-                  return $121;
+                  $135.model = v.value0;
+                  return $135;
               });
           };
-          throw new Error("Failed pattern match at Main (line 395, column 24 - line 398, column 59): " + [ v.constructor.name ]);
+          throw new Error("Failed pattern match at Main (line 445, column 24 - line 451, column 59): " + [ v.constructor.name ]);
       };
       return Halogen_Component.mkComponent({
           initialState: initialState,
@@ -22516,8 +23027,8 @@ var PS = {};
           "eval": Halogen_Component.mkEval({
               handleAction: handleExportAction,
               handleQuery: Halogen_Component.defaultEval.handleQuery,
-              receive: function ($182) {
-                  return Data_Maybe.Just.create(Receive.create($182));
+              receive: function ($198) {
+                  return Data_Maybe.Just.create(Receive.create($198));
               },
               initialize: Halogen_Component.defaultEval.initialize,
               finalize: Halogen_Component.defaultEval.finalize
@@ -22539,35 +23050,63 @@ var PS = {};
               if (v instanceof Data_Either.Left) {
                   return Halogen_HTML_Elements.p([ Render.class_("alert") ])([ Halogen_HTML_Core.text("Warning: reduction cannot be turned into leftmost derivation: " + v.value0) ]);
               };
-              throw new Error("Failed pattern match at Main (line 413, column 23 - line 415, column 132): " + [ v.constructor.name ]);
+              throw new Error("Failed pattern match at Main (line 466, column 23 - line 468, column 132): " + [ v.constructor.name ]);
           };
-          throw new Error("Failed pattern match at Main (line 411, column 7 - line 415, column 132): " + [ st.model.constructor.name ]);
+          throw new Error("Failed pattern match at Main (line 464, column 7 - line 468, column 132): " + [ st.model.constructor.name ]);
+      })(), Halogen_HTML_Elements.h3_([ Halogen_HTML_Core.text("Piece JSON") ]), (function () {
+          if (st.model instanceof Data_Maybe.Nothing) {
+              return Halogen_HTML_Core.text("No active piece.");
+          };
+          if (st.model instanceof Data_Maybe.Just) {
+              return Halogen_HTML_Elements.div_([ Halogen_HTML_Elements.p_([ Halogen_HTML_Core.text("with IDs:") ]), Halogen_HTML_Elements.pre_([ Halogen_HTML_Core.text(Simple_JSON.writeJSON(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                  return "notes";
+              }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                  return "hold";
+              }))(Simple_JSON.writeForeignBoolean)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                  return "id";
+              }))(Simple_JSON.writeForeignString)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                  return "pitch";
+              }))(Simple_JSON.writeForeignString)(Simple_JSON.nilWriteForeignFields)()()())()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                  return "time";
+              }))(Simple_JSON.writeForeignString)(Simple_JSON.nilWriteForeignFields)()()())()()())))(JSONTransport.pieceToJSON(st.model.value0.piece))) ]), Halogen_HTML_Elements.p_([ Halogen_HTML_Core.text("without IDs:") ]), Halogen_HTML_Elements.pre_([ Halogen_HTML_Core.text(Simple_JSON.writeJSON(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                  return "notes";
+              }))(Simple_JSON.writeForeignArray(Simple_JSON.recordWriteForeign()(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                  return "hold";
+              }))(Simple_JSON.writeForeignBoolean)(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                  return "pitch";
+              }))(Simple_JSON.writeForeignString)(Simple_JSON.nilWriteForeignFields)()()())()()())))(Simple_JSON.consWriteForeignFields(new Data_Symbol.IsSymbol(function () {
+                  return "time";
+              }))(Simple_JSON.writeForeignString)(Simple_JSON.nilWriteForeignFields)()()())()()())))(JSONTransport.stripJSONIds(JSONTransport.pieceToJSON(st.model.value0.piece)))) ]) ]);
+          };
+          throw new Error("Failed pattern match at Main (line 470, column 7 - line 478, column 14): " + [ st.model.constructor.name ]);
       })() ]);
   };
   var renderTabs = function (dictMonadEffect) {
-      return function (st) {
-          return Halogen_HTML_Elements.div_([ Halogen_HTML_Elements.div([ Render.class_("pure-menu pure-menu-horizontal") ])([ Halogen_HTML_Elements.ul([ Render.class_("pure-menu-list") ])([ tabHandle(st)(CommonApp.HelpTab.value)("Help"), tabHandle(st)(CommonApp.ImportTab.value)("Import"), tabHandle(st)(CommonApp.ExportTab.value)("Export"), tabHandle(st)(CommonApp.DebugTab.value)("Debug") ]) ]), (function () {
-              if (st.tab instanceof Data_Maybe.Nothing) {
-                  return Halogen_HTML_Core.text("");
-              };
-              if (st.tab instanceof Data_Maybe.Just && st.tab.value0 instanceof CommonApp.HelpTab) {
-                  return helpText;
-              };
-              if (st.tab instanceof Data_Maybe.Just && st.tab.value0 instanceof CommonApp.ImportTab) {
-                  return Halogen_HTML.slot()(new Data_Symbol.IsSymbol(function () {
-                      return "importTab";
-                  }))(Data_Ord.ordInt)(Type_Proxy["Proxy"].value)(1)(importComponent)(Data_Unit.unit)(CommonApp.HandleImport.create);
-              };
-              if (st.tab instanceof Data_Maybe.Just && st.tab.value0 instanceof CommonApp.ExportTab) {
-                  return Halogen_HTML.slot_()(new Data_Symbol.IsSymbol(function () {
-                      return "exportTab";
-                  }))(Data_Ord.ordInt)(Type_Proxy["Proxy"].value)(0)(exportComponent(dictMonadEffect))(st.model);
-              };
-              if (st.tab instanceof Data_Maybe.Just && st.tab.value0 instanceof CommonApp.DebugTab) {
-                  return debugComponent(st);
-              };
-              throw new Error("Failed pattern match at Main (line 205, column 7 - line 210, column 43): " + [ st.tab.constructor.name ]);
-          })() ]);
+      return function (dictMonadAff) {
+          return function (st) {
+              return Halogen_HTML_Elements.div_([ Halogen_HTML_Elements.div([ Render.class_("pure-menu pure-menu-horizontal") ])([ Halogen_HTML_Elements.ul([ Render.class_("pure-menu-list") ])([ tabHandle(st)(CommonApp.ImportTab.value)("Import"), tabHandle(st)(CommonApp.ExportTab.value)("Export"), tabHandle(st)(CommonApp.HelpTab.value)("Help"), tabHandle(st)(CommonApp.DebugTab.value)("Debug") ]) ]), (function () {
+                  if (st.tab instanceof Data_Maybe.Nothing) {
+                      return Halogen_HTML_Core.text("");
+                  };
+                  if (st.tab instanceof Data_Maybe.Just && st.tab.value0 instanceof CommonApp.HelpTab) {
+                      return helpText;
+                  };
+                  if (st.tab instanceof Data_Maybe.Just && st.tab.value0 instanceof CommonApp.ImportTab) {
+                      return Halogen_HTML.slot()(new Data_Symbol.IsSymbol(function () {
+                          return "importTab";
+                      }))(Data_Ord.ordInt)(Type_Proxy["Proxy"].value)(1)(importComponent(dictMonadAff))(Data_Unit.unit)(CommonApp.HandleImport.create);
+                  };
+                  if (st.tab instanceof Data_Maybe.Just && st.tab.value0 instanceof CommonApp.ExportTab) {
+                      return Halogen_HTML.slot_()(new Data_Symbol.IsSymbol(function () {
+                          return "exportTab";
+                      }))(Data_Ord.ordInt)(Type_Proxy["Proxy"].value)(0)(exportComponent(dictMonadAff.MonadEffect0()))(st.model);
+                  };
+                  if (st.tab instanceof Data_Maybe.Just && st.tab.value0 instanceof CommonApp.DebugTab) {
+                      return debugComponent(st);
+                  };
+                  throw new Error("Failed pattern match at Main (line 211, column 7 - line 216, column 43): " + [ st.tab.constructor.name ]);
+              })() ]);
+          };
       };
   };
   var removeAny = function (dictMonadEffect) {
@@ -22588,11 +23127,11 @@ var PS = {};
                   if (Data_Boolean.otherwise) {
                       return sel;
                   };
-                  throw new Error("Failed pattern match at Main (line 91, column 1 - line 91, column 94): " + [ v.constructor.name, sel.constructor.name ]);
+                  throw new Error("Failed pattern match at Main (line 96, column 1 - line 96, column 94): " + [ v.constructor.name, sel.constructor.name ]);
               };
               if (sel instanceof CommonApp.SelNote) {
-                  var $145 = sel.value0.note.id === v.noteId;
-                  if ($145) {
+                  var $161 = sel.value0.note.id === v.noteId;
+                  if ($161) {
                       return CommonApp.SelNote.create({
                           note: sel.value0.note,
                           expl: v.expl,
@@ -22615,9 +23154,9 @@ var PS = {};
               return Control_Bind.bind(Halogen_Query_HalogenM.bindHalogenM)(Effect_Class.liftEffect(Halogen_Query_HalogenM.monadEffectHalogenM(dictMonadEffect))(Control_Bind.bindFlipped(Effect.bindEffect)(Web_HTML_Window.document)(Web_HTML.window)))(function (doc) {
                   return Halogen_Query_HalogenM["subscribe'"](function (sid) {
                       return Halogen_Query_Event.eventListener(Web_UIEvent_KeyboardEvent_EventTypes.keyup)(Web_HTML_HTMLDocument.toEventTarget(doc))((function () {
-                          var $183 = Data_Functor.map(Data_Maybe.functorMaybe)(CommonApp.HandleKey.create);
-                          return function ($184) {
-                              return $183(Web_UIEvent_KeyboardEvent.fromEvent($184));
+                          var $199 = Data_Functor.map(Data_Maybe.functorMaybe)(CommonApp.HandleKey.create);
+                          return function ($200) {
+                              return $199(Web_UIEvent_KeyboardEvent.fromEvent($200));
                           };
                       })());
                   });
@@ -22625,14 +23164,14 @@ var PS = {};
           };
           if (v instanceof CommonApp.SwitchTab) {
               return Control_Monad_State_Class.modify_(Halogen_Query_HalogenM.monadStateHalogenM)(function (st) {
-                  var $150 = {};
-                  for (var $151 in st) {
-                      if ({}.hasOwnProperty.call(st, $151)) {
-                          $150[$151] = st[$151];
+                  var $166 = {};
+                  for (var $167 in st) {
+                      if ({}.hasOwnProperty.call(st, $167)) {
+                          $166[$167] = st[$167];
                       };
                   };
-                  $150.tab = v.value0;
-                  return $150;
+                  $166.tab = v.value0;
+                  return $166;
               });
           };
           if (v instanceof CommonApp.HandleKey) {
@@ -22663,46 +23202,46 @@ var PS = {};
           };
           if (v instanceof CommonApp.Select) {
               return Control_Monad_State_Class.modify_(Halogen_Query_HalogenM.monadStateHalogenM)(function (st) {
-                  var $156 = {};
-                  for (var $157 in st) {
-                      if ({}.hasOwnProperty.call(st, $157)) {
-                          $156[$157] = st[$157];
+                  var $172 = {};
+                  for (var $173 in st) {
+                      if ({}.hasOwnProperty.call(st, $173)) {
+                          $172[$173] = st[$173];
                       };
                   };
-                  $156.selected = v.value0;
-                  return $156;
+                  $172.selected = v.value0;
+                  return $172;
               });
           };
           if (v instanceof CommonApp.HandleImport) {
               if (v.value0 instanceof CommonApp.ImportPiece) {
                   return Control_Monad_State_Class.modify_(Halogen_Query_HalogenM.monadStateHalogenM)(function (st) {
-                      var $161 = {};
-                      for (var $162 in st) {
-                          if ({}.hasOwnProperty.call(st, $162)) {
-                              $161[$162] = st[$162];
+                      var $177 = {};
+                      for (var $178 in st) {
+                          if ({}.hasOwnProperty.call(st, $178)) {
+                              $177[$178] = st[$178];
                           };
                       };
-                      $161.model = Data_Maybe.Just.create(Model.loadPiece(v.value0.value0));
-                      $161.selected = CommonApp.SelNone.value;
-                      $161.tab = Data_Maybe.Nothing.value;
-                      return $161;
+                      $177.model = Data_Maybe.Just.create(Model.loadPiece(v.value0.value0));
+                      $177.selected = CommonApp.SelNone.value;
+                      $177.tab = Data_Maybe.Nothing.value;
+                      return $177;
                   });
               };
               if (v.value0 instanceof CommonApp.ImportModel) {
                   return Control_Monad_State_Class.modify_(Halogen_Query_HalogenM.monadStateHalogenM)(function (st) {
-                      var $165 = {};
-                      for (var $166 in st) {
-                          if ({}.hasOwnProperty.call(st, $166)) {
-                              $165[$166] = st[$166];
+                      var $181 = {};
+                      for (var $182 in st) {
+                          if ({}.hasOwnProperty.call(st, $182)) {
+                              $181[$182] = st[$182];
                           };
                       };
-                      $165.model = new Data_Maybe.Just(v.value0.value0);
-                      $165.selected = CommonApp.SelNone.value;
-                      $165.tab = Data_Maybe.Nothing.value;
-                      return $165;
+                      $181.model = new Data_Maybe.Just(v.value0.value0);
+                      $181.selected = CommonApp.SelNone.value;
+                      $181.tab = Data_Maybe.Nothing.value;
+                      return $181;
                   });
               };
-              throw new Error("Failed pattern match at Main (line 120, column 21 - line 122, column 103): " + [ v.value0.constructor.name ]);
+              throw new Error("Failed pattern match at Main (line 125, column 21 - line 127, column 103): " + [ v.value0.constructor.name ]);
           };
           if (v instanceof CommonApp.MergeAtSelected) {
               return tryModelAction(Halogen_Query_HalogenM.monadStateHalogenM)(Halogen_Query_HalogenM.monadEffectHalogenM(dictMonadEffect))(CommonApp.getSelSlice)(Model.mergeAtSlice)(true);
@@ -22727,18 +23266,18 @@ var PS = {};
                   return Model.noteSetExplanation(v1.noteId)(v1.expl);
               })(false))(function () {
                   return Control_Monad_State_Class.modify_(Halogen_Query_HalogenM.monadStateHalogenM)(function (st) {
-                      var $173 = {};
-                      for (var $174 in st) {
-                          if ({}.hasOwnProperty.call(st, $174)) {
-                              $173[$174] = st[$174];
+                      var $189 = {};
+                      for (var $190 in st) {
+                          if ({}.hasOwnProperty.call(st, $190)) {
+                              $189[$190] = st[$190];
                           };
                       };
-                      $173.selected = updateSelection(v.value0)(st.selected);
-                      return $173;
+                      $189.selected = updateSelection(v.value0)(st.selected);
+                      return $189;
                   });
               });
           };
-          throw new Error("Failed pattern match at Main (line 100, column 16 - line 134, column 70): " + [ v.constructor.name ]);
+          throw new Error("Failed pattern match at Main (line 105, column 16 - line 139, column 70): " + [ v.constructor.name ]);
       };
   };
   var combineAny = function (dictMonadEffect) {
@@ -22753,45 +23292,47 @@ var PS = {};
       });
   };
   var appComponent = function (dictMonadEffect) {
-      var render = function (st) {
-          return Halogen_HTML_Elements.div([  ])([ Halogen_HTML_Elements.h1_([ Halogen_HTML_Core.text("Proto-Voice Annotation Tool") ]), renderTabs(dictMonadEffect)(st), Halogen_HTML_Elements.h2_([ Halogen_HTML_Core.text("Annotation") ]), Halogen_HTML_Elements.button([ Render.class_("pure-button"), Halogen_HTML_Events.onClick(function (v) {
-              return CommonApp.CombineAny.value;
-          }), Halogen_HTML_Properties.enabled(CommonApp.outerSelected(st.selected)) ])([ Halogen_HTML_Core.text("Combine (Enter)") ]), Halogen_HTML_Elements.button([ Render.class_("pure-button"), Halogen_HTML_Events.onClick(function (v) {
-              return CommonApp.RemoveAny.value;
-          }), Halogen_HTML_Properties.enabled(CommonApp.outerSelected(st.selected)) ])([ Halogen_HTML_Core.text("Remove (Backspace)") ]), (function () {
-              if (st.model instanceof Data_Maybe.Nothing) {
-                  return Halogen_HTML_Core.text("");
-              };
-              if (st.model instanceof Data_Maybe.Just) {
-                  var valid = Validation.validateReduction(st.model.value0.reduction);
-                  var graph = Folding.evalGraph(st.model.value0.reduction);
-                  return Halogen_HTML_Elements.div_([ Halogen_HTML_Elements.p_([ Render.renderNoteExplanation(graph)(st.selected) ]), Render.renderReduction(st.model.value0.piece)(graph)(valid)(st.selected) ]);
-              };
-              throw new Error("Failed pattern match at Main (line 167, column 9 - line 177, column 16): " + [ st.model.constructor.name ]);
-          })() ]);
-      };
-      var initialState = function (v) {
-          return {
-              selected: CommonApp.SelNone.value,
-              model: Data_Maybe.Nothing.value,
-              tab: new Data_Maybe.Just(CommonApp.ImportTab.value)
+      return function (dictMonadAff) {
+          var render = function (st) {
+              return Halogen_HTML_Elements.div_([ Halogen_HTML_Elements.div([ Render.class_("content") ])([ Halogen_HTML_Elements.h1_([ Halogen_HTML_Core.text("Proto-Voice Annotation Tool") ]), renderTabs(dictMonadAff.MonadEffect0())(dictMonadAff)(st), Halogen_HTML_Elements.h2_([ Halogen_HTML_Core.text("Annotation") ]), Halogen_HTML_Elements.button([ Render.class_("pure-button"), Halogen_HTML_Events.onClick(function (v) {
+                  return CommonApp.CombineAny.value;
+              }), Halogen_HTML_Properties.enabled(CommonApp.outerSelected(st.selected)) ])([ Halogen_HTML_Core.text("Combine (Enter)") ]), Halogen_HTML_Elements.button([ Render.class_("pure-button"), Halogen_HTML_Events.onClick(function (v) {
+                  return CommonApp.RemoveAny.value;
+              }), Halogen_HTML_Properties.enabled(CommonApp.outerSelected(st.selected)) ])([ Halogen_HTML_Core.text("Remove (Backspace)") ]) ]), (function () {
+                  if (st.model instanceof Data_Maybe.Nothing) {
+                      return Halogen_HTML_Core.text("");
+                  };
+                  if (st.model instanceof Data_Maybe.Just) {
+                      var valid = Validation.validateReduction(st.model.value0.reduction);
+                      var graph = Folding.evalGraph(st.model.value0.reduction);
+                      return Halogen_HTML_Elements.div_([ Halogen_HTML_Elements.p([ Render.class_("content") ])([ Render.renderNoteExplanation(graph)(st.selected) ]), Halogen_HTML_Elements.div([ Render.class_("wide") ])([ Render.renderReduction(st.model.value0.piece)(graph)(valid)(st.selected) ]) ]);
+                  };
+                  throw new Error("Failed pattern match at Main (line 173, column 9 - line 183, column 16): " + [ st.model.constructor.name ]);
+              })() ]);
           };
+          var initialState = function (v) {
+              return {
+                  selected: CommonApp.SelNone.value,
+                  model: Data_Maybe.Nothing.value,
+                  tab: new Data_Maybe.Just(CommonApp.ImportTab.value)
+              };
+          };
+          return Halogen_Component.mkComponent({
+              initialState: initialState,
+              render: render,
+              "eval": Halogen_Component.mkEval({
+                  handleAction: handleAction(dictMonadAff.MonadEffect0()),
+                  handleQuery: Halogen_Component.defaultEval.handleQuery,
+                  receive: Halogen_Component.defaultEval.receive,
+                  initialize: new Data_Maybe.Just(CommonApp.Init.value),
+                  finalize: Halogen_Component.defaultEval.finalize
+              })
+          });
       };
-      return Halogen_Component.mkComponent({
-          initialState: initialState,
-          render: render,
-          "eval": Halogen_Component.mkEval({
-              handleAction: handleAction(dictMonadEffect),
-              handleQuery: Halogen_Component.defaultEval.handleQuery,
-              receive: Halogen_Component.defaultEval.receive,
-              initialize: new Data_Maybe.Just(CommonApp.Init.value),
-              finalize: Halogen_Component.defaultEval.finalize
-          })
-      });
   };
   var main = Halogen_Aff_Util.runHalogenAff(Control_Bind.discard(Control_Bind.discardUnit)(Effect_Aff.bindAff)(Halogen_Aff_Util.awaitLoad)(function () {
       return Control_Bind.bind(Effect_Aff.bindAff)(Halogen_Aff_Util.selectElement("#app"))(function (elt) {
-          return Data_Foldable.for_(Effect_Aff.applicativeAff)(Data_Foldable.foldableMaybe)(elt)(Halogen_VDom_Driver.runUI(appComponent(Effect_Aff.monadEffectAff))(Data_Unit.unit));
+          return Data_Foldable.for_(Effect_Aff.applicativeAff)(Data_Foldable.foldableMaybe)(elt)(Halogen_VDom_Driver.runUI(appComponent(Effect_Aff.monadEffectAff)(Effect_Aff_Class.monadAffAff))(Data_Unit.unit));
       });
   }));
   exports["main"] = main;
@@ -22805,10 +23346,13 @@ var PS = {};
   exports["helpText"] = helpText;
   exports["ImportUpdateModelInput"] = ImportUpdateModelInput;
   exports["ImportUpdatePieceInput"] = ImportUpdatePieceInput;
+  exports["ImportUploadModel"] = ImportUploadModel;
+  exports["ImportUploadPiece"] = ImportUploadPiece;
   exports["ImportLoadPiece"] = ImportLoadPiece;
   exports["ImportLoadModel"] = ImportLoadModel;
   exports["importComponent"] = importComponent;
   exports["CopyToClipboard"] = CopyToClipboard;
+  exports["DownloadJSON"] = DownloadJSON;
   exports["TogglePretty"] = TogglePretty;
   exports["Receive"] = Receive;
   exports["exportComponent"] = exportComponent;
