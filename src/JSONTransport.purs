@@ -2,10 +2,11 @@ module JSONTransport where
 
 import Prelude
 import Common (parseTime)
-import Data.Array (fromFoldable, mapWithIndex)
+import Data.Array (fromFoldable, mapWithIndex, sortBy)
 import Data.Either (Either(..), either)
 import Data.Map as M
 import Data.Maybe (Maybe(..))
+import Data.Ordering (invert)
 import Data.Pitches (parseNotation)
 import Data.Traversable (for, sequence)
 import Data.Tuple (Tuple(..))
@@ -13,8 +14,8 @@ import Data.Variant (Variant, case_, inj, on)
 import Folding (leftmostToReduction, reductionToLeftmost)
 import Leftmost (FreezeOp(..), HoriChildren(..), HoriOp(..), Leftmost(..), RootOrnament(..), SplitOp(..))
 import Model (DoubleOrnament(..), Edge, Edges, LeftOrnament(..), Model, Note, Piece, RightOrnament(..), SliceId(..), StartStop, TransId(..), Transition)
-import Type.Proxy (Proxy(..))
 import Simple.JSON as JSON
+import Type.Proxy (Proxy(..))
 
 ----------
 -- JSON --
@@ -160,7 +161,7 @@ pieceFromJSON piece =
     notes <-
       for slice.notes \note ->
         (\p -> { hold: note.hold, note: { pitch: p, id: note.id } }) <$> parseNotation note.pitch
-    pure { time: parseTime slice.time, notes }
+    pure { time: parseTime slice.time, notes: sortBy (\a b -> invert $ compare a.note.pitch b.note.pitch) notes }
 
 modelFromJSON :: ModelJSON -> Either String Model
 modelFromJSON { topSegments, derivation } = do

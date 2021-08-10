@@ -5,6 +5,7 @@ import Common (MBS)
 import Control.Alt ((<|>))
 import Data.Array (filter)
 import Data.Array as A
+import Data.Bounded (compare)
 import Data.Either (Either(..))
 import Data.Foldable (find, foldl, for_, intercalate)
 import Data.Generic.Rep (class Generic)
@@ -14,6 +15,7 @@ import Data.List as L
 import Data.Map as M
 import Data.Maybe (Maybe(..), maybe)
 import Data.Monoid (power)
+import Data.Ordering (invert)
 import Data.Pitches (class Interval, Pitch, SPitch, direction, ic, isStep, pc, pto)
 import Data.Show.Generic (genericShow)
 import Data.Traversable (scanl)
@@ -469,7 +471,7 @@ thawTrans ties id slice =
 thawSlice :: Array { note :: Note, hold :: Boolean } -> Int -> Slice
 thawSlice slice id =
   { id: SliceId id
-  , notes: Inner $ map (\n -> { note: n.note, expl: NoExpl }) $ A.sortWith _.note slice
+  , notes: Inner $ map (\n -> { note: n.note, expl: NoExpl }) $ A.sortBy (\a b -> invert $ compare a.note.pitch b.note.pitch) slice
   , x: toNumber id
   , parents: NoParents
   }
