@@ -194,7 +194,7 @@ appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultE
                   , HE.onClick $ \_ -> Redo
                   , HP.disabled $ L.null st.redoStack
                   ]
-                  [ HH.text $ "Redo " <> maybe "" _.name (L.head st.undoStack) ]
+                  [ HH.text $ "Redo " <> maybe "" _.name (L.head st.redoStack) ]
               ]
           ]
       , case st.model of
