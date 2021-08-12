@@ -148,8 +148,8 @@ addHoriEdge { id: child } { id: parent } = ST.modify_ \st -> st { horis = { chil
 --   res <- action
 --   ST.modify_ \st -> st { leftId = oldid }
 --   pure res
-graphAlg :: AgendaAlg { rdepth :: Number } Graph
-graphAlg =
+graphAlg :: Boolean -> AgendaAlg { rdepth :: Number } Graph
+graphAlg flatHori =
   { init
   , freezeOnly: freezeTrans
   , freezeLeft: freezeTrans
@@ -194,17 +194,21 @@ graphAlg =
     addHoriEdge childm.rslice left.seg.rslice
     addGraphTrans left.seg.rslice.id right.seg.trans right.seg.rslice.id
     let
-      dsub = max currentDepth (max left.more.rdepth right.more.rdepth) + 1.0
+      dsub =
+        if flatHori then
+          left.more.rdepth + 1.0
+        else
+          max currentDepth (max left.more.rdepth right.more.rdepth) + 1.0
     pure
       $ { seg: childl, more: { rdepth: dsub } }
       : { seg: childm, more: { rdepth: dsub } }
       : { seg: attachSegment childr right.seg.rslice, more: { rdepth: right.more.rdepth } }
       : Nil
 
-evalGraph :: Reduction -> Graph
-evalGraph reduction =
+evalGraph :: Boolean -> Reduction -> Graph
+evalGraph flatHori reduction =
   flip ST.execState initState
-    $ walkGraph graphAlg reduction.start agenda
+    $ walkGraph (graphAlg flatHori) reduction.start agenda
   where
   agenda = map (\seg -> { seg, more: { rdepth: 0.0 } }) reduction.segments
 

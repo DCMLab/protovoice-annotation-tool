@@ -2,7 +2,7 @@ module Render where
 
 import Prelude
 import Common (MBS(..))
-import CommonApp (GraphAction(..), Selection(..), addParentToNote, noteIsSelected, removeParent)
+import CommonApp (GraphAction(..), Selection(..), AppSettings, addParentToNote, noteIsSelected, removeParent)
 import Data.Array (catMaybes, elem, findIndex, fromFoldable, length, mapWithIndex)
 import Data.Either (Either(..))
 import Data.Int (toNumber)
@@ -20,14 +20,17 @@ import Model (DoubleOrnament(..), Edge, LeftOrnament(..), Note, NoteExplanation(
 import Validation (EdgeError(..), NoteError(..), SliceError(..), Validation)
 import Web.UIEvent.MouseEvent (ctrlKey)
 
-scalex :: Number -> Number
-scalex x = x * 60.0
+scalex :: AppSettings -> Number -> Number
+scalex { xscale } x = x * xscale
 
-scaley :: Number -> Number
-scaley y = y * 60.0
+scaley :: AppSettings -> Number -> Number
+scaley { yscale } y = y * yscale
 
 offset :: Int -> Number
 offset i = toNumber i * 20.0
+
+noteSize :: Number
+noteSize = 29.0
 
 findPitchIndex :: StartStop Note -> StartStop Notes -> Int
 findPitchIndex (Inner note) (Inner notes) =
@@ -84,22 +87,22 @@ data SelectionStatus
 
 derive instance eqSelectionStatus :: Eq SelectionStatus
 
-renderSlice :: forall p. Selection -> Validation -> GraphSlice -> HH.HTML p GraphAction
-renderSlice selection validation { slice: { id, notes, x, parents }, depth: d } = case notes of
+renderSlice :: forall p. AppSettings -> Selection -> Validation -> GraphSlice -> HH.HTML p GraphAction
+renderSlice sett selection validation { slice: { id, notes, x, parents }, depth: d } = case notes of
   Inner inotes ->
     SE.g (if selectable then selectionAttr else [])
       ( [ SE.rect
-            [ SA.x $ scalex x - scalex 0.24
-            , SA.y $ scaley d - scaley 0.24
-            , SA.width $ scalex 0.48
-            , SA.height $ offset (length inotes - 1) + scaley 0.48
+            [ SA.x $ scalex sett x - (noteSize / 2.0)
+            , SA.y $ scaley sett d - (noteSize / 2.0)
+            , SA.width noteSize
+            , SA.height $ offset (length inotes - 1) + noteSize
             , SA.fill white
             , SA.stroke $ if selected then selColor else if activeParent then parentColor else if sliceInvalid then errColor else white
             ]
         ]
           <> mapWithIndex mknote inotes
       )
-  startstop -> mknode [ HH.text $ show startstop ] (scalex x) (scaley d) (if activeParent then Related else NotSelected) Nothing []
+  startstop -> mknode [ HH.text $ show startstop ] (scalex sett x) (scaley sett d) (if activeParent then Related else NotSelected) Nothing []
   where
   selected = selection == SelSlice id
 
@@ -122,9 +125,9 @@ renderSlice selection validation { slice: { id, notes, x, parents }, depth: d } 
     where
     bg =
       SE.rect
-        [ SA.x $ xcoord - scalex 0.24
-        , SA.y $ ycoord - (0.5 * offset 1)
-        , SA.width $ scalex 0.48
+        [ SA.x $ xcoord - (noteSize / 2.0)
+        , SA.y $ ycoord - (offset 1 / 2.0)
+        , SA.width noteSize
         , SA.height $ offset 1
         , SA.fill
             $ case selStatus of
@@ -152,8 +155,8 @@ renderSlice selection validation { slice: { id, notes, x, parents }, depth: d } 
   mknote i { note, expl } =
     mknode
       label
-      (scalex x)
-      (scaley d + offset i)
+      (scalex sett x)
+      (scaley sett d + offset i)
       nodeselected
       (M.lookup note.id validation.notes)
       (if clickable then attrsSel else [])
@@ -190,8 +193,8 @@ renderSlice selection validation { slice: { id, notes, x, parents }, depth: d } 
                 NoOp
       ]
 
-renderTrans :: forall p. Selection -> Validation -> M.Map SliceId GraphSlice -> GraphTransition -> HH.HTML p GraphAction
-renderTrans selection validation slices { id, left, right, edges } =
+renderTrans :: forall p. AppSettings -> Selection -> Validation -> M.Map SliceId GraphSlice -> GraphTransition -> HH.HTML p GraphAction
+renderTrans sett selection validation slices { id, left, right, edges } =
   fromMaybe (HH.text "")
     $ do
         { depth: yl, slice: { x: xl, notes: nl } } <- M.lookup left slices
@@ -201,10 +204,10 @@ renderTrans selection validation slices { id, left, right, edges } =
 
           bar =
             [ SE.line
-                $ [ SA.x1 $ scalex xl
-                  , SA.y1 $ scaley yl
-                  , SA.x2 $ scalex xr
-                  , SA.y2 $ scaley yr
+                $ [ SA.x1 $ scalex sett xl
+                  , SA.y1 $ scaley sett yl
+                  , SA.x2 $ scalex sett xr
+                  , SA.y2 $ scaley sett yr
                   , SA.stroke if transSelected then selColor else lightgray
                   , SA.strokeWidth 15.0
                   ]
@@ -214,10 +217,10 @@ renderTrans selection validation slices { id, left, right, edges } =
           mkedge :: Boolean -> Edge -> HH.HTML p GraphAction
           mkedge isPassing edge@{ left: p1, right: p2 } =
             SE.line
-              [ SA.x1 $ scalex xl
-              , SA.y1 $ scaley yl + offset offl
-              , SA.x2 $ scalex xr
-              , SA.y2 $ scaley yr + offset offr
+              [ SA.x1 $ scalex sett xl
+              , SA.y1 $ scaley sett yl + offset offl
+              , SA.x2 $ scalex sett xr
+              , SA.y2 $ scaley sett yr + offset offr
               , SA.stroke
                   if edgeSelected then
                     selColor
@@ -248,11 +251,12 @@ renderTrans selection validation slices { id, left, right, edges } =
 
 renderHori ::
   forall p.
+  AppSettings ->
   Selection ->
   M.Map SliceId GraphSlice ->
   { child :: SliceId, parent :: SliceId } ->
   HH.HTML p GraphAction
-renderHori selection slices { child, parent } =
+renderHori sett selection slices { child, parent } =
   fromMaybe (HH.text "")
     $ do
         { depth: yc, slice: slicec@{ x: xc, notes: notesc } } <- M.lookup child slices
@@ -260,10 +264,10 @@ renderHori selection slices { child, parent } =
         let
           bar =
             [ SE.line
-                $ [ SA.x1 $ scalex xp
-                  , SA.y1 $ scaley yp
-                  , SA.x2 $ scalex xc
-                  , SA.y2 $ scaley yc
+                $ [ SA.x1 $ scalex sett xp
+                  , SA.y1 $ scaley sett yp
+                  , SA.x2 $ scalex sett xc
+                  , SA.y2 $ scaley sett yc
                   , SA.stroke lightgray
                   , SA.strokeWidth 3.0
                   , SA.attr (HH.AttrName "stroke-dasharray") "10,5"
@@ -273,10 +277,10 @@ renderHori selection slices { child, parent } =
           mkedge :: { parentNote :: Note, childNote :: Note } -> HH.HTML p GraphAction
           mkedge { parentNote, childNote } =
             SE.line
-              [ SA.x1 $ scalex xp
-              , SA.y1 $ scaley yp + offset offp
-              , SA.x2 $ scalex xc
-              , SA.y2 $ scaley yc + offset offc
+              [ SA.x1 $ scalex sett xp
+              , SA.y1 $ scaley sett yp + offset offp
+              , SA.x2 $ scalex sett xc
+              , SA.y2 $ scaley sett yc + offset offc
               , SA.stroke if edgeSelected then selColor else black
               , SA.strokeWidth 1.0
               ]
@@ -294,11 +298,11 @@ renderHori selection slices { child, parent } =
     HoriExpl parentNote -> Just { childNote: note.note, parentNote }
     _ -> Nothing
 
-renderTime :: forall r p. Int -> { time :: Either String MBS | r } -> HH.HTML p GraphAction
-renderTime i { time } =
+renderTime :: forall r p. AppSettings -> Int -> { time :: Either String MBS | r } -> HH.HTML p GraphAction
+renderTime sett i { time } =
   SE.text
-    [ SA.x $ scalex $ toNumber (i + 1)
-    , SA.y $ scaley (-0.5)
+    [ SA.x $ scalex sett $ toNumber (i + 1)
+    , SA.y $ scaley sett (-0.5)
     , SA.text_anchor SA.AnchorMiddle
     , SA.dominant_baseline SA.BaselineMiddle
     ]
@@ -308,31 +312,31 @@ renderTime i { time } =
     Right (MBS { m, b, s }) -> if s == 0 % 1 then show m <> "." <> show b else ""
     Left str -> str
 
-renderReduction :: forall p. Piece -> Graph -> Validation -> Selection -> HH.HTML p GraphAction
-renderReduction piece graph validation selection =
+renderReduction :: forall p. AppSettings -> Piece -> Graph -> Validation -> Selection -> HH.HTML p GraphAction
+renderReduction sett piece graph validation selection =
   HH.div
     [ HP.style "overflow-x: scroll; max-width: max-content;" ]
     [ SE.svg
         [ SA.width width
         , SA.height height
-        , SA.viewBox (negate $ scalex 1.0) (negate $ scaley 1.0) width height
+        , SA.viewBox (negate $ scalex sett 1.0) (negate $ scaley sett 1.0) width height
         ]
         (svgTranss <> svgHoris <> svgSlices <> svgAxis)
     ]
   where
   { slices, transitions, horis, maxx, maxd } = graph
 
-  width = scalex (maxx + 2.0)
+  width = scalex sett (maxx + 2.0)
 
-  height = scaley (maxd + 4.0)
+  height = scaley sett (maxd + 4.0)
 
-  svgSlices = map (renderSlice selection validation) $ fromFoldable $ M.values slices
+  svgSlices = map (renderSlice sett selection validation) $ fromFoldable $ M.values slices
 
-  svgTranss = map (renderTrans selection validation slices) $ fromFoldable $ M.values transitions
+  svgTranss = map (renderTrans sett selection validation slices) $ fromFoldable $ M.values transitions
 
-  svgHoris = map (renderHori selection slices) $ fromFoldable horis
+  svgHoris = map (renderHori sett selection slices) $ fromFoldable horis
 
-  svgAxis = mapWithIndex renderTime piece
+  svgAxis = mapWithIndex (renderTime sett) piece
 
 class_ :: forall r i. String -> HH.IProp ( class :: String | r ) i
 class_ str = HA.class_ $ HH.ClassName str

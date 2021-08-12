@@ -84,6 +84,7 @@ data Tab
   = HelpTab
   | ImportTab
   | ExportTab
+  | SettingsTab
   | DebugTab
 
 derive instance eqTab :: Eq Tab
@@ -92,10 +93,24 @@ data ImportOutput
   = ImportPiece Piece
   | ImportModel Model
 
+type AppSettings
+  = { flatHori :: Boolean
+    , xscale :: Number
+    , yscale :: Number
+    }
+
+defaultSettings :: AppSettings
+defaultSettings =
+  { flatHori: true
+  , xscale: 70.0
+  , yscale: 60.0
+  }
+
 data GraphAction
   = NoOp
   | Init
   | HandleImport ImportOutput
+  | HandleSettings AppSettings
   | SwitchTab (Maybe Tab)
   | HandleKey KeyboardEvent
   | Select Selection

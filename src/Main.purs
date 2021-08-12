@@ -1,13 +1,14 @@
 module Main where
 
 import Prelude
-import CommonApp (GraphAction(..), ImportOutput(..), Selection(..), Tab(..), getSelSlice, getSelTrans, outerSelected)
+import CommonApp (AppSettings, GraphAction(..), ImportOutput(..), Selection(..), Tab(..), defaultSettings, getSelSlice, getSelTrans, outerSelected)
 import Control.Monad.State (class MonadState)
 import DOM.HTML.Indexed.InputAcceptType (InputAcceptTypeAtom(..))
 import Data.Either (Either(..), either)
 import Data.Foldable (for_, intercalate)
 import Data.List as L
 import Data.Maybe (Maybe(..))
+import Data.Number (fromString)
 import Data.Tuple (Tuple(..))
 import Effect (Effect)
 import Effect.Aff.Class (class MonadAff)
@@ -57,11 +58,13 @@ type AppState
   = { selected :: Selection
     , model :: Maybe Model
     , tab :: Maybe Tab
+    , settings :: AppSettings
     }
 
 type AppSlots
   = ( exportTab :: forall query. H.Slot query Void Int
     , importTab :: forall query. H.Slot query ImportOutput Int
+    , settingsTab :: forall query. H.Slot query AppSettings Int
     )
 
 tryModelAction ::
@@ -125,6 +128,7 @@ handleAction = case _ of
   HandleImport i -> case i of
     ImportPiece piece -> H.modify_ \st -> st { model = Just $ loadPiece piece, selected = SelNone, tab = Nothing }
     ImportModel model -> H.modify_ \st -> st { model = Just model, selected = SelNone, tab = Nothing }
+  HandleSettings s -> H.modify_ \st -> st { settings = s }
   MergeAtSelected -> tryModelAction getSelSlice mergeAtSlice true
   VertAtSelected -> tryModelAction getSelTrans vertAtMid true
   UnMergeAtSelected -> tryModelAction getSelTrans undoMergeAtTrans true
@@ -149,7 +153,12 @@ appComponent :: forall query input output m. MonadEffect m => MonadAff m => H.Co
 appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultEval { handleAction = handleAction, initialize = Just Init } }
   where
   initialState :: input -> AppState
-  initialState _ = { selected: SelNone, model: Nothing, tab: Just ImportTab }
+  initialState _ =
+    { selected: SelNone
+    , model: Nothing
+    , tab: Just ImportTab
+    , settings: defaultSettings
+    }
 
   render st =
     HH.div_
@@ -174,12 +183,12 @@ appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultE
           Nothing -> HH.text ""
           Just model -> do
             let
-              graph = evalGraph model.reduction
+              graph = evalGraph st.settings.flatHori model.reduction
 
               valid = validateReduction model.reduction
             HH.div_
               [ HH.p [ class_ "content" ] [ renderNoteExplanation graph st.selected ]
-              , HH.div [ class_ "wide" ] [ renderReduction model.piece graph valid st.selected ]
+              , HH.div [ class_ "wide" ] [ renderReduction st.settings model.piece graph valid st.selected ]
               ]
       ]
 
@@ -205,6 +214,7 @@ renderTabs st =
             [ tabHandle st ImportTab "Import"
             , tabHandle st ExportTab "Export"
             , tabHandle st HelpTab "Help"
+            , tabHandle st SettingsTab "Settings"
             , tabHandle st DebugTab "Debug"
             ]
         ]
@@ -213,6 +223,7 @@ renderTabs st =
         Just HelpTab -> helpText
         Just ImportTab -> HH.slot (Proxy :: Proxy "importTab") 1 importComponent unit HandleImport
         Just ExportTab -> HH.slot_ (Proxy :: Proxy "exportTab") 0 exportComponent st.model
+        Just SettingsTab -> HH.slot (Proxy :: Proxy "settingsTab") 2 settingsComponent st.settings HandleSettings
         Just DebugTab -> debugComponent st
     ]
 
@@ -242,6 +253,70 @@ helpText =
         , HH.text "Correctly reduced notes are shown in grey, unreduced notes are shown in black, and inconsistencies are shown in orange or red."
         ]
     ]
+
+-- settings component
+-- ------------------
+data SettingsAction
+  = SettingsToggleFlatHori
+  | SettingsSetXScale String
+  | SettingsSetYScale String
+
+settingsComponent :: forall query m. H.Component query AppSettings AppSettings m
+settingsComponent = H.mkComponent { initialState, render, eval: H.mkEval H.defaultEval { handleAction = handleOptAction } }
+  where
+  initialState settings = { settings }
+
+  render { settings } =
+    HH.div [ class_ "tab" ]
+      [ HH.p_
+          [ HH.input
+              [ HP.type_ $ HP.InputCheckbox
+              , HP.checked settings.flatHori
+              , HE.onChange \_ -> SettingsToggleFlatHori
+              , HP.name "flatHori"
+              ]
+          , HH.label [ HP.for "flatHori" ] [ HH.text " render horis flat" ]
+          ]
+      , HH.p [ class_ "pure-g" ]
+          [ HH.label [ class_ "pure-u-1-5", HP.for "xscale" ] [ HH.text $ "xscale: " <> show settings.xscale ]
+          , HH.input
+              [ class_ "pure-u-2-5"
+              , HP.type_ $ HP.InputRange
+              , HP.min 30.0
+              , HP.max 200.0
+              , HP.value $ show settings.xscale
+              , HE.onValueInput SettingsSetXScale
+              , HP.name "xscale"
+              ]
+          , HH.div [ class_ "pure-u-1-5" ] []
+          , HH.button [ class_ "pure-u-1-5", HE.onClick $ \_ -> SettingsSetXScale $ show defaultSettings.xscale ] [ HH.text "Reset" ]
+          ]
+      , HH.p [ class_ "pure-g" ]
+          [ HH.label [ class_ "pure-u-1-5", HP.for "yscale" ] [ HH.text $ "yscale: " <> show settings.yscale ]
+          , HH.input
+              [ class_ "pure-u-2-5"
+              , HP.type_ $ HP.InputRange
+              , HP.min 30.0
+              , HP.max 200.0
+              , HP.value $ show settings.yscale
+              , HE.onValueInput SettingsSetYScale
+              , HP.name "yscale"
+              ]
+          , HH.div [ class_ "pure-u-1-5" ] []
+          , HH.button [ class_ "pure-u-1-5", HE.onClick $ \_ -> SettingsSetYScale $ show defaultSettings.yscale ] [ HH.text "Reset" ]
+          ]
+      ]
+
+  handleOptAction msg = do
+    case msg of
+      SettingsToggleFlatHori -> H.modify_ \st -> st { settings { flatHori = not st.settings.flatHori } }
+      SettingsSetXScale s -> case fromString s of
+        Nothing -> pure unit
+        Just n -> H.modify_ \st -> st { settings { xscale = n } }
+      SettingsSetYScale s -> case fromString s of
+        Nothing -> pure unit
+        Just n -> H.modify_ \st -> st { settings { yscale = n } }
+    H.raise =<< H.gets _.settings
 
 -- import component
 -- ----------------
@@ -460,6 +535,8 @@ debugComponent st =
         [ HH.text "Selection: "
         , HH.text $ show st.selected
         ]
+    , HH.h3_ [ HH.text "Settings" ]
+    , HH.p_ [ HH.text $ show st.settings ]
     , HH.h3_ [ HH.text "Reduction Steps" ]
     , case st.model of
         Nothing -> HH.text "No active reduction."
