@@ -1,4 +1,4 @@
-module Folding where
+module ProtoVoices.Folding where
 
 import Prelude
 import Control.Bind (bindFlipped)
@@ -12,8 +12,8 @@ import Data.List as L
 import Data.Map as M
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Tuple (Tuple(..))
-import Leftmost (FreezeOp(..), HoriChildren(..), HoriOp(..), Leftmost(..), RootOrnament(..), SplitOp(..), horiLeftChildren, horiRightChildren, splitGetChildNotes)
-import Model (DoubleOrnament(..), Edges, EndSegment, Model, Note, NoteExplanation(..), Notes, Op(..), Parents(..), Piece, Reduction, Segment, Slice, SliceId(..), StartStop(..), Time, TransId(..), Transition, attachSegment, detachSegment, getInnerNotes, incS, incT, parentEdges, vertEdgesLeft, vertEdgesRight)
+import ProtoVoices.Leftmost (FreezeOp(..), HoriChildren(..), HoriOp(..), Leftmost(..), RootOrnament(..), SplitOp(..), horiLeftChildren, horiRightChildren, splitGetChildNotes)
+import ProtoVoices.Model (DoubleOrnament(..), Edges, EndSegment, Model, Note, NoteExplanation(..), Notes, Op(..), Parents(..), Piece, Reduction, Segment, Slice, SliceId(..), StartStop(..), Time, TransId(..), Transition, attachSegment, detachSegment, getInnerNotes, incS, incT, parentEdges, vertEdgesLeft, vertEdgesRight)
 
 type AgendaItem a
   = { seg :: Segment, more :: a }

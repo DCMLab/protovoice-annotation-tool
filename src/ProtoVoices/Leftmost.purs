@@ -1,4 +1,4 @@
-module Leftmost where
+module ProtoVoices.Leftmost where
 
 import Prelude
 import Data.Array (sortWith)
@@ -10,7 +10,7 @@ import Data.Maybe (Maybe)
 import Data.Show.Generic (genericShow)
 import Data.Traversable (sequence)
 import Data.Tuple (Tuple(..))
-import Model (DoubleOrnament, Edge, Edges, LeftOrnament, Note, NoteExplanation(..), Notes, RightOrnament, SliceId, StartStop(..), TransId, Time)
+import ProtoVoices.Model (DoubleOrnament, Edge, Edges, LeftOrnament, Note, NoteExplanation(..), Notes, RightOrnament, SliceId, StartStop(..), TransId, Time)
 
 ----------------
 -- operations --

@@ -1,4 +1,4 @@
-module Validation where
+module ProtoVoices.Validation where
 
 import Prelude
 import Control.Monad.State as ST
@@ -12,8 +12,8 @@ import Data.Maybe (Maybe(..))
 import Data.Set as S
 import Data.Show.Generic (genericShow)
 import Data.Traversable (for_)
-import Folding (AgendaAlg, nothingMore, walkGraph)
-import Model (Edge, Note, NoteExplanation(..), Reduction, Slice, SliceId, StartStop(..), attachSegment, findDoubleOrn, findLeftOrn, findRightOrn, getInnerNotes, isRepeatingEdge, transEdges)
+import ProtoVoices.Folding (AgendaAlg, nothingMore, walkGraph)
+import ProtoVoices.Model (Edge, Note, NoteExplanation(..), Reduction, Slice, SliceId, StartStop(..), attachSegment, findDoubleOrn, findLeftOrn, findRightOrn, getInnerNotes, isRepeatingEdge, transEdges)
 
 data NoteError
   = NSNoExpl

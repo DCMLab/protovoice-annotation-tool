@@ -1,11 +1,9 @@
-module Model where
+module ProtoVoices.Model where
 
 import Prelude
-import Common (MBS)
 import Control.Alt ((<|>))
 import Data.Array (filter)
 import Data.Array as A
-import Data.Bounded (compare)
 import Data.Either (Either(..))
 import Data.Foldable (find, foldl, for_, intercalate)
 import Data.Generic.Rep (class Generic)
@@ -23,6 +21,7 @@ import Data.Tuple (Tuple(..))
 import Effect (Effect)
 import Effect.Console (log, logShow)
 import Foreign as F
+import ProtoVoices.Common (MBS)
 import Simple.JSON (readImpl, writeImpl)
 import Simple.JSON as JSON
 
@@ -160,7 +159,7 @@ setLeftExplParent :: SPitch -> Maybe Note -> NoteExplanation -> Maybe NoteExplan
 setLeftExplParent child leftParentMaybe expl = case leftParentMaybe of
   Just leftParent -> case expl of
     NoExpl -> Just $ RightExpl { orn: findRightOrn child leftParent, leftParent }
-    RightExpl { orn } -> Just $ RightExpl { orn: findRightOrn child leftParent, leftParent }
+    RightExpl _ -> Just $ RightExpl { orn: findRightOrn child leftParent, leftParent }
     LeftExpl { rightParent } ->
       Just
         $ DoubleExpl

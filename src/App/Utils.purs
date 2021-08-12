@@ -1,13 +1,15 @@
-module Utils where
+module App.Utils where
 
 import Prelude
-import Common (MBS)
-import Data.Either (Either)
+import Data.Either (Either(..))
+import Data.Foldable (class Foldable, intercalate)
 import Data.Maybe (fromJust)
 import Effect (Effect)
-import JSONTransport (PieceJSON, addJSONIds, pieceFromJSON)
-import Model (Note)
+import Foreign (ForeignError, renderForeignError)
 import Partial.Unsafe (unsafePartial)
+import ProtoVoices.Common (MBS)
+import ProtoVoices.JSONTransport (PieceJSON, addJSONIds, pieceFromJSON)
+import ProtoVoices.Model (Note)
 
 foreign import examplePieceJSON :: PieceJSON ()
 
@@ -26,3 +28,6 @@ examplePieceLong :: Array { time :: Either String MBS, notes :: Array { hold :: 
 examplePieceLong = unsafePartial $ fromJust $ pieceFromJSON examplePieceJSONLongWithIds
 
 foreign import copyToClipboard :: String -> Effect Unit
+
+showJSONErrors :: forall a f. Foldable f => Functor f => f ForeignError -> Either String a
+showJSONErrors errs = Left $ "Errors parsing JSON:\n  " <> intercalate "\n  " (renderForeignError <$> errs)

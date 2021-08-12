@@ -1,242 +1,31 @@
-module Main where
+module App.Tabs where
 
 import Prelude
-import CommonApp (AppSettings, GraphAction(..), ImportOutput(..), Selection(..), Tab(..), defaultSettings, getSelSlice, getSelTrans, outerSelected)
-import Control.Alternative (when)
-import Control.Monad.State (class MonadState)
-import DOM.HTML.Indexed.InputAcceptType (InputAcceptTypeAtom(..))
-import Data.Either (Either(..), either)
-import Data.Foldable (for_, intercalate)
-import Data.List as L
-import Data.Maybe (Maybe(..), maybe)
-import Data.Number (fromString)
-import Data.Tuple (Tuple(..))
-import Effect (Effect)
+import App.Common (AppSettings, AppSlots, AppState, GraphAction(..), ImportOutput(..), Tab(..), defaultSettings)
+import App.Render (class_)
+import Data.Maybe (Maybe(..))
 import Effect.Aff.Class (class MonadAff)
-import Effect.Class (class MonadEffect, liftEffect)
-import Effect.Class.Console (log)
-import Folding (evalGraph, reductionToLeftmost)
-import Foreign (renderForeignError)
 import Halogen as H
-import Halogen.Aff as HA
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
-import Halogen.Query.Event (eventListener)
-import Halogen.VDom.Driver (runUI)
-import JSONTransport (addJSONIds, modelFromJSON, modelToJSON, pieceFromJSON, pieceToJSON, stripJSONIds, writeJSONPretty)
-import Model (Model, Piece, loadPiece, mergeAtSlice, noteSetExplanation, undoMergeAtTrans, undoVertAtSlice, vertAtMid)
-import Render (class_, renderNoteExplanation, renderReduction)
+import App.Utils (copyToClipboard, examplePiece, examplePieceLong, showJSONErrors)
+import DOM.HTML.Indexed.InputAcceptType (InputAcceptTypeAtom(..))
+import Data.Either (Either(..), either)
+import Data.List as L
+import Data.Number (fromString)
+import Data.Tuple (Tuple(..))
+import Effect.Class (class MonadEffect, liftEffect)
+import ProtoVoices.Folding (reductionToLeftmost)
+import ProtoVoices.JSONTransport (addJSONIds, modelFromJSON, modelToJSON, pieceFromJSON, pieceToJSON, stripJSONIds, writeJSONPretty)
+import ProtoVoices.Model (Model, Piece, loadPiece)
+import ProtoVoices.Validation (validateReduction, validationIsOk)
 import Simple.JSON (readJSON)
 import Simple.JSON as JSON
 import Type.Proxy (Proxy(..))
-import Utils (copyToClipboard, examplePiece, examplePieceLong)
-import Validation (validateReduction, validationIsOk)
-import Web.DOM.ParentNode (QuerySelector(..))
 import Web.DownloadJs (download)
-import Web.Event.Event as E
 import Web.File.File (File, toBlob) as File
 import Web.File.FileReader.Aff (readAsText) as File
-import Web.HTML (window)
-import Web.HTML.HTMLDocument (toEventTarget)
-import Web.HTML.Window (document)
-import Web.UIEvent.KeyboardEvent (ctrlKey, shiftKey)
-import Web.UIEvent.KeyboardEvent as KE
-import Web.UIEvent.KeyboardEvent.EventTypes as KET
-
-main :: Effect Unit
-main =
-  HA.runHalogenAff
-    $ do
-        HA.awaitLoad
-        elt <- HA.selectElement (QuerySelector "#app")
-        for_ elt (runUI appComponent unit)
-
--- some comment
---------------------
--- main component --
---------------------
-type AppState
-  = { selected :: Selection
-    , model :: Maybe Model
-    , undoStack :: L.List { m :: Model, name :: String }
-    , redoStack :: L.List { m :: Model, name :: String }
-    , tab :: Maybe Tab
-    , settings :: AppSettings
-    }
-
-type AppSlots
-  = ( exportTab :: forall query. H.Slot query Void Int
-    , importTab :: forall query. H.Slot query ImportOutput Int
-    , settingsTab :: forall query. H.Slot query AppSettings Int
-    )
-
-tryModelAction ::
-  forall a m.
-  (MonadState AppState m) =>
-  (MonadEffect m) =>
-  (Selection -> Maybe a) ->
-  (a -> Model -> Either String Model) ->
-  String ->
-  Boolean ->
-  m Unit
-tryModelAction selector action actionName clearSel = do
-  st <- H.get
-  let
-    modelAndSel = do
-      sel <- selector st.selected
-      model <- st.model
-      pure { sel, model }
-  case modelAndSel of
-    Nothing -> pure unit
-    Just { sel, model } -> case action sel model of
-      Left err -> log err
-      Right model' ->
-        H.put
-          st
-            { model = Just model'
-            , selected = (if clearSel then SelNone else st.selected)
-            , undoStack = { m: model, name: actionName } L.: st.undoStack
-            , redoStack = L.Nil
-            }
-
-combineAny :: forall o m. (MonadEffect m) => H.HalogenM AppState GraphAction AppSlots o m Unit
-combineAny = do
-  st <- H.get
-  case st.selected of
-    SelTrans _ -> handleAction VertAtSelected
-    SelSlice _ -> handleAction MergeAtSelected
-    _ -> pure unit
-
-removeAny :: forall o m. (MonadEffect m) => H.HalogenM AppState GraphAction AppSlots o m Unit
-removeAny = do
-  st <- H.get
-  case st.selected of
-    SelTrans _ -> handleAction UnMergeAtSelected
-    SelSlice _ -> handleAction UnVertAtSelected
-    _ -> pure unit
-
-handleAction :: forall o m. (MonadEffect m) => GraphAction -> H.HalogenM AppState GraphAction AppSlots o m Unit
-handleAction = case _ of
-  NoOp -> log "NoOp"
-  Init -> do
-    doc <- H.liftEffect $ document =<< window
-    H.subscribe' \sid ->
-      eventListener KET.keyup (toEventTarget doc) (KE.fromEvent >>> map HandleKey)
-  SwitchTab t -> H.modify_ \st -> st { tab = t }
-  HandleKey ev -> case KE.key ev of
-    "m" -> pr ev *> handleAction MergeAtSelected
-    "M" -> pr ev *> handleAction UnMergeAtSelected
-    "v" -> pr ev *> handleAction VertAtSelected
-    "V" -> pr ev *> handleAction UnVertAtSelected
-    "z" -> pr ev *> handleAction Undo
-    "Z" -> pr ev *> handleAction Redo
-    "Enter" -> pr ev *> combineAny
-    " " -> pr ev *> combineAny
-    "Backspace" -> pr ev *> removeAny
-    _ -> pure unit
-  Select s -> H.modify_ \st -> st { selected = s }
-  HandleImport i -> case i of
-    ImportPiece piece -> H.modify_ \st -> st { model = Just $ loadPiece piece, selected = SelNone, tab = Nothing }
-    ImportModel model -> H.modify_ \st -> st { model = Just model, selected = SelNone, tab = Nothing }
-  HandleSettings s -> H.modify_ \st -> st { settings = s }
-  MergeAtSelected -> tryModelAction getSelSlice mergeAtSlice "Merge Transitions" true
-  VertAtSelected -> tryModelAction getSelTrans vertAtMid "Vert Slices" true
-  UnMergeAtSelected -> tryModelAction getSelTrans undoMergeAtTrans "Unmerge Transition" true
-  UnVertAtSelected -> tryModelAction getSelSlice undoVertAtSlice "Unvert Slice" true
-  CombineAny -> combineAny
-  RemoveAny -> removeAny
-  SetNoteExplanation ne -> do
-    tryModelAction
-      (const $ Just ne)
-      (\{ noteId, expl } -> noteSetExplanation noteId expl)
-      "Set Note Explanation"
-      false
-    H.modify_ \st -> st { selected = updateSelection ne st.selected }
-  Undo ->
-    H.modify_ \st ->
-      let
-        { model, s1, s2 } = swapTops st.model st.undoStack st.redoStack
-      in
-        st { model = model, undoStack = s1, redoStack = s2 }
-  Redo ->
-    H.modify_ \st ->
-      let
-        { model, s1, s2 } = swapTops st.model st.redoStack st.undoStack
-      in
-        st { model = model, undoStack = s2, redoStack = s1 }
-  where
-  pr ev = H.liftEffect $ E.preventDefault $ KE.toEvent ev
-
-  swapTops model s1 s2 = case model of
-    Nothing -> { model, s1, s2 }
-    Just current -> case s1 of
-      L.Nil -> { model, s1, s2 }
-      L.Cons { m, name } rest -> { model: Just m, s1: rest, s2: { m: current, name } L.: s2 }
-
-  updateSelection { noteId, expl } sel
-    | SelNote selnote <- sel
-    , selnote.note.id == noteId = SelNote $ selnote { expl = expl }
-    | otherwise = sel
-
-appComponent :: forall query input output m. MonadEffect m => MonadAff m => H.Component query input output m
-appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultEval { handleAction = handleAction, initialize = Just Init } }
-  where
-  initialState :: input -> AppState
-  initialState _ =
-    { selected: SelNone
-    , model: Nothing
-    , undoStack: L.Nil
-    , redoStack: L.Nil
-    , tab: Just ImportTab
-    , settings: defaultSettings
-    }
-
-  render st =
-    HH.div_
-      [ HH.div [ class_ "content" ]
-          [ HH.h1_ [ HH.text "Proto-Voice Annotation Tool" ]
-          , renderTabs st
-          , HH.h2_ [ HH.text "Annotation" ]
-          , HH.div [ class_ "pure-g" ]
-              [ HH.button
-                  [ class_ "pure-button pure-u-1-4"
-                  , HE.onClick $ \_ -> CombineAny
-                  , HP.enabled (outerSelected st.selected)
-                  ]
-                  [ HH.text "Combine (Enter)" ]
-              , HH.button
-                  [ class_ "pure-button pure-u-1-4"
-                  , HE.onClick $ \_ -> RemoveAny
-                  , HP.enabled (outerSelected st.selected)
-                  ]
-                  [ HH.text "Remove (Backspace)" ]
-              , HH.button
-                  [ class_ "pure-button pure-u-1-4"
-                  , HE.onClick $ \_ -> Undo
-                  , HP.disabled $ L.null st.undoStack
-                  ]
-                  [ HH.text $ "Undo " <> maybe "" _.name (L.head st.undoStack) ]
-              , HH.button
-                  [ class_ "pure-button pure-u-1-4"
-                  , HE.onClick $ \_ -> Redo
-                  , HP.disabled $ L.null st.redoStack
-                  ]
-                  [ HH.text $ "Redo " <> maybe "" _.name (L.head st.undoStack) ]
-              ]
-          ]
-      , case st.model of
-          Nothing -> HH.text ""
-          Just model -> do
-            let
-              graph = evalGraph st.settings.flatHori model.reduction
-
-              valid = validateReduction model.reduction
-            HH.div_
-              [ HH.p [ class_ "content" ] [ renderNoteExplanation graph st.selected ]
-              , HH.div [ class_ "wide" ] [ renderReduction st.settings model.piece graph valid st.selected ]
-              ]
-      ]
 
 --------------------
 -- sub-components --
@@ -440,9 +229,6 @@ importComponent = H.mkComponent { initialState, render, eval: H.mkEval H.default
           ]
       ]
     where
-    showErrors :: forall a. _ -> Either String a
-    showErrors errs = Left $ "Errors parsing JSON:\n  " <> intercalate "\n  " (renderForeignError <$> errs)
-
     pieceEither = case readJSON pieceText of
       Right json -> case pieceFromJSON json of
         Just piece -> Right $ Right $ loadPiece piece
@@ -451,9 +237,9 @@ importComponent = H.mkComponent { initialState, render, eval: H.mkEval H.default
         Right jsonNoIds -> case pieceFromJSON (addJSONIds jsonNoIds) of
           Just pieceNewIds -> Right $ Left $ loadPiece pieceNewIds
           Nothing -> Left "Invalid piece!"
-        Left errs2 -> showErrors (if errs1 == errs2 then errs1 else errs1 <> errs2)
+        Left errs2 -> showJSONErrors (if errs1 == errs2 then errs1 else errs1 <> errs2)
 
-    modelEither = either showErrors modelFromJSON $ readJSON modelText
+    modelEither = either showJSONErrors modelFromJSON $ readJSON modelText
 
   handleImportAction = case _ of
     ImportUpdateModelInput str -> H.modify_ \st -> st { modelText = str }

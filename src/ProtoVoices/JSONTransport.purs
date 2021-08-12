@@ -1,7 +1,7 @@
-module JSONTransport where
+module ProtoVoices.JSONTransport where
 
 import Prelude
-import Common (parseTime)
+import ProtoVoices.Common (parseTime)
 import Data.Array (fromFoldable, mapWithIndex, sortBy)
 import Data.Either (Either(..), either)
 import Data.Map as M
@@ -11,9 +11,9 @@ import Data.Pitches (parseNotation)
 import Data.Traversable (for, sequence)
 import Data.Tuple (Tuple(..))
 import Data.Variant (Variant, case_, inj, on)
-import Folding (leftmostToReduction, reductionToLeftmost)
-import Leftmost (FreezeOp(..), HoriChildren(..), HoriOp(..), Leftmost(..), RootOrnament(..), SplitOp(..))
-import Model (DoubleOrnament(..), Edge, Edges, LeftOrnament(..), Model, Note, Piece, RightOrnament(..), SliceId(..), StartStop, TransId(..), Transition)
+import ProtoVoices.Folding (leftmostToReduction, reductionToLeftmost)
+import ProtoVoices.Leftmost (FreezeOp(..), HoriChildren(..), HoriOp(..), Leftmost(..), RootOrnament(..), SplitOp(..))
+import ProtoVoices.Model (DoubleOrnament(..), Edge, Edges, LeftOrnament(..), Model, Note, Piece, RightOrnament(..), SliceId(..), StartStop, TransId(..), Transition)
 import Simple.JSON as JSON
 import Type.Proxy (Proxy(..))
 

@@ -1,11 +1,13 @@
-module CommonApp where
+module App.Common where
 
 import Prelude
 import Data.Generic.Rep (class Generic)
 import Data.Maybe (Maybe(..), maybe)
 import Data.Pitches (SPitch)
+import Data.List as L
 import Data.Show.Generic (genericShow)
-import Model (Model, Note, NoteExplanation, Parents(..), Piece, SliceId, StartStop(..), TransId, setHoriExplParent, setLeftExplParent, setRightExplParent)
+import Halogen as H
+import ProtoVoices.Model (Model, Note, NoteExplanation, Parents(..), Piece, SliceId, StartStop(..), TransId, setHoriExplParent, setLeftExplParent, setRightExplParent)
 import Web.UIEvent.KeyboardEvent (KeyboardEvent)
 
 data Selection
@@ -13,6 +15,21 @@ data Selection
   | SelSlice SliceId
   | SelTrans TransId
   | SelNote { note :: Note, expl :: NoteExplanation, parents :: Parents SliceId }
+
+type AppState
+  = { selected :: Selection
+    , model :: Maybe Model
+    , undoStack :: L.List { m :: Model, name :: String }
+    , redoStack :: L.List { m :: Model, name :: String }
+    , tab :: Maybe Tab
+    , settings :: AppSettings
+    }
+
+type AppSlots
+  = ( exportTab :: forall query. H.Slot query Void Int
+    , importTab :: forall query. H.Slot query ImportOutput Int
+    , settingsTab :: forall query. H.Slot query AppSettings Int
+    )
 
 derive instance eqOuterSelection :: Eq Selection
 

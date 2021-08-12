@@ -1,23 +1,23 @@
-module Render where
+module App.Render where
 
 import Prelude
-import Common (MBS(..))
-import CommonApp (GraphAction(..), Selection(..), AppSettings, addParentToNote, noteIsSelected, removeParent)
+import ProtoVoices.Common (MBS(..))
+import App.Common (GraphAction(..), Selection(..), AppSettings, addParentToNote, noteIsSelected, removeParent)
 import Data.Array (catMaybes, elem, findIndex, fromFoldable, length, mapWithIndex)
 import Data.Either (Either(..))
 import Data.Int (toNumber)
 import Data.Map as M
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Ratio ((%))
-import Folding (Graph, GraphSlice, GraphTransition)
+import ProtoVoices.Folding (Graph, GraphSlice, GraphTransition)
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HA
 import Halogen.HTML.Properties as HP
 import Halogen.Svg.Attributes as SA
 import Halogen.Svg.Elements as SE
-import Model (DoubleOrnament(..), Edge, LeftOrnament(..), Note, NoteExplanation(..), Notes, Piece, RightOrnament(..), SliceId, StartStop(..), explHasParent, getInnerNotes, getParents, setHoriExplParent, setLeftExplParent, setRightExplParent)
-import Validation (EdgeError(..), NoteError(..), SliceError(..), Validation)
+import ProtoVoices.Model (DoubleOrnament(..), Edge, LeftOrnament(..), Note, NoteExplanation(..), Notes, Piece, RightOrnament(..), SliceId, StartStop(..), explHasParent, getInnerNotes, getParents, setHoriExplParent, setLeftExplParent, setRightExplParent)
+import ProtoVoices.Validation (EdgeError(..), NoteError(..), SliceError(..), Validation)
 import Web.UIEvent.MouseEvent (ctrlKey)
 
 scalex :: AppSettings -> Number -> Number
