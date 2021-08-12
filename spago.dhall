@@ -21,6 +21,7 @@ You can edit this file as you like.
   , "integers"
   , "lists"
   , "maybe"
+  , "numbers"
   , "ordered-collections"
   , "partial"
   , "pitches"

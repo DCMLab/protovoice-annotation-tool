@@ -121,3 +121,5 @@ data GraphAction
   | CombineAny
   | RemoveAny
   | SetNoteExplanation { noteId :: String, expl :: NoteExplanation }
+  | Undo
+  | Redo

@@ -2,12 +2,13 @@ module Main where
 
 import Prelude
 import CommonApp (AppSettings, GraphAction(..), ImportOutput(..), Selection(..), Tab(..), defaultSettings, getSelSlice, getSelTrans, outerSelected)
+import Control.Alternative (when)
 import Control.Monad.State (class MonadState)
 import DOM.HTML.Indexed.InputAcceptType (InputAcceptTypeAtom(..))
 import Data.Either (Either(..), either)
 import Data.Foldable (for_, intercalate)
 import Data.List as L
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), maybe)
 import Data.Number (fromString)
 import Data.Tuple (Tuple(..))
 import Effect (Effect)
@@ -39,6 +40,7 @@ import Web.File.FileReader.Aff (readAsText) as File
 import Web.HTML (window)
 import Web.HTML.HTMLDocument (toEventTarget)
 import Web.HTML.Window (document)
+import Web.UIEvent.KeyboardEvent (ctrlKey, shiftKey)
 import Web.UIEvent.KeyboardEvent as KE
 import Web.UIEvent.KeyboardEvent.EventTypes as KET
 
@@ -57,6 +59,8 @@ main =
 type AppState
   = { selected :: Selection
     , model :: Maybe Model
+    , undoStack :: L.List { m :: Model, name :: String }
+    , redoStack :: L.List { m :: Model, name :: String }
     , tab :: Maybe Tab
     , settings :: AppSettings
     }
@@ -73,9 +77,10 @@ tryModelAction ::
   (MonadEffect m) =>
   (Selection -> Maybe a) ->
   (a -> Model -> Either String Model) ->
+  String ->
   Boolean ->
   m Unit
-tryModelAction selector action clearSel = do
+tryModelAction selector action actionName clearSel = do
   st <- H.get
   let
     modelAndSel = do
@@ -86,7 +91,14 @@ tryModelAction selector action clearSel = do
     Nothing -> pure unit
     Just { sel, model } -> case action sel model of
       Left err -> log err
-      Right model' -> H.put st { model = Just model', selected = (if clearSel then SelNone else st.selected) }
+      Right model' ->
+        H.put
+          st
+            { model = Just model'
+            , selected = (if clearSel then SelNone else st.selected)
+            , undoStack = { m: model, name: actionName } L.: st.undoStack
+            , redoStack = L.Nil
+            }
 
 combineAny :: forall o m. (MonadEffect m) => H.HalogenM AppState GraphAction AppSlots o m Unit
 combineAny = do
@@ -117,32 +129,50 @@ handleAction = case _ of
     "M" -> pr ev *> handleAction UnMergeAtSelected
     "v" -> pr ev *> handleAction VertAtSelected
     "V" -> pr ev *> handleAction UnVertAtSelected
-    "Enter" -> do
-      pr ev
-      combineAny
-    "Backspace" -> do
-      pr ev
-      removeAny
+    "z" -> pr ev *> handleAction Undo
+    "Z" -> pr ev *> handleAction Redo
+    "Enter" -> pr ev *> combineAny
+    " " -> pr ev *> combineAny
+    "Backspace" -> pr ev *> removeAny
     _ -> pure unit
   Select s -> H.modify_ \st -> st { selected = s }
   HandleImport i -> case i of
     ImportPiece piece -> H.modify_ \st -> st { model = Just $ loadPiece piece, selected = SelNone, tab = Nothing }
     ImportModel model -> H.modify_ \st -> st { model = Just model, selected = SelNone, tab = Nothing }
   HandleSettings s -> H.modify_ \st -> st { settings = s }
-  MergeAtSelected -> tryModelAction getSelSlice mergeAtSlice true
-  VertAtSelected -> tryModelAction getSelTrans vertAtMid true
-  UnMergeAtSelected -> tryModelAction getSelTrans undoMergeAtTrans true
-  UnVertAtSelected -> tryModelAction getSelSlice undoVertAtSlice true
+  MergeAtSelected -> tryModelAction getSelSlice mergeAtSlice "Merge Transitions" true
+  VertAtSelected -> tryModelAction getSelTrans vertAtMid "Vert Slices" true
+  UnMergeAtSelected -> tryModelAction getSelTrans undoMergeAtTrans "Unmerge Transition" true
+  UnVertAtSelected -> tryModelAction getSelSlice undoVertAtSlice "Unvert Slice" true
   CombineAny -> combineAny
   RemoveAny -> removeAny
   SetNoteExplanation ne -> do
     tryModelAction
       (const $ Just ne)
       (\{ noteId, expl } -> noteSetExplanation noteId expl)
+      "Set Note Explanation"
       false
     H.modify_ \st -> st { selected = updateSelection ne st.selected }
+  Undo ->
+    H.modify_ \st ->
+      let
+        { model, s1, s2 } = swapTops st.model st.undoStack st.redoStack
+      in
+        st { model = model, undoStack = s1, redoStack = s2 }
+  Redo ->
+    H.modify_ \st ->
+      let
+        { model, s1, s2 } = swapTops st.model st.redoStack st.undoStack
+      in
+        st { model = model, undoStack = s2, redoStack = s1 }
   where
   pr ev = H.liftEffect $ E.preventDefault $ KE.toEvent ev
+
+  swapTops model s1 s2 = case model of
+    Nothing -> { model, s1, s2 }
+    Just current -> case s1 of
+      L.Nil -> { model, s1, s2 }
+      L.Cons { m, name } rest -> { model: Just m, s1: rest, s2: { m: current, name } L.: s2 }
 
   updateSelection { noteId, expl } sel
     | SelNote selnote <- sel
@@ -156,6 +186,8 @@ appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultE
   initialState _ =
     { selected: SelNone
     , model: Nothing
+    , undoStack: L.Nil
+    , redoStack: L.Nil
     , tab: Just ImportTab
     , settings: defaultSettings
     }
@@ -166,18 +198,32 @@ appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultE
           [ HH.h1_ [ HH.text "Proto-Voice Annotation Tool" ]
           , renderTabs st
           , HH.h2_ [ HH.text "Annotation" ]
-          , HH.button
-              [ class_ "pure-button"
-              , HE.onClick $ \_ -> CombineAny
-              , HP.enabled (outerSelected st.selected)
+          , HH.div [ class_ "pure-g" ]
+              [ HH.button
+                  [ class_ "pure-button pure-u-1-4"
+                  , HE.onClick $ \_ -> CombineAny
+                  , HP.enabled (outerSelected st.selected)
+                  ]
+                  [ HH.text "Combine (Enter)" ]
+              , HH.button
+                  [ class_ "pure-button pure-u-1-4"
+                  , HE.onClick $ \_ -> RemoveAny
+                  , HP.enabled (outerSelected st.selected)
+                  ]
+                  [ HH.text "Remove (Backspace)" ]
+              , HH.button
+                  [ class_ "pure-button pure-u-1-4"
+                  , HE.onClick $ \_ -> Undo
+                  , HP.disabled $ L.null st.undoStack
+                  ]
+                  [ HH.text $ "Undo " <> maybe "" _.name (L.head st.undoStack) ]
+              , HH.button
+                  [ class_ "pure-button pure-u-1-4"
+                  , HE.onClick $ \_ -> Redo
+                  , HP.disabled $ L.null st.redoStack
+                  ]
+                  [ HH.text $ "Redo " <> maybe "" _.name (L.head st.undoStack) ]
               ]
-              [ HH.text "Combine (Enter)" ]
-          , HH.button
-              [ class_ "pure-button"
-              , HE.onClick $ \_ -> RemoveAny
-              , HP.enabled (outerSelected st.selected)
-              ]
-              [ HH.text "Remove (Backspace)" ]
           ]
       , case st.model of
           Nothing -> HH.text ""

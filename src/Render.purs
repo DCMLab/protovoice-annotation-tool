@@ -209,7 +209,7 @@ renderTrans sett selection validation slices { id, left, right, edges } =
                   , SA.x2 $ scalex sett xr
                   , SA.y2 $ scaley sett yr
                   , SA.stroke if transSelected then selColor else lightgray
-                  , SA.strokeWidth 15.0
+                  , SA.strokeWidth $ if selectable then (noteSize / 2.0) else 5.0
                   ]
                 <> if selectable then selectionAttr else []
             ]
@@ -269,7 +269,7 @@ renderHori sett selection slices { child, parent } =
                   , SA.x2 $ scalex sett xc
                   , SA.y2 $ scaley sett yc
                   , SA.stroke lightgray
-                  , SA.strokeWidth 3.0
+                  , SA.strokeWidth 5.0
                   , SA.attr (HH.AttrName "stroke-dasharray") "10,5"
                   ]
             ]
