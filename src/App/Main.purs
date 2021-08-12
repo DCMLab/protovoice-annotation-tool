@@ -1,4 +1,4 @@
-module App.Main where
+module App.Main (main) where
 
 import Prelude
 import App.Common (AppSlots, AppState, GraphAction(..), ImportOutput(..), Selection(..), Tab(..), defaultSettings, getSelSlice, getSelTrans, outerSelected)
