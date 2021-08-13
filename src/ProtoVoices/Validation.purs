@@ -99,7 +99,8 @@ validationAlg = { init, freezeLeft, freezeOnly, splitLeft, splitOnly, splitRight
     ST.modify_ \st -> st { edges = foldl (\mp { edge, stat } -> M.insert edge stat mp) st.edges (catMaybes $ leftChildren <> rightChildren) }
     pure $ nothingMore <$> childl : attachSegment childr seg.rslice : Nil
     where
-    explainedEdges =
+    -- collect all edges that are produced by some elaboration and thus "used"
+    usedEdges =
       fold $ catMaybes
         $ ( \{ note, expl } -> case expl of
               DoubleExpl { leftParent, rightParent } ->
@@ -113,9 +114,9 @@ validationAlg = { init, freezeLeft, freezeOnly, splitLeft, splitOnly, splitRight
           )
         <$> getInnerNotes childl.rslice
 
-    leftChildren = map (\edge -> if S.member edge explainedEdges.ls then Nothing else Just { edge, stat: ESNotUsed }) $ transEdges childl.trans
+    leftChildren = map (\edge -> if S.member edge usedEdges.ls then Nothing else Just { edge, stat: ESNotUsed }) $ childl.trans.edges.regular
 
-    rightChildren = map (\edge -> if S.member edge explainedEdges.rs then Nothing else Just { edge, stat: ESNotUsed }) $ transEdges childr.trans
+    rightChildren = map (\edge -> if S.member edge usedEdges.rs then Nothing else Just { edge, stat: ESNotUsed }) $ childr.trans.edges.regular
 
   splitOnly = splitLeft
 
