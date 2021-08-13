@@ -1,12 +1,13 @@
 module ProtoVoices.Leftmost where
 
 import Prelude
-import Data.Array (sortWith)
+import Data.Array (sortBy, sortWith)
 import Data.Array as A
 import Data.Either (Either(..))
 import Data.Generic.Rep (class Generic)
 import Data.Map as M
 import Data.Maybe (Maybe)
+import Data.Ordering (invert)
 import Data.Show.Generic (genericShow)
 import Data.Traversable (sequence)
 import Data.Tuple (Tuple(..))
@@ -131,7 +132,7 @@ newtype HoriOp
   }
 
 horiLeftChildren :: HoriOp -> Notes
-horiLeftChildren (HoriOp { children, unexplained }) = sortWith _.note $ unexpl <> explained
+horiLeftChildren (HoriOp { children, unexplained }) = sortBy (\a b -> invert $ compare a.note.pitch b.note.pitch) $ unexpl <> explained
   where
   unexpl = (\note -> { note, expl: NoExpl }) <$> unexplained.left
 
