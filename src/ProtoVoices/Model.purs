@@ -270,7 +270,7 @@ type Edge
 
 isRepeatingEdge :: Edge -> Boolean
 isRepeatingEdge = case _ of
-  { left: Inner left, right: Inner right } -> left.pitch == right.pitch
+  { left: Inner left, right: Inner right } -> pc left.pitch == pc right.pitch
   _ -> false
 
 type Notes
