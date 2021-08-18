@@ -13,7 +13,7 @@ import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Set as S
 import Data.Tuple (Tuple(..))
 import ProtoVoices.Leftmost (FreezeOp(..), HoriChildren(..), HoriOp(..), Leftmost(..), RootOrnament(..), SplitOp(..), horiLeftChildren, horiRightChildren, splitGetChildNotes)
-import ProtoVoices.Model (DoubleOrnament(..), Edge, Edges, EndSegment, Model, Note, NoteExplanation(..), Notes, Op(..), Parents(..), Piece, Reduction, Segment, Slice, SliceId(..), StartStop(..), Time, TransId(..), Transition, attachSegment, detachSegment, explLeftEdge, explRightEdge, getInnerNotes, incS, incT, parentEdges, vertEdgesLeft, vertEdgesRight)
+import ProtoVoices.Model (DoubleOrnament(..), Edge, Edges, EndSegment, Model, Note, NoteExplanation(..), Notes, Op(..), Parents(..), Piece, Reduction, Segment, Slice, SliceId(..), StartStop(..), Time, TransId(..), Transition, attachSegment, detachSegment, explLeftEdge, explRightEdge, getInnerNotes, incS, incT, parentEdges, sortNotes, vertEdgesLeft, vertEdgesRight)
 
 type AgendaItem a
   = { seg :: Segment, more :: a }
@@ -445,7 +445,7 @@ leftmostToReduction topSegments deriv = do
     let
       holdNote { note } = { note, hold: A.any (\{ left } -> left == Inner note) fop.ties }
 
-      pieceNotes = holdNote <$> getInnerNotes lslice
+      pieceNotes = map holdNote $ sortNotes $ getInnerNotes lslice
     st <-
       ST.modify \st ->
         st

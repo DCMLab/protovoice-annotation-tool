@@ -1,17 +1,16 @@
 module ProtoVoices.Leftmost where
 
 import Prelude
-import Data.Array (sortBy, sortWith)
+import Data.Array (sortWith)
 import Data.Array as A
 import Data.Either (Either(..))
 import Data.Generic.Rep (class Generic)
 import Data.Map as M
 import Data.Maybe (Maybe)
-import Data.Ordering (invert)
 import Data.Show.Generic (genericShow)
 import Data.Traversable (sequence)
 import Data.Tuple (Tuple(..))
-import ProtoVoices.Model (DoubleOrnament, Edge, Edges, LeftOrnament, Note, NoteExplanation(..), Notes, RightOrnament, SliceId, StartStop(..), TransId, Time)
+import ProtoVoices.Model (DoubleOrnament, Edge, Edges, LeftOrnament, Note, NoteExplanation(..), Notes, RightOrnament, SliceId, StartStop(..), Time, TransId, sortNotes)
 
 ----------------
 -- operations --
@@ -91,7 +90,7 @@ splitGetChildNotes (SplitOp s) = do
   fromRight <- extractChildNotes s.fromRight \p orn -> Right $ LeftExpl { rightParent: p, orn }
   let
     unexplained = map (\note -> { note, expl: NoExpl }) s.unexplained
-  pure $ sortWith _.note $ regular <> passing <> fromLeft <> fromRight <> unexplained
+  pure $ sortNotes $ regular <> passing <> fromLeft <> fromRight <> unexplained
 
 newtype FreezeOp
   = FreezeOp { ties :: Array Edge, prevTime :: Time }
@@ -134,7 +133,7 @@ newtype HoriOp
   }
 
 horiLeftChildren :: HoriOp -> Notes
-horiLeftChildren (HoriOp { children, unexplained }) = sortBy (\a b -> invert $ compare a.note.pitch b.note.pitch) $ unexpl <> explained
+horiLeftChildren (HoriOp { children, unexplained }) = sortNotes $ unexpl <> explained
   where
   unexpl = (\note -> { note, expl: NoExpl }) <$> unexplained.left
 
@@ -147,7 +146,7 @@ horiLeftChildren (HoriOp { children, unexplained }) = sortBy (\a b -> invert $ c
     TooManyChildren { left } -> map { note: _, expl: HoriExpl parent } left
 
 horiRightChildren :: HoriOp -> Notes
-horiRightChildren (HoriOp { children, unexplained }) = sortWith _.note $ unexpl <> explained
+horiRightChildren (HoriOp { children, unexplained }) = sortNotes $ unexpl <> explained
   where
   unexpl = (\note -> { note, expl: NoExpl }) <$> unexplained.right
 

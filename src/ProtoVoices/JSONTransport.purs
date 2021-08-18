@@ -1,12 +1,11 @@
 module ProtoVoices.JSONTransport where
 
 import Prelude
-import Data.Array (fromFoldable, mapWithIndex, sortBy)
+import Data.Array (fromFoldable, mapWithIndex)
 import Data.Array as A
 import Data.Either (Either(..), either)
 import Data.Map as M
 import Data.Maybe (Maybe(..))
-import Data.Ordering (invert)
 import Data.Pitches (parseNotation)
 import Data.Set as S
 import Data.Traversable (for, sequence)
@@ -15,7 +14,7 @@ import Data.Variant (Variant, case_, inj, on)
 import ProtoVoices.Common (parseTime)
 import ProtoVoices.Folding (leftmostToReduction, reductionToLeftmost)
 import ProtoVoices.Leftmost (FreezeOp(..), HoriChildren(..), HoriOp(..), Leftmost(..), RootOrnament(..), SplitOp(..))
-import ProtoVoices.Model (DoubleOrnament(..), Edge, Edges, LeftOrnament(..), Model, Note, Piece, RightOrnament(..), SliceId(..), StartStop, TransId(..))
+import ProtoVoices.Model (DoubleOrnament(..), Edge, Edges, LeftOrnament(..), Model, Note, Piece, RightOrnament(..), SliceId(..), StartStop, TransId(..), sortNotes)
 import Simple.JSON as JSON
 import Type.Proxy (Proxy(..))
 
@@ -178,7 +177,7 @@ pieceFromJSON piece =
     notes <-
       for slice.notes \note ->
         (\p -> { hold: note.hold, note: { pitch: p, id: note.id } }) <$> parseNotation note.pitch
-    pure { time: parseTime slice.time, notes: sortBy (\a b -> invert $ compare a.note.pitch b.note.pitch) notes }
+    pure { time: parseTime slice.time, notes: sortNotes notes }
 
 modelFromJSON :: ModelJSON -> Either String Model
 modelFromJSON { topSegments, derivation } = do

@@ -2,7 +2,7 @@ module ProtoVoices.Model where
 
 import Prelude
 import Control.Alt ((<|>))
-import Data.Array (filter)
+import Data.Array (filter, sortBy)
 import Data.Array as A
 import Data.Either (Either(..))
 import Data.Foldable (all, find, foldMap, foldl, for_, intercalate)
@@ -297,6 +297,9 @@ isRepeatingEdge = case _ of
 type Notes
   = Array { note :: Note, expl :: NoteExplanation }
 
+sortNotes :: forall r. Array { note :: Note | r } -> Array { note :: Note | r }
+sortNotes = sortBy (\a b -> invert $ compare a.note.pitch b.note.pitch)
+
 type Edges
   = { regular :: S.Set Edge
     , passing :: S.Set Edge
@@ -491,7 +494,7 @@ thawTrans ties id slice =
 thawSlice :: Array { note :: Note, hold :: Boolean } -> Int -> Slice
 thawSlice slice id =
   { id: SliceId id
-  , notes: Inner $ map (\n -> { note: n.note, expl: NoExpl }) $ A.sortBy (\a b -> invert $ compare a.note.pitch b.note.pitch) slice
+  , notes: Inner $ map (\n -> { note: n.note, expl: NoExpl }) $ sortNotes slice
   , x: toNumber id
   , parents: NoParents
   }
