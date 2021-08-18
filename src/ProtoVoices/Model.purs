@@ -5,7 +5,7 @@ import Control.Alt ((<|>))
 import Data.Array (filter)
 import Data.Array as A
 import Data.Either (Either(..))
-import Data.Foldable (find, foldl, for_, intercalate)
+import Data.Foldable (all, find, foldMap, foldl, for_, intercalate)
 import Data.Generic.Rep (class Generic)
 import Data.Int (toNumber)
 import Data.List (List(..), (:))
@@ -15,6 +15,7 @@ import Data.Maybe (Maybe(..), maybe)
 import Data.Monoid (power)
 import Data.Ordering (invert)
 import Data.Pitches (class Interval, Pitch, SPitch, direction, ic, isStep, pc, pto)
+import Data.Set as S
 import Data.Show.Generic (genericShow)
 import Data.Traversable (scanl)
 import Data.Tuple (Tuple(..))
@@ -94,22 +95,42 @@ explParentEdge :: NoteExplanation -> Edges
 explParentEdge = case _ of
   DoubleExpl { orn, leftParent: l, rightParent: r } ->
     let
-      parentEdge = { left: Inner l, right: Inner r }
+      parentEdge = S.singleton { left: Inner l, right: Inner r }
     in
       case orn of
-        Just PassingMid -> emptyEdges { passing = [ parentEdge ] }
-        Just PassingLeft -> emptyEdges { passing = [ parentEdge ] }
-        Just PassingRight -> emptyEdges { passing = [ parentEdge ] }
-        _ -> emptyEdges { regular = [ parentEdge ] }
-  RootExpl -> emptyEdges { regular = [ { left: Start, right: Stop } ] }
+        Just PassingMid -> emptyEdges { passing = parentEdge }
+        Just PassingLeft -> emptyEdges { passing = parentEdge }
+        Just PassingRight -> emptyEdges { passing = parentEdge }
+        _ -> emptyEdges { regular = parentEdge }
+  RootExpl -> emptyEdges { regular = S.singleton { left: Start, right: Stop } }
   _ -> emptyEdges
+
+explLeftEdge :: { note :: Note, expl :: NoteExplanation } -> Edges
+explLeftEdge { note: m, expl } = case expl of
+  DoubleExpl { orn, leftParent } -> case orn of
+    Just PassingRight -> emptyEdges { passing = edge leftParent }
+    _ -> emptyEdges { regular = edge leftParent }
+  RightExpl { leftParent } -> emptyEdges { regular = edge leftParent }
+  RootExpl -> emptyEdges { regular = S.singleton { left: Start, right: Inner m } }
+  _ -> emptyEdges
+  where
+  edge l = S.singleton { left: Inner l, right: Inner m }
+
+explRightEdge :: { note :: Note, expl :: NoteExplanation } -> Edges
+explRightEdge { note: m, expl } = case expl of
+  DoubleExpl { orn, rightParent } -> case orn of
+    Just PassingLeft -> emptyEdges { passing = edge rightParent }
+    _ -> emptyEdges { regular = edge rightParent }
+  LeftExpl { rightParent } -> emptyEdges { regular = edge rightParent }
+  RootExpl -> emptyEdges { regular = S.singleton { left: Inner m, right: Stop } }
+  _ -> emptyEdges
+  where
+  edge r = S.singleton { left: Inner m, right: Inner r }
 
 parentEdges :: Slice -> Edges
 parentEdges = case _ of
-  { notes: Inner notes } -> foldl collectParents { regular: [], passing: [] } (_.expl <$> notes)
+  { notes: Inner notes } -> foldMap explParentEdge (_.expl <$> notes)
   _ -> emptyEdges
-  where
-  collectParents acc e = acc <> explParentEdge e
 
 explIsSplit :: NoteExplanation -> Boolean
 explIsSplit = case _ of
@@ -277,12 +298,12 @@ type Notes
   = Array { note :: Note, expl :: NoteExplanation }
 
 type Edges
-  = { regular :: Array Edge
-    , passing :: Array Edge
+  = { regular :: S.Set Edge
+    , passing :: S.Set Edge
     }
 
 emptyEdges :: Edges
-emptyEdges = { regular: [], passing: [] }
+emptyEdges = mempty
 
 newtype SliceId
   = SliceId Int
@@ -359,7 +380,7 @@ emptyTrans :: TransId -> Boolean -> Transition
 emptyTrans id is2nd = { id, is2nd, edges: emptyEdges }
 
 transEdges :: Transition -> Array Edge
-transEdges trans = trans.edges.regular <> trans.edges.passing
+transEdges trans = S.toUnfoldable $ trans.edges.regular <> trans.edges.passing
 
 data Op
   = Freeze
@@ -458,8 +479,8 @@ thawTrans ties id slice =
   { id: TransId id
   , is2nd: false
   , edges:
-      { regular: A.catMaybes $ map findSecond ties
-      , passing: []
+      { regular: S.fromFoldable $ A.catMaybes $ map findSecond ties
+      , passing: S.empty
       }
   }
   where
@@ -595,30 +616,30 @@ vertEdgesLeft :: Edges -> Slice -> Either String Edges
 vertEdgesLeft edges slice
   | Inner notes <- slice.notes =
     Right
-      $ { regular: A.concatMap replaceRight edges.regular
-        , passing: A.concatMap replaceRight edges.passing
+      $ { regular: S.catMaybes $ S.map replaceRight edges.regular
+        , passing: S.catMaybes $ S.map replaceRight edges.passing
         }
     where
     replaceRight { left, right }
       | Inner rightNote <- right
       , Just sliceNote <- A.find (\n -> n.note.id == rightNote.id) notes
-      , HoriExpl parent <- sliceNote.expl = [ { left, right: Inner parent } ]
-      | otherwise = []
+      , HoriExpl parent <- sliceNote.expl = Just { left, right: Inner parent }
+      | otherwise = Nothing
   | otherwise = Left "The current reduction is invalid: Trying to vert a Start or Stop slice."
 
 vertEdgesRight :: Edges -> Slice -> Either String Edges
 vertEdgesRight edges slice
   | Inner notes <- slice.notes =
     Right
-      $ { regular: A.concatMap replaceLeft edges.regular
-        , passing: A.concatMap replaceLeft edges.passing
+      $ { regular: S.catMaybes $ S.map replaceLeft edges.regular
+        , passing: S.catMaybes $ S.map replaceLeft edges.passing
         }
     where
     replaceLeft { left, right }
       | Inner leftNote <- left
       , Just sliceNote <- A.find (\n -> n.note.id == leftNote.id) notes
-      , HoriExpl parent <- sliceNote.expl = [ { left: Inner parent, right } ]
-      | otherwise = []
+      , HoriExpl parent <- sliceNote.expl = Just { left: Inner parent, right }
+      | otherwise = Nothing
   | otherwise = Left "The current reduction is invalid: Trying to vert a Start or Stop slice."
 
 -- | Merges two segment into a new segment with a 'Split' operation.
@@ -655,7 +676,7 @@ mergeAtSlice sliceId model = case doAt matchSlice tryMerge model.reduction of
 -- the first of witch gets a 'Hori' operation.
 mkVert :: TransId -> SliceId -> Segment -> Segment -> Segment -> Either String { mkLeftParent :: EndSegment -> Either String EndSegment, rightParent :: Segment, topSlice :: Slice }
 mkVert tid sid l@{ rslice: { notes: Inner notesl } } m@{ rslice: { notes: Inner notesr } } r
-  | not $ A.all isRepeatingEdge m.trans.edges.regular = Left "Middle transition of a vert must only contain repetition and passing edges!"
+  | not $ all isRepeatingEdge m.trans.edges.regular = Left "Middle transition of a vert must only contain repetition and passing edges!"
   | otherwise = do
     rightEdges <- vertEdgesRight r.trans.edges childm.rslice
     let

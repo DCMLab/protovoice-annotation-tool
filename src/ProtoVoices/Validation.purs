@@ -2,9 +2,8 @@ module ProtoVoices.Validation where
 
 import Prelude
 import Control.Monad.State as ST
-import Data.Array (catMaybes)
 import Data.Array as A
-import Data.Foldable (fold, foldl)
+import Data.Foldable (all, fold, foldl)
 import Data.Generic.Rep (class Generic)
 import Data.List (List(..), (:))
 import Data.Map as M
@@ -13,7 +12,7 @@ import Data.Set as S
 import Data.Show.Generic (genericShow)
 import Data.Traversable (for_)
 import ProtoVoices.Folding (AgendaAlg, nothingMore, walkGraph)
-import ProtoVoices.Model (Edge, Note, NoteExplanation(..), Reduction, Slice, SliceId, StartStop(..), attachSegment, findDoubleOrn, findLeftOrn, findRightOrn, getInnerNotes, isRepeatingEdge, transEdges)
+import ProtoVoices.Model (Edge, Note, NoteExplanation(..), Reduction, Slice, SliceId, StartStop(..), attachSegment, findDoubleOrn, findLeftOrn, findRightOrn, getInnerNotes, isRepeatingEdge)
 
 data NoteError
   = NSNoExpl
@@ -44,7 +43,7 @@ validateSlice slice st =
     }
   where
   notes' = case slice.notes of
-    Inner slicenotes -> foldl (\mp { id, stat } -> M.insert id stat mp) st.notes $ catMaybes $ validateNote <$> slicenotes
+    Inner slicenotes -> foldl (\mp { id, stat } -> M.insert id stat mp) st.notes $ A.catMaybes $ validateNote <$> slicenotes
     _ -> st.notes
 
 validateNote :: { note :: Note, expl :: NoteExplanation } -> Maybe { id :: String, stat :: NoteError }
@@ -96,12 +95,12 @@ validationAlg = { init, freezeLeft, freezeOnly, splitLeft, splitOnly, splitRight
   splitLeft _ { seg } { childl, childr } = do
     -- check if mandatory edges are used
     -- TODO: check for invalid (e.g. non-stepwise) edges too
-    ST.modify_ \st -> st { edges = foldl (\mp { edge, stat } -> M.insert edge stat mp) st.edges (catMaybes $ leftChildren <> rightChildren) }
+    ST.modify_ \st -> st { edges = foldl (\mp { edge, stat } -> M.insert edge stat mp) st.edges (S.catMaybes $ leftChildren <> rightChildren) }
     pure $ nothingMore <$> childl : attachSegment childr seg.rslice : Nil
     where
     -- collect all edges that are produced by some elaboration and thus "used"
     usedEdges =
-      fold $ catMaybes
+      fold $ A.catMaybes
         $ ( \{ note, expl } -> case expl of
               DoubleExpl { leftParent, rightParent } ->
                 Just
@@ -114,9 +113,9 @@ validationAlg = { init, freezeLeft, freezeOnly, splitLeft, splitOnly, splitRight
           )
         <$> getInnerNotes childl.rslice
 
-    leftChildren = map (\edge -> if S.member edge usedEdges.ls then Nothing else Just { edge, stat: ESNotUsed }) $ childl.trans.edges.regular
+    leftChildren = S.map (\edge -> if S.member edge usedEdges.ls then Nothing else Just { edge, stat: ESNotUsed }) $ childl.trans.edges.regular
 
-    rightChildren = map (\edge -> if S.member edge usedEdges.rs then Nothing else Just { edge, stat: ESNotUsed }) $ childr.trans.edges.regular
+    rightChildren = S.map (\edge -> if S.member edge usedEdges.rs then Nothing else Just { edge, stat: ESNotUsed }) $ childr.trans.edges.regular
 
   splitOnly = splitLeft
 
@@ -126,7 +125,7 @@ validationAlg = { init, freezeLeft, freezeOnly, splitLeft, splitOnly, splitRight
     -- check slice and its notes
     ST.modify_ (validateSlice seg1.rslice)
     -- check validity of hori reduction
-    when (not $ A.all isRepeatingEdge childm.trans.edges.regular)
+    when (not $ all isRepeatingEdge childm.trans.edges.regular)
       $ ST.modify_ \st -> st { slices = M.insert seg1.rslice.id SSInvalidReduction st.slices }
     -- check edges in middle transition
     for_ childm.trans.edges.regular
@@ -155,6 +154,8 @@ instance showNoteError :: Show NoteError where
 
 -- EdgeError
 derive instance eqEdgeError :: Eq EdgeError
+
+derive instance ordEdgeError :: Ord EdgeError
 
 derive instance genericEdgeError :: Generic EdgeError _
 

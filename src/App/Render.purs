@@ -1,21 +1,25 @@
 module App.Render where
 
 import Prelude
-import ProtoVoices.Common (MBS(..))
-import App.Common (GraphAction(..), Selection(..), AppSettings, addParentToNote, noteIsSelected, removeParent)
+import App.Common (AppSettings, GraphAction(..), Selection(..), addParentToNote, noteIsSelected, removeParent)
 import Data.Array (catMaybes, elem, findIndex, fromFoldable, length, mapWithIndex)
+import Data.Array as A
 import Data.Either (Either(..))
 import Data.Int (toNumber)
 import Data.Map as M
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Ratio ((%))
-import ProtoVoices.Folding (Graph, GraphSlice, GraphTransition)
+import Halogen as H
 import Halogen.HTML as HH
+import Halogen.HTML.Core as HC
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HA
 import Halogen.HTML.Properties as HP
+import Halogen.Query.Input (Input(..))
 import Halogen.Svg.Attributes as SA
 import Halogen.Svg.Elements as SE
+import ProtoVoices.Common (MBS(..))
+import ProtoVoices.Folding (Graph, GraphSlice, GraphTransition)
 import ProtoVoices.Model (DoubleOrnament(..), Edge, LeftOrnament(..), Note, NoteExplanation(..), Notes, Piece, RightOrnament(..), SliceId, StartStop(..), explHasParent, getInnerNotes, getParents, setHoriExplParent, setLeftExplParent, setRightExplParent)
 import ProtoVoices.Validation (EdgeError(..), NoteError(..), SliceError(..), Validation)
 import Web.UIEvent.MouseEvent (ctrlKey)
@@ -31,6 +35,15 @@ offset i = toNumber i * 20.0
 
 noteSize :: Number
 noteSize = 29.0
+
+scoreHeight :: Number
+scoreHeight = 200.0
+
+scoreScale :: Number
+scoreScale = 0.9
+
+axisHeight :: Number
+axisHeight = 60.0
 
 findPitchIndex :: StartStop Note -> StartStop Notes -> Int
 findPitchIndex (Inner note) (Inner notes) =
@@ -87,23 +100,44 @@ data SelectionStatus
 
 derive instance eqSelectionStatus :: Eq SelectionStatus
 
+-- renderScore :: forall p. Slice -> Number -> HH.HTML p GraphAction
+-- renderScore slice x =
+--   SE.element (H.ElemName "svg")
+--     [ SA.x x
+--     , SA.y (negate scoreHeight)
+--     --, HP.ref $ H.RefLabel $ "score" <> show slice.id
+--     ]
+--     [ SE.g
+--         [ SA.transform [ SA.Scale scoreScale scoreScale ]
+--         , HP.IProp $ HC.ref
+--             $ case _ of
+--                 Just elt -> Just $ Action $ RenderScore elt slice
+--                 Nothing -> Nothing
+--         ]
+--         []
+--     , HH.text $ "score" <> show slice.id
+--     ]
 renderSlice :: forall p. AppSettings -> Selection -> Validation -> GraphSlice -> HH.HTML p GraphAction
-renderSlice sett selection validation { slice: { id, notes, x, parents }, depth: d } = case notes of
+renderSlice sett selection validation { slice: slice@{ id, notes, x, parents }, depth: d } = case notes of
   Inner inotes ->
-    SE.g (if selectable then selectionAttr else [])
-      ( [ SE.rect
-            [ SA.x $ scalex sett x - (noteSize / 2.0)
-            , SA.y $ scaley sett d - (noteSize / 2.0)
-            , SA.width noteSize
-            , SA.height $ offset (length inotes - 1) + noteSize
-            , SA.fill white
-            , SA.stroke $ if selected then selColor else if activeParent then parentColor else if sliceInvalid then errColor else white
-            ]
+    SE.g []
+      $ [ SE.g (if isTopLevel then selectionAttr else [])
+            $ [ SE.rect
+                  [ SA.x svgx
+                  , SA.y $ scaley sett d - (noteSize / 2.0)
+                  , SA.width noteSize
+                  , SA.height $ offset (length inotes - 1) + noteSize
+                  , SA.fill white
+                  , SA.stroke $ if selected then selColor else if activeParent then parentColor else if sliceInvalid then errColor else white
+                  ]
+              ]
+            <> mapWithIndex mknote inotes
         ]
-          <> mapWithIndex mknote inotes
-      )
+  -- <> (if isTopLevel then [ renderScore slice svgx ] else [])
   startstop -> mknode [ HH.text $ show startstop ] (scalex sett x) (scaley sett d) (if activeParent then Related else NotSelected) Nothing []
   where
+  svgx = scalex sett x - (noteSize / 2.0)
+
   selected = selection == SelSlice id
 
   activeParent = case selection of
@@ -112,7 +146,7 @@ renderSlice sett selection validation { slice: { id, notes, x, parents }, depth:
 
   sliceInvalid = M.lookup id validation.slices == Just SSInvalidReduction
 
-  selectable = d == 0.0
+  isTopLevel = d == 0.0
 
   selectionAttr =
     [ cursor "pointer"
@@ -239,7 +273,7 @@ renderTrans sett selection validation slices { id, left, right, edges } =
 
             edgeSelected = noteIsSelected selection p1 || noteIsSelected selection p2
 
-          edgeLines = map (mkedge false) edges.regular <> map (mkedge true) edges.passing
+          edgeLines = map (mkedge false) (A.fromFoldable edges.regular) <> map (mkedge true) (A.fromFoldable edges.passing)
         pure $ SE.g [] (bar <> edgeLines)
   where
   transSelected = selection == SelTrans id
@@ -302,7 +336,7 @@ renderTime :: forall r p. AppSettings -> Int -> { time :: Either String MBS | r 
 renderTime sett i { time } =
   SE.text
     [ SA.x $ scalex sett $ toNumber (i + 1)
-    , SA.y $ scaley sett (-0.5)
+    , SA.y $ negate (axisHeight / 2.0)
     , SA.text_anchor SA.AnchorMiddle
     , SA.dominant_baseline SA.BaselineMiddle
     ]
@@ -312,6 +346,17 @@ renderTime sett i { time } =
     Right (MBS { m, b, s }) -> if s == 0 % 1 then show m <> "." <> show b else ""
     Left str -> str
 
+renderScore :: forall p. HH.HTML p GraphAction
+renderScore =
+  SE.element (H.ElemName "svg")
+    [ SA.x 0.0
+    , SA.y (negate scoreHeight)
+    , HP.style "overflow: visible;"
+    , HP.ref $ H.RefLabel $ "scoreStaff"
+    , HP.IProp $ HC.ref $ map (Action <<< RegisterScoreElt)
+    ]
+    []
+
 renderReduction :: forall p. AppSettings -> Piece -> Graph -> Validation -> Selection -> HH.HTML p GraphAction
 renderReduction sett piece graph validation selection =
   HH.div
@@ -319,16 +364,18 @@ renderReduction sett piece graph validation selection =
     [ SE.svg
         [ SA.width width
         , SA.height height
-        , SA.viewBox (negate $ scalex sett 1.0) (negate $ scaley sett 1.0) width height
+        , SA.viewBox (negate $ scalex sett 1.0) (negate extraHeight) width height
         ]
-        (svgTranss <> svgHoris <> svgSlices <> svgAxis)
+        (svgScore <> svgTranss <> svgHoris <> svgSlices <> svgAxis)
     ]
   where
   { slices, transitions, horis, maxx, maxd } = graph
 
   width = scalex sett (maxx + 2.0)
 
-  height = scaley sett (maxd + 4.0)
+  extraHeight = axisHeight + if sett.showScore then scoreHeight else 0.0
+
+  height = scaley sett (maxd + 2.0) + extraHeight
 
   svgSlices = map (renderSlice sett selection validation) $ fromFoldable $ M.values slices
 
@@ -337,6 +384,8 @@ renderReduction sett piece graph validation selection =
   svgHoris = map (renderHori sett selection slices) $ fromFoldable horis
 
   svgAxis = mapWithIndex (renderTime sett) piece
+
+  svgScore = if sett.showScore then [ renderScore ] else []
 
 class_ :: forall r i. String -> HH.IProp ( class :: String | r ) i
 class_ str = HA.class_ $ HH.ClassName str

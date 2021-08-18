@@ -41,6 +41,8 @@ newtype SplitOp
   , unexplained :: Array Note
   , keepLeft :: Array Edge
   , keepRight :: Array Edge
+  , passLeft :: Array Edge
+  , passRight :: Array Edge
   , ids :: { left :: TransId, slice :: SliceId, right :: TransId }
   }
 

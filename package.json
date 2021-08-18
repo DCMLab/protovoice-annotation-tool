@@ -12,7 +12,8 @@
     "build-prod": "rm -rf dist prod && mkdir -p prod && cp dev/index.html prod/ && cp dev/index-prod.js prod/index.js && cp -r dev/css prod/ && spago bundle-module --to prod/app.js && parcel build prod/index.html --public-url \"./\""
   },
   "dependencies": {
-    "downloadjs": "^1.4.7"
+    "downloadjs": "^1.4.7",
+    "vexflow": "^3.0.9"
   },
   "devDependencies": {
     "parcel": "^2.0.0-beta.2",

@@ -1,19 +1,21 @@
 module ProtoVoices.JSONTransport where
 
 import Prelude
-import ProtoVoices.Common (parseTime)
 import Data.Array (fromFoldable, mapWithIndex, sortBy)
+import Data.Array as A
 import Data.Either (Either(..), either)
 import Data.Map as M
 import Data.Maybe (Maybe(..))
 import Data.Ordering (invert)
 import Data.Pitches (parseNotation)
+import Data.Set as S
 import Data.Traversable (for, sequence)
 import Data.Tuple (Tuple(..))
 import Data.Variant (Variant, case_, inj, on)
+import ProtoVoices.Common (parseTime)
 import ProtoVoices.Folding (leftmostToReduction, reductionToLeftmost)
 import ProtoVoices.Leftmost (FreezeOp(..), HoriChildren(..), HoriOp(..), Leftmost(..), RootOrnament(..), SplitOp(..))
-import ProtoVoices.Model (DoubleOrnament(..), Edge, Edges, LeftOrnament(..), Model, Note, Piece, RightOrnament(..), SliceId(..), StartStop, TransId(..), Transition)
+import ProtoVoices.Model (DoubleOrnament(..), Edge, Edges, LeftOrnament(..), Model, Note, Piece, RightOrnament(..), SliceId(..), StartStop, TransId(..))
 import Simple.JSON as JSON
 import Type.Proxy (Proxy(..))
 
@@ -26,11 +28,17 @@ type PieceJSON n
 type ModelJSON
   = { derivation :: Array LeftmostJSON
     , start :: SliceJSON
-    , topSegments :: Array { trans :: Transition, rslice :: SliceJSON }
+    , topSegments :: Array { trans :: TransitionJSON, rslice :: SliceJSON }
     }
+
+type TransitionJSON
+  = { id :: TransId, edges :: EdgesJSON, is2nd :: Boolean }
 
 type SliceJSON
   = { id :: SliceId, notes :: StartStop (Array Note) }
+
+type EdgesJSON
+  = { regular :: Array Edge, passing :: Array Edge }
 
 type LeftmostJSON
   = Variant
@@ -55,6 +63,8 @@ type SplitJSON
     , unexplained :: Array Note
     , keepLeft :: Array Edge
     , keepRight :: Array Edge
+    , passLeft :: Array Edge
+    , passRight :: Array Edge
     , ids :: { left :: TransId, slice :: SliceId, right :: TransId }
     }
 
@@ -71,7 +81,7 @@ type HoriJSON
                 )
           }
     , unexplained :: { left :: Array Note, right :: Array Note }
-    , midEdges :: Edges
+    , midEdges :: EdgesJSON
     , ids :: { left :: TransId, lslice :: SliceId, mid :: TransId, rslice :: SliceId, right :: TransId }
     }
 
@@ -88,10 +98,12 @@ modelToJSON model = do
   pure
     { derivation: leftmostToJSON <$> lm
     , start: sliceToJSON model.reduction.start
-    , topSegments: (\{ trans, rslice } -> { trans, rslice: sliceToJSON rslice }) <$> fromFoldable model.reduction.segments
+    , topSegments: (\{ trans, rslice } -> { trans: transToJSON trans, rslice: sliceToJSON rslice }) <$> fromFoldable model.reduction.segments
     }
   where
   sliceToJSON { id, notes } = { id, notes: map _.note <$> notes }
+
+  transToJSON t = t { edges = edgesToJSON t.edges }
 
 leftmostToJSON :: Leftmost SplitOp FreezeOp HoriOp -> LeftmostJSON
 leftmostToJSON = case _ of
@@ -106,15 +118,17 @@ freezeToJSON :: FreezeOp -> FreezeJSON
 freezeToJSON (FreezeOp { ties, prevTime }) = { ties, prevTime: either identity show prevTime }
 
 splitToJSON :: SplitOp -> SplitJSON
-splitToJSON (SplitOp split) =
+splitToJSON (SplitOp split@{ unexplained, keepLeft, keepRight, passLeft, passRight, ids }) =
   { regular: unwrap regToJSON <$> M.toUnfoldable split.regular
   , passing: unwrap (map show) <$> M.toUnfoldable split.passing
   , fromLeft: unwrap (map show) <$> M.toUnfoldable split.fromLeft
   , fromRight: unwrap (map show) <$> M.toUnfoldable split.fromRight
-  , unexplained: split.unexplained
-  , keepLeft: split.keepLeft
-  , keepRight: split.keepRight
-  , ids: split.ids
+  , unexplained
+  , keepLeft
+  , keepRight
+  , passLeft
+  , passRight
+  , ids
   }
   where
   unwrap ::
@@ -133,7 +147,7 @@ splitToJSON (SplitOp split) =
 
 horiToJSON :: HoriOp -> HoriJSON
 horiToJSON (HoriOp { midEdges, children, ids, unexplained }) =
-  { midEdges
+  { midEdges: edgesToJSON midEdges
   , children: childToJSON <$> M.toUnfoldable children
   , ids
   , unexplained
@@ -150,6 +164,9 @@ horiToJSON (HoriOp { midEdges, children, ids, unexplained }) =
         TooManyChildren t -> inj (Proxy :: Proxy "tooManyChildren") t
     in
       { parent, child }
+
+edgesToJSON :: Edges -> EdgesJSON
+edgesToJSON edges = { regular: A.fromFoldable edges.regular, passing: A.fromFoldable edges.passing }
 
 -- decoding JSON
 -- -------------
@@ -182,7 +199,7 @@ freezeFromJSON :: FreezeJSON -> Either String FreezeOp
 freezeFromJSON { ties, prevTime } = Right $ FreezeOp { ties, prevTime: parseTime prevTime }
 
 splitFromJSON :: SplitJSON -> Either String SplitOp
-splitFromJSON json@{ unexplained, keepLeft, keepRight, ids } = do
+splitFromJSON json@{ unexplained, keepLeft, keepRight, passLeft, passRight, ids } = do
   regular <- M.fromFoldable <$> (sequence $ wrap readDoubleOrnament <$> json.regular)
   passing <- M.fromFoldable <$> (sequence $ wrap readPassingOrnament <$> json.passing)
   fromLeft <- M.fromFoldable <$> (sequence $ wrap readRightOrnament <$> json.fromLeft)
@@ -196,6 +213,8 @@ splitFromJSON json@{ unexplained, keepLeft, keepRight, ids } = do
         , unexplained
         , keepLeft
         , keepRight
+        , passLeft
+        , passRight
         , ids
         }
   where
@@ -242,7 +261,7 @@ horiFromJSON :: HoriJSON -> Either String HoriOp
 horiFromJSON { midEdges, children, ids, unexplained } =
   Right
     $ HoriOp
-        { midEdges
+        { midEdges: { regular: S.fromFoldable midEdges.regular, passing: S.fromFoldable midEdges.passing }
         , children: M.fromFoldable (childFromJSON <$> children)
         , ids
         , unexplained

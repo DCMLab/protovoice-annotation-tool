@@ -3,21 +3,23 @@ module App.Tabs where
 import Prelude
 import App.Common (AppSettings, AppSlots, AppState, GraphAction(..), ImportOutput(..), Tab(..), defaultSettings)
 import App.Render (class_)
-import Data.Maybe (Maybe(..))
-import Effect.Aff.Class (class MonadAff)
-import Halogen as H
-import Halogen.HTML as HH
-import Halogen.HTML.Events as HE
-import Halogen.HTML.Properties as HP
 import App.Utils (copyToClipboard, examplePiece, examplePieceLong, showJSONErrors)
 import DOM.HTML.Indexed.InputAcceptType (InputAcceptTypeAtom(..))
 import Data.Either (Either(..), either)
 import Data.List as L
+import Data.List.NonEmpty (NonEmptyList)
+import Data.Maybe (Maybe(..))
 import Data.Number (fromString)
 import Data.Tuple (Tuple(..))
+import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect, liftEffect)
+import Foreign (ForeignError)
+import Halogen as H
+import Halogen.HTML as HH
+import Halogen.HTML.Events as HE
+import Halogen.HTML.Properties as HP
 import ProtoVoices.Folding (reductionToLeftmost)
-import ProtoVoices.JSONTransport (addJSONIds, modelFromJSON, modelToJSON, pieceFromJSON, pieceToJSON, stripJSONIds, writeJSONPretty)
+import ProtoVoices.JSONTransport (ModelJSON, addJSONIds, modelFromJSON, modelToJSON, pieceFromJSON, pieceToJSON, stripJSONIds, writeJSONPretty)
 import ProtoVoices.Model (Model, Piece, loadPiece)
 import ProtoVoices.Validation (validateReduction, validationIsOk)
 import Simple.JSON (readJSON)
@@ -93,6 +95,8 @@ helpText =
 -- ------------------
 data SettingsAction
   = SettingsToggleFlatHori
+  | SettingsToggleShowAllEdges
+  | SettingsToggleShowScore
   | SettingsSetXScale String
   | SettingsSetYScale String
 
@@ -112,6 +116,24 @@ settingsComponent = H.mkComponent { initialState, render, eval: H.mkEval H.defau
               ]
           , HH.label [ HP.for "flatHori" ] [ HH.text " render horis flat" ]
           ]
+      , HH.p_
+          [ HH.input
+              [ HP.type_ $ HP.InputCheckbox
+              , HP.checked settings.showAllEdges
+              , HE.onChange \_ -> SettingsToggleShowAllEdges
+              , HP.name "showAllEdges"
+              ]
+          , HH.label [ HP.for "showAllEdges" ] [ HH.text " show all edges" ]
+          ]
+      , HH.p_
+          [ HH.input
+              [ HP.type_ $ HP.InputCheckbox
+              , HP.checked settings.showScore
+              , HE.onChange \_ -> SettingsToggleShowScore
+              , HP.name "showScore"
+              ]
+          , HH.label [ HP.for "showScore" ] [ HH.text " show score" ]
+          ]
       , HH.p [ class_ "pure-g" ]
           [ HH.label [ class_ "pure-u-1-5", HP.for "xscale" ] [ HH.text $ "xscale: " <> show settings.xscale ]
           , HH.input
@@ -120,7 +142,7 @@ settingsComponent = H.mkComponent { initialState, render, eval: H.mkEval H.defau
               , HP.min 30.0
               , HP.max 200.0
               , HP.value $ show settings.xscale
-              , HE.onValueInput SettingsSetXScale
+              , HE.onValueChange SettingsSetXScale
               , HP.name "xscale"
               ]
           , HH.div [ class_ "pure-u-1-5" ] []
@@ -134,7 +156,7 @@ settingsComponent = H.mkComponent { initialState, render, eval: H.mkEval H.defau
               , HP.min 30.0
               , HP.max 200.0
               , HP.value $ show settings.yscale
-              , HE.onValueInput SettingsSetYScale
+              , HE.onValueChange SettingsSetYScale
               , HP.name "yscale"
               ]
           , HH.div [ class_ "pure-u-1-5" ] []
@@ -145,6 +167,8 @@ settingsComponent = H.mkComponent { initialState, render, eval: H.mkEval H.defau
   handleOptAction msg = do
     case msg of
       SettingsToggleFlatHori -> H.modify_ \st -> st { settings { flatHori = not st.settings.flatHori } }
+      SettingsToggleShowAllEdges -> H.modify_ \st -> st { settings { showAllEdges = not st.settings.showAllEdges } }
+      SettingsToggleShowScore -> H.modify_ \st -> st { settings { showScore = not st.settings.showScore } }
       SettingsSetXScale s -> case fromString s of
         Nothing -> pure unit
         Just n -> H.modify_ \st -> st { settings { xscale = n } }
@@ -239,7 +263,10 @@ importComponent = H.mkComponent { initialState, render, eval: H.mkEval H.default
           Nothing -> Left "Invalid piece!"
         Left errs2 -> showJSONErrors (if errs1 == errs2 then errs1 else errs1 <> errs2)
 
-    modelEither = either showJSONErrors modelFromJSON $ readJSON modelText
+    modelEither = either showJSONErrors modelFromJSON $ modeljson
+      where
+      modeljson :: Either (NonEmptyList ForeignError) ModelJSON
+      modeljson = readJSON modelText
 
   handleImportAction = case _ of
     ImportUpdateModelInput str -> H.modify_ \st -> st { modelText = str }

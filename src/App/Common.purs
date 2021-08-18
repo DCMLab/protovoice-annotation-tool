@@ -2,12 +2,13 @@ module App.Common where
 
 import Prelude
 import Data.Generic.Rep (class Generic)
+import Data.List as L
 import Data.Maybe (Maybe(..), maybe)
 import Data.Pitches (SPitch)
-import Data.List as L
 import Data.Show.Generic (genericShow)
 import Halogen as H
 import ProtoVoices.Model (Model, Note, NoteExplanation, Parents(..), Piece, SliceId, StartStop(..), TransId, setHoriExplParent, setLeftExplParent, setRightExplParent)
+import Web.DOM.Element (Element)
 import Web.UIEvent.KeyboardEvent (KeyboardEvent)
 
 data Selection
@@ -23,6 +24,7 @@ type AppState
     , redoStack :: L.List { m :: Model, name :: String }
     , tab :: Maybe Tab
     , settings :: AppSettings
+    , scoreElt :: Maybe Element
     }
 
 type AppSlots
@@ -112,6 +114,8 @@ data ImportOutput
 
 type AppSettings
   = { flatHori :: Boolean
+    , showAllEdges :: Boolean
+    , showScore :: Boolean
     , xscale :: Number
     , yscale :: Number
     }
@@ -119,6 +123,8 @@ type AppSettings
 defaultSettings :: AppSettings
 defaultSettings =
   { flatHori: true
+  , showAllEdges: false
+  , showScore: true
   , xscale: 70.0
   , yscale: 60.0
   }
@@ -140,3 +146,4 @@ data GraphAction
   | SetNoteExplanation { noteId :: String, expl :: NoteExplanation }
   | Undo
   | Redo
+  | RegisterScoreElt Element
