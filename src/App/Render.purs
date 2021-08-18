@@ -37,7 +37,7 @@ noteSize :: Number
 noteSize = 29.0
 
 scoreHeight :: Number
-scoreHeight = 200.0
+scoreHeight = 150.0
 
 scoreScale :: Number
 scoreScale = 0.9
@@ -100,23 +100,6 @@ data SelectionStatus
 
 derive instance eqSelectionStatus :: Eq SelectionStatus
 
--- renderScore :: forall p. Slice -> Number -> HH.HTML p GraphAction
--- renderScore slice x =
---   SE.element (H.ElemName "svg")
---     [ SA.x x
---     , SA.y (negate scoreHeight)
---     --, HP.ref $ H.RefLabel $ "score" <> show slice.id
---     ]
---     [ SE.g
---         [ SA.transform [ SA.Scale scoreScale scoreScale ]
---         , HP.IProp $ HC.ref
---             $ case _ of
---                 Just elt -> Just $ Action $ RenderScore elt slice
---                 Nothing -> Nothing
---         ]
---         []
---     , HH.text $ "score" <> show slice.id
---     ]
 renderSlice :: forall p. AppSettings -> Selection -> Validation -> GraphSlice -> HH.HTML p GraphAction
 renderSlice sett selection validation { slice: slice@{ id, notes, x, parents }, depth: d } = case notes of
   Inner inotes ->
@@ -133,7 +116,6 @@ renderSlice sett selection validation { slice: slice@{ id, notes, x, parents }, 
               ]
             <> mapWithIndex mknote inotes
         ]
-  -- <> (if isTopLevel then [ renderScore slice svgx ] else [])
   startstop -> mknode [ HH.text $ show startstop ] (scalex sett x) (scaley sett d) (if activeParent then Related else NotSelected) Nothing []
   where
   svgx = scalex sett x - (noteSize / 2.0)
@@ -350,7 +332,7 @@ renderScore :: forall p. HH.HTML p GraphAction
 renderScore =
   SE.element (H.ElemName "svg")
     [ SA.x 0.0
-    , SA.y (negate scoreHeight)
+    , SA.y (negate $ scoreHeight + axisHeight)
     , HP.style "overflow: visible;"
     , HP.ref $ H.RefLabel $ "scoreStaff"
     , HP.IProp $ HC.ref $ map (Action <<< RegisterScoreElt)
