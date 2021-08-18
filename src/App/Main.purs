@@ -24,7 +24,7 @@ import Halogen.HTML.Properties as HP
 import Halogen.Query.Event (eventListener)
 import Halogen.VDom.Driver (runUI)
 import ProtoVoices.Folding (evalGraph)
-import ProtoVoices.Model (Model, getInnerNotes, loadPiece, mergeAtSlice, noteSetExplanation, undoMergeAtTrans, undoVertAtSlice, vertAtMid)
+import ProtoVoices.Model (Model, getInnerNotes, getParents, loadPiece, mergeAtSlice, noteSetExplanation, undoMergeAtTrans, undoVertAtSlice, vertAtMid)
 import ProtoVoices.Validation (validateReduction)
 import Web.DOM.ParentNode (QuerySelector(..))
 import Web.Event.Event as E
@@ -110,10 +110,12 @@ redrawScore = do
 
           mkSlice { slice } = { x: scalex st.settings slice.x - (noteSize / 2.0), notes: _.note <$> getInnerNotes slice }
 
-          slices = map mkSlice $ A.filter (\s -> s.depth == 0.0) $ A.fromFoldable graph.slices
+          slices = case st.selected of
+            SelNote { note, parents } -> A.filter (\s -> s.slice.id `A.elem` getParents parents || note `A.elem` (_.note <$> getInnerNotes s.slice)) $ A.fromFoldable graph.slices
+            _ -> A.filter (\s -> s.depth == 0.0) $ A.fromFoldable graph.slices
 
           totalWidth = (1.0 / scoreScale) * scalex st.settings (toNumber $ length model.piece + 1)
-        pure $ liftEffect $ insertScore scoreElt $ renderScore slices totalWidth scoreScale
+        pure $ liftEffect $ insertScore scoreElt $ renderScore (mkSlice <$> slices) totalWidth scoreScale
     fromMaybe (pure unit) update
 
 handleAction :: forall o m. (MonadEffect m) => GraphAction -> H.HalogenM AppState GraphAction AppSlots o m Unit
@@ -136,7 +138,9 @@ handleAction act = do
       " " -> pr ev *> combineAny
       "Backspace" -> pr ev *> removeAny
       _ -> pure unit
-    Select s -> H.modify_ \st -> st { selected = s }
+    Select s -> do
+      H.modify_ \st -> st { selected = s }
+      redrawScore
     HandleImport i -> do
       case i of
         ImportPiece piece -> H.modify_ \st -> st { selected = SelNone, tab = Nothing, model = Just $ loadPiece piece }
