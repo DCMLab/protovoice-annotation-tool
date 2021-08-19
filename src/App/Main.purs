@@ -143,9 +143,10 @@ handleAction act = do
       redrawScore
     HandleImport i -> do
       case i of
-        ImportPiece piece -> H.modify_ \st -> st { selected = SelNone, tab = Nothing, model = Just $ loadPiece piece }
-        ImportModel model -> H.modify_ \st -> st { selected = SelNone, tab = Nothing, model = Just model }
+        ImportPiece piece -> H.modify_ \st -> st { model = Just $ loadPiece piece }
+        ImportModel model -> H.modify_ \st -> st { model = Just model }
       redrawScore
+      H.modify_ \st -> st { selected = SelNone, tab = Nothing, undoStack = L.Nil, redoStack = L.Nil }
     HandleSettings s -> do
       H.modify_ \st -> st { settings = s }
       redrawScore
@@ -166,13 +167,13 @@ handleAction act = do
       st <- H.get
       let
         { model, s1, s2 } = swapTops st.model st.undoStack st.redoStack
-      H.put $ st { undoStack = s1, redoStack = s2, model = model }
+      H.put $ st { undoStack = s1, redoStack = s2, model = model, selected = SelNone }
       redrawScore
     Redo -> do
       st <- H.get
       let
         { model, s1, s2 } = swapTops st.model st.redoStack st.undoStack
-      H.put $ st { undoStack = s2, redoStack = s1, model = model }
+      H.put $ st { undoStack = s2, redoStack = s1, model = model, selected = SelNone }
       redrawScore
     -- RenderScore elt slice -> do
     --   log $ "score for slice " <> show slice.id
