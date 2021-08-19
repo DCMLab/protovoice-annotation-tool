@@ -20,6 +20,7 @@ You can edit this file as you like.
   , "halogen-svg-elems"
   , "integers"
   , "lists"
+  , "math"
   , "maybe"
   , "numbers"
   , "ordered-collections"
