@@ -215,42 +215,59 @@ appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultE
           [ HH.h1_ [ HH.text "Proto-Voice Annotation Tool" ]
           , renderTabs st
           , HH.h2_ [ HH.text "Annotation" ]
-          , HH.div [ class_ "pure-g" ]
-              [ HH.button
-                  [ class_ "pure-button pure-u-1-4"
-                  , HE.onClick $ \_ -> CombineAny
-                  , HP.enabled (outerSelected st.selected)
-                  ]
-                  [ HH.text "Combine (Enter)" ]
-              , HH.button
-                  [ class_ "pure-button pure-u-1-4"
-                  , HE.onClick $ \_ -> RemoveAny
-                  , HP.enabled (outerSelected st.selected)
-                  ]
-                  [ HH.text "Remove (Backspace)" ]
-              , HH.button
-                  [ class_ "pure-button pure-u-1-4"
-                  , HE.onClick $ \_ -> Undo
-                  , HP.disabled $ L.null st.undoStack
-                  ]
-                  [ HH.text $ "Undo " <> maybe "" _.name (L.head st.undoStack) ]
-              , HH.button
-                  [ class_ "pure-button pure-u-1-4"
-                  , HE.onClick $ \_ -> Redo
-                  , HP.disabled $ L.null st.redoStack
-                  ]
-                  [ HH.text $ "Redo " <> maybe "" _.name (L.head st.redoStack) ]
-              ]
           ]
       , case st.model of
           Nothing -> HH.text ""
-          Just model -> do
+          Just model ->
             let
               graph = evalGraph st.settings.flatHori st.settings.showAllEdges model.reduction
 
               validation = validateReduction model.reduction
-            HH.div_
-              [ HH.p [ class_ "content" ] [ renderNoteExplanation graph st.selected ]
-              , HH.div [ class_ "wide" ] [ renderReduction st.settings model.piece graph validation st.selected ]
-              ]
+            in
+              HH.div_
+                [ HH.div [ class_ "content pure-g pure-form" ]
+                    $ [ HH.button
+                          [ class_ "pure-button pure-u-1-12"
+                          , HE.onClick $ \_ -> Undo
+                          , HP.disabled $ L.null st.undoStack
+                          , HP.title $ "Undo " <> maybe "" _.name (L.head st.undoStack)
+                          ]
+                          [ HH.text "Undo"
+                          ]
+                      , HH.button
+                          [ class_ "pure-button pure-u-1-12"
+                          , HE.onClick $ \_ -> Redo
+                          , HP.disabled $ L.null st.redoStack
+                          , HP.title $ "Redo " <> maybe "" _.name (L.head st.redoStack)
+                          ]
+                          [ HH.text "Redo" ]
+                      ]
+                    <> case st.selected of
+                        SelNote { note, expl, parents } ->
+                          [ HH.div [ class_ "pure-u-1-12", HP.style "height:30px;" ] []
+                          , HH.div [ class_ "pure-u-3-4" ]
+                              [ renderNoteExplanation graph note expl parents ]
+                          ]
+                        SelNone ->
+                          [ HH.div [ class_ "pure-u-1-12", HP.style "height:30px;" ] []
+                          , HH.label [ class_ "pure-u-3-4" ] [ HH.text "Nothing selected." ]
+                          ]
+                        _ ->
+                          [ HH.div [ class_ "pure-u-1-12 pure-g", HP.style "height:30px;" ] []
+                          , HH.label [ class_ "pure-u-1-4" ] [ HH.text $ "Slice or transition selected." ]
+                          , HH.button
+                              [ class_ "pure-button pure-u-1-4"
+                              , HE.onClick $ \_ -> CombineAny
+                              , HP.enabled (outerSelected st.selected)
+                              ]
+                              [ HH.text "Combine (Enter)" ]
+                          , HH.button
+                              [ class_ "pure-button pure-u-1-4"
+                              , HE.onClick $ \_ -> RemoveAny
+                              , HP.enabled (outerSelected st.selected)
+                              ]
+                              [ HH.text "Remove (Backspace)" ]
+                          ]
+                , HH.div [ class_ "wide" ] [ renderReduction st.settings model.piece graph validation st.selected ]
+                ]
       ]

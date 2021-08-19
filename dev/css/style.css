@@ -72,6 +72,8 @@ textarea {
 
 .form-text {
     padding: 0.5em 0;
+    max-width: max-content;
+    display: inline-block;
 }
 
 @media screen and (min-width: 48em) {

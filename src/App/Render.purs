@@ -20,7 +20,7 @@ import Halogen.Svg.Attributes as SA
 import Halogen.Svg.Elements as SE
 import ProtoVoices.Common (MBS(..))
 import ProtoVoices.Folding (Graph, GraphSlice, GraphTransition)
-import ProtoVoices.Model (DoubleOrnament(..), Edge, LeftOrnament(..), Note, NoteExplanation(..), Notes, Piece, RightOrnament(..), SliceId, StartStop(..), explHasParent, getInnerNotes, getParents, setHoriExplParent, setLeftExplParent, setRightExplParent)
+import ProtoVoices.Model (DoubleOrnament(..), Edge, LeftOrnament(..), Note, NoteExplanation(..), Notes, Parents, Piece, RightOrnament(..), SliceId, StartStop(..), explHasParent, getInnerNotes, getParents, setHoriExplParent, setLeftExplParent, setRightExplParent)
 import ProtoVoices.Validation (EdgeError(..), NoteError(..), SliceError(..), Validation)
 import Web.UIEvent.MouseEvent (ctrlKey)
 
@@ -67,14 +67,20 @@ dy = SA.attr $ HH.AttrName "dy"
 svgFilter :: forall r i. String -> HH.IProp r i
 svgFilter = SA.attr $ HH.AttrName "filter"
 
-selColor :: Maybe SA.Color
-selColor = Just $ SA.RGB 30 144 255
+selColorOuter :: Maybe SA.Color
+selColorOuter = Just $ SA.RGB 30 144 255
 
-selColor' :: Maybe SA.Color
-selColor' = Just $ SA.RGB 135 206 250
+selColorOuter' :: Maybe SA.Color
+selColorOuter' = Just $ SA.RGB 135 206 250
+
+selColorInner :: Maybe SA.Color
+selColorInner = selColorOuter -- Just $ SA.RGB 51 160 44
+
+selColorInner' :: Maybe SA.Color
+selColorInner' = selColorOuter' -- Just $ SA.RGB 178 223 138
 
 parentColor :: Maybe SA.Color
-parentColor = selColor'
+parentColor = selColorInner'
 
 warnColor :: Maybe SA.Color
 warnColor = Just $ SA.RGB 255 165 0
@@ -82,8 +88,6 @@ warnColor = Just $ SA.RGB 255 165 0
 errColor :: Maybe SA.Color
 errColor = Just $ SA.RGB 255 0 0
 
--- noteSelColor :: SA.Color
--- noteSelColor = SA.RGB 255 0 0
 white :: Maybe SA.Color
 white = Just $ SA.RGB 255 255 255
 
@@ -111,7 +115,7 @@ renderSlice sett selection validation { slice: slice@{ id, notes, x, parents }, 
                   , SA.width noteSize
                   , SA.height $ offset (length inotes - 1) + noteSize
                   , SA.fill white
-                  , SA.stroke $ if selected then selColor else if activeParent then parentColor else if sliceInvalid then errColor else white
+                  , SA.stroke $ if selected then selColorOuter else if activeParent then parentColor else if sliceInvalid then errColor else white
                   ]
               ]
             <> mapWithIndex mknote inotes
@@ -148,8 +152,8 @@ renderSlice sett selection validation { slice: slice@{ id, notes, x, parents }, 
         , SA.fill
             $ case selStatus of
                 NotSelected -> white
-                Selected -> selColor
-                Related -> selColor'
+                Selected -> selColorInner
+                Related -> selColorInner'
         ]
 
     label =
@@ -224,7 +228,7 @@ renderTrans sett selection validation slices { id, left, right, edges } =
                   , SA.y1 $ scaley sett yl
                   , SA.x2 $ scalex sett xr
                   , SA.y2 $ scaley sett yr
-                  , SA.stroke if transSelected then selColor else lightgray
+                  , SA.stroke if transSelected then selColorOuter else lightgray
                   , SA.strokeWidth $ if selectable then (noteSize / 2.0) else 5.0
                   ]
                 <> if selectable then selectionAttr else []
@@ -239,7 +243,7 @@ renderTrans sett selection validation slices { id, left, right, edges } =
               , SA.y2 $ scaley sett yr + offset offr
               , SA.stroke
                   if edgeSelected then
-                    selColor
+                    selColorInner
                   else case M.lookup edge validation.edges of
                     Just ESNotUsed -> warnColor
                     Just ESNotStepwise -> errColor
@@ -297,7 +301,7 @@ renderHori sett selection slices { child, parent } =
               , SA.y1 $ scaley sett yp + offset offp
               , SA.x2 $ scalex sett xc
               , SA.y2 $ scaley sett yc + offset offc
-              , SA.stroke if edgeSelected then selColor else black
+              , SA.stroke if edgeSelected then selColorInner else black
               , SA.strokeWidth 1.0
               ]
             where
@@ -373,7 +377,13 @@ class_ :: forall r i. String -> HH.IProp ( class :: String | r ) i
 class_ str = HA.class_ $ HH.ClassName str
 
 mkOption :: forall o p. (Maybe o -> GraphAction) -> { k :: Maybe o, v :: String, s :: Boolean } -> HH.HTML p GraphAction
-mkOption updateAction { k, v, s } = HH.option [ HA.value v, HA.selected s, HE.onClick \_ -> updateAction k ] [ HH.text v ]
+mkOption updateAction { k, v, s } =
+  HH.option
+    [ HA.value v
+    , HA.selected s
+    , HE.onClick \_ -> updateAction k
+    ]
+    [ HH.text v ]
 
 mkSelect :: forall o p. Show o => Eq o => (Maybe o -> GraphAction) -> Maybe o -> Array o -> HH.HTML p GraphAction
 mkSelect updateAction orn opts = HH.select_ options
@@ -391,60 +401,44 @@ doubleOrnaments =
   , PassingRight
   ]
 
-renderNoteExplanation :: forall p. Graph -> Selection -> HH.HTML p GraphAction
-renderNoteExplanation graph sel =
-  HH.div [ class_ "pure-g", HA.style "height:30px;" ] case sel of
-    SelNote { note, parents, expl } ->
-      [ HH.div [ class_ "pure-u-1-4" ] [ HH.text $ show note.pitch <> " (" <> note.id <> ") " ] ]
-        <> case expl of
-            NoExpl -> [ HH.div [ class_ "pure-u-1-4" ] [ HH.text "no parents" ] ]
-            RootExpl -> [ HH.div [ class_ "pure-u-1-4" ] [ HH.text "root note" ] ]
-            HoriExpl n ->
-              [ HH.div [ class_ "pure-u-1-4" ]
-                  [ HH.text $ "parent: " <> show n.pitch <> " (" <> n.id <> ")"
-                  , HH.button [ HE.onClick $ \_ -> removeParent note expl setHoriExplParent ] [ HH.text "x" ]
-                  ]
+renderNoteExplanation :: forall p. Graph -> Note -> NoteExplanation -> Parents SliceId -> HH.HTML p GraphAction
+renderNoteExplanation graph note expl parents =
+  HH.div [ class_ "pure-g", HA.style "height:30px;" ]
+    $ [ HH.label [ class_ "pure-u-1-4" ] [ HH.text $ "Note selected: " <> show note.pitch ] ]
+    <> case expl of
+        NoExpl -> [ HH.label [ class_ "pure-u-1-4" ] [ HH.text "no parents" ] ]
+        RootExpl -> [ HH.label [ class_ "pure-u-1-4" ] [ HH.text "root note" ] ]
+        HoriExpl n ->
+          [ HH.button [ class_ "pure-u-1-24", HE.onClick $ \_ -> removeParent note expl setHoriExplParent ] [ HH.text "x" ]
+          , HH.label [ class_ "pure-u-5-24" ] [ HH.text $ " parent: " <> show n.pitch ]
+          ]
+        LeftExpl lxpl@{ orn, rightParent } ->
+          [ HH.div [ class_ "pure-u-1-4" ] []
+          , HH.div [ class_ "pure-u-1-4" ]
+              [ mkSelect (\orn' -> SetNoteExplanation { noteId: note.id, expl: LeftExpl lxpl { orn = orn' } })
+                  orn
+                  [ LeftRepeat, LeftNeighbor ]
               ]
-            LeftExpl lxpl@{ orn, rightParent } ->
-              [ HH.div [ class_ "pure-u-1-4" ] []
-              , HH.div [ class_ "pure-u-1-4" ]
-                  [ mkSelect (\orn' -> SetNoteExplanation { noteId: note.id, expl: LeftExpl lxpl { orn = orn' } })
-                      orn
-                      [ LeftRepeat, LeftNeighbor ]
-                  ]
-              , HH.div [ class_ "pure-u-1-4" ]
-                  [ HH.text $ "right parent: " <> show rightParent.pitch <> " (" <> rightParent.id <> ")"
-                  , HH.button [ HE.onClick $ \_ -> removeParent note expl setRightExplParent ] [ HH.text "x" ]
-                  ]
+          , HH.button [ class_ "pure-u-1-24", HE.onClick $ \_ -> removeParent note expl setRightExplParent ] [ HH.text "x" ]
+          , HH.label [ class_ "pure-u-5-24" ] [ HH.text $ " right parent: " <> show rightParent.pitch ]
+          ]
+        RightExpl rxpl@{ orn, leftParent } ->
+          [ HH.button [ class_ "pure-u-1-24", HE.onClick $ \_ -> removeParent note expl setLeftExplParent ] [ HH.text "x" ]
+          , HH.label [ class_ "pure-u-5-24" ] [ HH.text $ " left parent: " <> show leftParent.pitch ]
+          , HH.div [ class_ "pure-u-1-4" ]
+              [ mkSelect (\orn' -> SetNoteExplanation { noteId: note.id, expl: RightExpl rxpl { orn = orn' } })
+                  orn
+                  [ RightRepeat, RightNeighbor ]
               ]
-            RightExpl rxpl@{ orn, leftParent } ->
-              [ HH.div [ class_ "pure-u-1-4" ]
-                  [ HH.text $ "left parent: " <> show leftParent.pitch <> " (" <> leftParent.id <> ")"
-                  , HH.button [ HE.onClick $ \_ -> removeParent note expl setLeftExplParent ] [ HH.text "x" ]
-                  ]
-              , HH.div [ class_ "pure-u-1-4" ]
-                  [ mkSelect (\orn' -> SetNoteExplanation { noteId: note.id, expl: RightExpl rxpl { orn = orn' } })
-                      orn
-                      [ RightRepeat, RightNeighbor ]
-                  ]
+          ]
+        DoubleExpl dxpl@{ orn, rightParent, leftParent } ->
+          [ HH.button [ class_ "pure-u-1-24", HE.onClick $ \_ -> removeParent note expl setLeftExplParent ] [ HH.text "x" ]
+          , HH.label [ class_ "pure-u-5-24" ] [ HH.text $ " left parent: " <> show leftParent.pitch ]
+          , HH.div [ class_ "pure-u-1-4" ]
+              [ mkSelect (\orn' -> SetNoteExplanation { noteId: note.id, expl: DoubleExpl dxpl { orn = orn' } })
+                  orn
+                  doubleOrnaments
               ]
-            DoubleExpl dxpl@{ orn, rightParent, leftParent } ->
-              [ HH.div [ class_ "pure-u-1-4" ]
-                  [ HH.text $ "left parent: " <> show leftParent.pitch <> " (" <> leftParent.id <> ")"
-                  , HH.button
-                      [ HE.onClick $ \_ -> removeParent note expl setLeftExplParent ]
-                      [ HH.text "x" ]
-                  ]
-              , HH.div [ class_ "pure-u-1-4" ]
-                  [ mkSelect (\orn' -> SetNoteExplanation { noteId: note.id, expl: DoubleExpl dxpl { orn = orn' } })
-                      orn
-                      doubleOrnaments
-                  ]
-              , HH.div [ class_ "pure-u-1-4" ]
-                  [ HH.text $ "right parent: " <> show rightParent.pitch <> " (" <> rightParent.id <> ")"
-                  , HH.button
-                      [ HE.onClick $ \_ -> removeParent note expl setRightExplParent ]
-                      [ HH.text "x" ]
-                  ]
-              ]
-    _ -> [ HH.div [ class_ "pure-u-1" ] [ HH.text "No note selected." ] ]
+          , HH.button [ class_ "pure-u-1-24", HE.onClick $ \_ -> removeParent note expl setRightExplParent ] [ HH.text "x" ]
+          , HH.label [ class_ "pure-u-5-24" ] [ HH.text $ " right parent: " <> show rightParent.pitch ]
+          ]
