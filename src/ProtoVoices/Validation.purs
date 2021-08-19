@@ -12,7 +12,7 @@ import Data.Set as S
 import Data.Show.Generic (genericShow)
 import Data.Traversable (for_)
 import ProtoVoices.Folding (AgendaAlg, nothingMore, walkGraph)
-import ProtoVoices.Model (Edge, Note, NoteExplanation(..), Reduction, Slice, SliceId, StartStop(..), attachSegment, findDoubleOrn, findLeftOrn, findRightOrn, getInnerNotes, isRepeatingEdge)
+import ProtoVoices.Model (DoubleOrnament(..), Edge, Note, NoteExplanation(..), Reduction, Slice, SliceId, StartStop(..), attachSegment, findDoubleOrn, findLeftOrn, findRightOrn, getInnerNotes, isRepeatingEdge, passingEdge, regularEdge)
 
 data NoteError
   = NSNoExpl
@@ -73,14 +73,28 @@ validateNote note = do
           Nothing
         else
           Just NSInvalidExplanation
-    DoubleExpl expl -> case expl.orn of
-      Nothing -> Just NSInvalidExplanation
-      e ->
-        -- TODO: check presence of child passing edges for non-mid passings
-        if e == findDoubleOrn note.note.pitch expl.leftParent expl.rightParent then
-          Nothing
-        else
-          Just NSInvalidExplanation
+    DoubleExpl { orn, leftParent, rightParent } ->
+      -- TODO: check presence of child passing edges for non-mid passings
+      let
+        predOrn = findDoubleOrn note.note.pitch leftParent rightParent
+      in
+        case orn of
+          Nothing -> Just NSInvalidExplanation
+          Just PassingLeft ->
+            if (predOrn == Just PassingLeft || predOrn == Just PassingMid) then
+              Nothing
+            else
+              Just NSInvalidExplanation
+          Just PassingRight ->
+            if (predOrn == Just PassingRight || predOrn == Just PassingMid) then
+              Nothing
+            else
+              Just NSInvalidExplanation
+          _ ->
+            if predOrn == orn then
+              Nothing
+            else
+              Just NSInvalidExplanation
 
 validationAlg :: AgendaAlg Unit Validation
 validationAlg = { init, freezeLeft, freezeOnly, splitLeft, splitOnly, splitRight, hori }
@@ -95,27 +109,37 @@ validationAlg = { init, freezeLeft, freezeOnly, splitLeft, splitOnly, splitRight
   splitLeft _ { seg } { childl, childr } = do
     -- check if mandatory edges are used
     -- TODO: check for invalid (e.g. non-stepwise) edges too
-    ST.modify_ \st -> st { edges = foldl (\mp { edge, stat } -> M.insert edge stat mp) st.edges (S.catMaybes $ leftChildren <> rightChildren) }
+    ST.modify_ \st -> st { edges = foldl (\mp { edge, stat } -> M.insert edge stat mp) st.edges allChildren }
     pure $ nothingMore <$> childl : attachSegment childr seg.rslice : Nil
     where
     -- collect all edges that are produced by some elaboration and thus "used"
     usedEdges =
-      fold $ A.catMaybes
+      fold
         $ ( \{ note, expl } -> case expl of
-              DoubleExpl { leftParent, rightParent } ->
-                Just
-                  { ls: S.singleton { left: Inner leftParent, right: Inner note }
-                  , rs: S.singleton { left: Inner note, right: Inner rightParent }
-                  }
-              LeftExpl { rightParent } -> Just { ls: S.empty, rs: S.singleton { left: Inner note, right: Inner rightParent } }
-              RightExpl { leftParent } -> Just { rs: S.empty, ls: S.singleton { left: Inner leftParent, right: Inner note } }
-              _ -> Nothing
+              DoubleExpl { orn, leftParent, rightParent } ->
+                let
+                  ledge = { left: Inner leftParent, right: Inner note }
+
+                  redge = { left: Inner note, right: Inner rightParent }
+                in
+                  case orn of
+                    Just PassingLeft -> { ls: regularEdge ledge, rs: passingEdge redge }
+                    Just PassingRight -> { ls: passingEdge ledge, rs: regularEdge redge }
+                    Just _ -> { ls: regularEdge ledge, rs: regularEdge redge }
+                    _ -> mempty
+              LeftExpl { rightParent } -> { ls: mempty, rs: regularEdge { left: Inner note, right: Inner rightParent } }
+              RightExpl { leftParent } -> { rs: mempty, ls: regularEdge { left: Inner leftParent, right: Inner note } }
+              _ -> mempty
           )
         <$> getInnerNotes childl.rslice
 
-    leftChildren = S.map (\edge -> if S.member edge usedEdges.ls then Nothing else Just { edge, stat: ESNotUsed }) $ childl.trans.edges.regular
+    checkUsed used toCheck = S.map (\edge -> if S.member edge used then Nothing else Just { edge, stat: ESNotUsed }) toCheck
 
-    rightChildren = S.map (\edge -> if S.member edge usedEdges.rs then Nothing else Just { edge, stat: ESNotUsed }) $ childr.trans.edges.regular
+    leftChildrenReg = checkUsed usedEdges.ls.regular childl.trans.edges.regular
+
+    rightChildrenReg = checkUsed usedEdges.rs.regular childr.trans.edges.regular
+
+    allChildren = S.catMaybes $ leftChildrenReg <> rightChildrenReg
 
   splitOnly = splitLeft
 

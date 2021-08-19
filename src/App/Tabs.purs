@@ -396,6 +396,10 @@ debugComponent st =
         ]
     , HH.h3_ [ HH.text "Settings" ]
     , HH.p_ [ HH.text $ show st.settings ]
+    , HH.h3_ [ HH.text "Validation" ]
+    , case st.model of
+        Nothing -> HH.text "No active reduction."
+        Just model -> HH.p_ [ HH.text $ show $ validateReduction model.reduction ]
     , HH.h3_ [ HH.text "Reduction Steps" ]
     , case st.model of
         Nothing -> HH.text "No active reduction."

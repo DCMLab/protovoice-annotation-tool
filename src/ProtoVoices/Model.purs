@@ -14,7 +14,7 @@ import Data.Map as M
 import Data.Maybe (Maybe(..), maybe)
 import Data.Monoid (power)
 import Data.Ordering (invert)
-import Data.Pitches (class Interval, Pitch, SPitch, direction, ic, isStep, pc, pto)
+import Data.Pitches (class Interval, Pitch, SIC, SPitch, direction, generic, ic, isStep, pc, pto, unison)
 import Data.Set as S
 import Data.Show.Generic (genericShow)
 import Data.Traversable (scanl)
@@ -170,11 +170,10 @@ findDoubleOrn child { pitch: left } { pitch: right }
   | pc child == pc left, isStep (ic (child `pto` right)) = Just RightRepeatOfLeft
   | pc child == pc right, isStep (ic (child `pto` left)) = Just LeftRepeatOfRight
   | pc left == pc right, isStep (ic (child `pto` left)) = Just FullNeighbor
-  | pbetween (pc left) (pc child) (pc right) =
+  | otherwise =
     if isStep (ic (child `pto` left)) then
       if isStep (ic (child `pto` right)) then Just PassingMid else Just PassingLeft
     else if isStep (ic (child `pto` right)) then Just PassingRight else Nothing
-  | otherwise = Nothing
 
 setLeftExplParent :: SPitch -> Maybe Note -> NoteExplanation -> Maybe NoteExplanation
 setLeftExplParent child leftParentMaybe expl = case leftParentMaybe of
@@ -307,6 +306,12 @@ type Edges
 
 emptyEdges :: Edges
 emptyEdges = mempty
+
+regularEdge :: Edge -> Edges
+regularEdge edge = emptyEdges { regular = S.singleton edge }
+
+passingEdge :: Edge -> Edges
+passingEdge edge = emptyEdges { passing = S.singleton edge }
 
 newtype SliceId
   = SliceId Int
