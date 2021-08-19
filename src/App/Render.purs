@@ -18,6 +18,7 @@ import Halogen.HTML.Properties as HP
 import Halogen.Query.Input (Input(..))
 import Halogen.Svg.Attributes as SA
 import Halogen.Svg.Elements as SE
+import Math (exp)
 import ProtoVoices.Common (MBS(..))
 import ProtoVoices.Folding (Graph, GraphSlice, GraphTransition)
 import ProtoVoices.Model (DoubleOrnament(..), Edge, LeftOrnament(..), Note, NoteExplanation(..), Notes, Parents, Piece, RightOrnament(..), SliceId, StartStop(..), explHasParent, getInnerNotes, getParents, setHoriExplParent, setLeftExplParent, setRightExplParent)
@@ -25,10 +26,10 @@ import ProtoVoices.Validation (EdgeError(..), NoteError(..), SliceError(..), Val
 import Web.UIEvent.MouseEvent (ctrlKey)
 
 scalex :: AppSettings -> Number -> Number
-scalex { xscale } x = x * xscale
+scalex { xscale } x = x * 70.0 * exp xscale
 
 scaley :: AppSettings -> Number -> Number
-scaley { yscale } y = y * yscale
+scaley { yscale } y = y * 100.0 * exp yscale
 
 offset :: Int -> Number
 offset i = toNumber i * 20.0
@@ -409,7 +410,7 @@ renderNoteExplanation graph note expl parents =
         NoExpl -> [ HH.label [ class_ "pure-u-1-4" ] [ HH.text "no parents" ] ]
         RootExpl -> [ HH.label [ class_ "pure-u-1-4" ] [ HH.text "root note" ] ]
         HoriExpl n ->
-          [ HH.button [ class_ "pure-u-1-24", HE.onClick $ \_ -> removeParent note expl setHoriExplParent ] [ HH.text "x" ]
+          [ HH.button [ class_ "pure-button pure-u-1-24", HE.onClick $ \_ -> removeParent note expl setHoriExplParent ] [ HH.text "x" ]
           , HH.label [ class_ "pure-u-5-24" ] [ HH.text $ " parent: " <> show n.pitch ]
           ]
         LeftExpl lxpl@{ orn, rightParent } ->
@@ -419,11 +420,11 @@ renderNoteExplanation graph note expl parents =
                   orn
                   [ LeftRepeat, LeftNeighbor ]
               ]
-          , HH.button [ class_ "pure-u-1-24", HE.onClick $ \_ -> removeParent note expl setRightExplParent ] [ HH.text "x" ]
+          , HH.button [ class_ "pure-button pure-u-1-24", HE.onClick $ \_ -> removeParent note expl setRightExplParent ] [ HH.text "x" ]
           , HH.label [ class_ "pure-u-5-24" ] [ HH.text $ " right parent: " <> show rightParent.pitch ]
           ]
         RightExpl rxpl@{ orn, leftParent } ->
-          [ HH.button [ class_ "pure-u-1-24", HE.onClick $ \_ -> removeParent note expl setLeftExplParent ] [ HH.text "x" ]
+          [ HH.button [ class_ "pure-button pure-u-1-24", HE.onClick $ \_ -> removeParent note expl setLeftExplParent ] [ HH.text "x" ]
           , HH.label [ class_ "pure-u-5-24" ] [ HH.text $ " left parent: " <> show leftParent.pitch ]
           , HH.div [ class_ "pure-u-1-4" ]
               [ mkSelect (\orn' -> SetNoteExplanation { noteId: note.id, expl: RightExpl rxpl { orn = orn' } })
@@ -432,13 +433,13 @@ renderNoteExplanation graph note expl parents =
               ]
           ]
         DoubleExpl dxpl@{ orn, rightParent, leftParent } ->
-          [ HH.button [ class_ "pure-u-1-24", HE.onClick $ \_ -> removeParent note expl setLeftExplParent ] [ HH.text "x" ]
+          [ HH.button [ class_ "pure-button pure-u-1-24", HE.onClick $ \_ -> removeParent note expl setLeftExplParent ] [ HH.text "x" ]
           , HH.label [ class_ "pure-u-5-24" ] [ HH.text $ " left parent: " <> show leftParent.pitch ]
           , HH.div [ class_ "pure-u-1-4" ]
               [ mkSelect (\orn' -> SetNoteExplanation { noteId: note.id, expl: DoubleExpl dxpl { orn = orn' } })
                   orn
                   doubleOrnaments
               ]
-          , HH.button [ class_ "pure-u-1-24", HE.onClick $ \_ -> removeParent note expl setRightExplParent ] [ HH.text "x" ]
+          , HH.button [ class_ "pure-button pure-u-1-24", HE.onClick $ \_ -> removeParent note expl setRightExplParent ] [ HH.text "x" ]
           , HH.label [ class_ "pure-u-5-24" ] [ HH.text $ " right parent: " <> show rightParent.pitch ]
           ]

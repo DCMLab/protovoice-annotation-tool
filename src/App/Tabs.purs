@@ -106,13 +106,13 @@ settingsComponent = H.mkComponent { initialState, render, eval: H.mkEval H.defau
   initialState settings = { settings }
 
   render { settings } =
-    HH.div [ class_ "tab" ]
+    HH.div [ class_ "tab pure-form" ]
       [ HH.p_
           [ HH.input
               [ HP.type_ $ HP.InputCheckbox
               , HP.checked settings.flatHori
               , HE.onChange \_ -> SettingsToggleFlatHori
-              , HP.name "flatHori"
+              , HP.id "flatHori"
               ]
           , HH.label [ HP.for "flatHori" ] [ HH.text " render horis flat" ]
           ]
@@ -121,7 +121,7 @@ settingsComponent = H.mkComponent { initialState, render, eval: H.mkEval H.defau
               [ HP.type_ $ HP.InputCheckbox
               , HP.checked settings.showAllEdges
               , HE.onChange \_ -> SettingsToggleShowAllEdges
-              , HP.name "showAllEdges"
+              , HP.id "showAllEdges"
               ]
           , HH.label [ HP.for "showAllEdges" ] [ HH.text " show all edges" ]
           ]
@@ -130,37 +130,37 @@ settingsComponent = H.mkComponent { initialState, render, eval: H.mkEval H.defau
               [ HP.type_ $ HP.InputCheckbox
               , HP.checked settings.showScore
               , HE.onChange \_ -> SettingsToggleShowScore
-              , HP.name "showScore"
+              , HP.id "showScore"
               ]
           , HH.label [ HP.for "showScore" ] [ HH.text " show score" ]
           ]
       , HH.p [ class_ "pure-g" ]
-          [ HH.label [ class_ "pure-u-1-5", HP.for "xscale" ] [ HH.text $ "xscale: " <> show settings.xscale ]
+          [ HH.label [ class_ "pure-u-1-5", HP.for "xscale" ] [ HH.text $ "horizontal zoom: " <> show settings.xscale ]
           , HH.input
-              [ class_ "pure-u-2-5"
+              [ class_ "pure-u-3-5"
               , HP.type_ $ HP.InputRange
-              , HP.min 30.0
-              , HP.max 200.0
+              , HP.min (-5.0)
+              , HP.max 0.0
+              , HP.step $ HP.Step 0.01
               , HP.value $ show settings.xscale
               , HE.onValueChange SettingsSetXScale
               , HP.name "xscale"
               ]
-          , HH.div [ class_ "pure-u-1-5" ] []
-          , HH.button [ class_ "pure-u-1-5", HE.onClick $ \_ -> SettingsSetXScale $ show defaultSettings.xscale ] [ HH.text "Reset" ]
+          , HH.div [ class_ "pure-u-1-5" ] [ HH.button [ class_ "pure-button center", HE.onClick $ \_ -> SettingsSetXScale $ show defaultSettings.xscale ] [ HH.text "Reset" ] ]
           ]
       , HH.p [ class_ "pure-g" ]
           [ HH.label [ class_ "pure-u-1-5", HP.for "yscale" ] [ HH.text $ "yscale: " <> show settings.yscale ]
           , HH.input
-              [ class_ "pure-u-2-5"
+              [ class_ "pure-u-3-5"
               , HP.type_ $ HP.InputRange
-              , HP.min 30.0
-              , HP.max 200.0
+              , HP.min (-2.0)
+              , HP.max 2.0
+              , HP.step $ HP.Step 0.01
               , HP.value $ show settings.yscale
               , HE.onValueChange SettingsSetYScale
-              , HP.name "yscale"
+              , HP.name "vertical zoom"
               ]
-          , HH.div [ class_ "pure-u-1-5" ] []
-          , HH.button [ class_ "pure-u-1-5", HE.onClick $ \_ -> SettingsSetYScale $ show defaultSettings.yscale ] [ HH.text "Reset" ]
+          , HH.div [ class_ "pure-u-1-5" ] [ HH.button [ class_ "pure-button center", HE.onClick $ \_ -> SettingsSetYScale $ show defaultSettings.yscale ] [ HH.text "Reset" ] ]
           ]
       ]
 
@@ -332,7 +332,7 @@ exportComponent =
                               [ HP.type_ $ HP.InputCheckbox
                               , HP.checked pretty
                               , HE.onChange \_ -> TogglePretty
-                              , HP.name "prettyJSON"
+                              , HP.id "prettyJSON"
                               ]
                           , HH.label [ HP.for "prettyJSON" ] [ HH.text " pretty" ]
                           ]

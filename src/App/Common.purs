@@ -125,8 +125,8 @@ defaultSettings =
   { flatHori: true
   , showAllEdges: false
   , showScore: true
-  , xscale: 70.0
-  , yscale: 60.0
+  , xscale: 0.0
+  , yscale: 0.0
   }
 
 data GraphAction
