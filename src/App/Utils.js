@@ -39,10 +39,6 @@ function drawNotes(notes) {
     var voiceB = new VF.Voice({num_beats: 1,  beat_value: 4});
     voiceB.addTickables([chordB]);
 
-    console.log(notes);
-    console.log(chordT);
-    console.log(chordB);
-    
     var formatter = new VF.Formatter();
     formatter.joinVoices([voiceT]);
     formatter.joinVoices([voiceB]);
@@ -56,14 +52,11 @@ function drawNotes(notes) {
     //staveB.setContext(ctx).draw();
 
     if (notesT.length > 0) {
-        console.log("drawing notesT");
         voiceT.draw(ctx, staveT);
     }
     if (notesB.length > 0) {
-        console.log("drawing notesB");
         voiceB.draw(ctx, staveB);
     }
-    console.log(div.children);
     return div.children[0];
 };
 

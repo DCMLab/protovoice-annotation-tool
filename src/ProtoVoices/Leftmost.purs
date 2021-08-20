@@ -1,7 +1,6 @@
 module ProtoVoices.Leftmost where
 
 import Prelude
-import Data.Array (sortWith)
 import Data.Array as A
 import Data.Either (Either(..))
 import Data.Generic.Rep (class Generic)

@@ -14,7 +14,7 @@ import Data.Map as M
 import Data.Maybe (Maybe(..), maybe)
 import Data.Monoid (power)
 import Data.Ordering (invert)
-import Data.Pitches (class Interval, Pitch, SIC, SPitch, direction, generic, ic, isStep, pc, pto, unison)
+import Data.Pitches (class Interval, Pitch, SPitch, direction, ic, isStep, pc, pto)
 import Data.Set as S
 import Data.Show.Generic (genericShow)
 import Data.Traversable (scanl)
@@ -905,22 +905,160 @@ undoMergeAtTrans transId model = case doAt matchTrans tryUnmerge model.reduction
 
 -- | Undoes a verticalization at slice 'sliceId', if it exists, restoring its children.
 undoVertAtSlice :: SliceId -> Model -> Either String Model
-undoVertAtSlice sliceId model = case doAt matchSlice tryUnvert model.reduction of
-  Right segments' -> Right model { reduction { segments = segments' } }
-  Left err -> Left err
+undoVertAtSlice sliceId model = do
+  { tail: segments', result } <- extractVert model.reduction.segments
+  case result of
+    Right children -> do
+      segments'' <- doAt matchSlice (tryReInsert children) $ model.reduction { segments = segments' }
+      pure $ model { reduction { segments = segments'' } }
+    Left _ -> Left "Could not find left parent edge. This is a bug!"
   where
+  extractVert = case _ of
+    Nil -> Left "Could not find hori!"
+    Cons _ Nil -> Left "Could not find hori!"
+    Cons pl (Cons pr rest) ->
+      if pl.rslice.id == sliceId then case pl.op of
+        Hori { childl, childr, childm } ->
+          if pr.op == Freeze then
+            Right
+              { tail: childl { rslice = pl.rslice } : pr : rest
+              , result:
+                  Right
+                    { slicel: childl.rslice
+                    , childm
+                    , childr
+                    , pl': childl.trans.edges
+                    }
+              , surfaceCount: 0
+              }
+          else
+            Left "Not a top-level hori!"
+        Freeze ->
+          Right
+            { tail: pl : pr : rest
+            , result: Left 1
+            , surfaceCount: 1
+            }
+        -- TODO: maybe allow split too?
+        _ -> Left "Not a top-level hori!"
+      else do
+        next <- extractVert (Cons pr rest)
+        case next.result of
+          Right res -> pure $ { tail: Cons pl next.tail, result: next.result, surfaceCount: 0 }
+          Left count -> do
+            pl'Maybe <- tryExtract count (detachSegment pl)
+            case pl'Maybe of
+              Left count' -> pure { tail: pl : next.tail, result: Left (count' + 1), surfaceCount: next.surfaceCount + 1 }
+              Right { seg', result } -> do
+                fixedTail <- fixPl next.surfaceCount result.pl' $ attachSegment seg' pl.rslice : next.tail
+                pure { tail: fixedTail, result: Right result, surfaceCount: 0 }
+
+  tryExtract ::
+    Int ->
+    EndSegment ->
+    Either String (Either Int { seg' :: EndSegment, result :: { slicel :: Slice, childm :: Segment, childr :: EndSegment, pl' :: Edges } })
+  tryExtract count seg
+    | count <= 0 = case seg.op of
+      Hori { childl, childm, childr } ->
+        pure $ Right
+          $ { seg': detachSegment childl
+            , result: { slicel: childl.rslice, childm, childr, pl': childl.trans.edges }
+            }
+      Freeze -> pure $ Left count
+      _ -> Left "Could not find left parent edge. This is a bug!"
+    | otherwise = case seg.op of
+      Freeze -> pure $ Left count
+      Split { childl, childr } -> do
+        -- check right child
+        resR <- tryExtract count childr
+        case resR of
+          Right { seg', result } -> pure $ Right { seg': seg { op = Split { childl, childr: seg' } }, result }
+          Left countR -> do
+            -- check left child
+            resL <- tryExtract (countR + 1) $ detachSegment childl
+            case resL of
+              Right { seg', result } -> pure $ Right { seg': seg { op = Split { childl: attachSegment seg' childl.rslice, childr } }, result }
+              Left countL -> pure $ Left countL
+      Hori { childl, childm, childr } -> do
+        -- check right child
+        resR <- tryExtract (count - 1) childr
+        case resR of
+          -- TODO: fix changed segments, if necessary!
+          Right { seg', result } -> do
+            pure $ Right { seg': seg { op = Hori { childl, childm, childr: seg' } }, result }
+          Left countR -> do
+            resM <- tryExtract (countR + 1) $ detachSegment childm
+            case resM of
+              Right { seg', result } -> pure $ Right { seg': seg { op = Hori { childl, childm: attachSegment seg' childm.rslice, childr } }, result }
+              Left countM -> do
+                resL <- tryExtract (countM + 1) $ detachSegment childl
+                case resL of
+                  Right { seg', result } -> pure $ Right { seg': seg { op = Hori { childl: attachSegment seg' childl.rslice, childm, childr } }, result }
+                  Left countL -> pure $ Left countL
+
+  fixPl :: Int -> Edges -> List Segment -> Either String (List Segment)
+  fixPl count pl
+    | count >= 0 = case _ of
+      Nil -> pure Nil
+      Cons seg tail -> do
+        { seg', pl' } <- insertPl count pl $ detachSegment seg
+        tail' <- fixPl (count - 1) pl' tail
+        pure $ attachSegment seg' seg.rslice : tail'
+    | otherwise = pure
+
+  insertPl :: Int -> Edges -> EndSegment -> Either String { seg' :: EndSegment, pl' :: Edges }
+  insertPl count pl seg
+    | count <= 0 = case seg.op of
+      Freeze -> Right { seg': seg { trans { edges = pl } }, pl': pl }
+      _ -> Left "Invalid structure. This is a bug!"
+    | otherwise = case seg.op of
+      Freeze -> Right { seg': seg, pl': pl }
+      Split { childl, childr } -> do
+        resL <- insertPl (count + 1) pl $ detachSegment childl
+        resR <- insertPl count resL.pl' childr
+        pure { seg': seg { op = Split { childl: attachSegment resL.seg' childl.rslice, childr: resR.seg' } }, pl': resR.pl' }
+      Hori { childl, childm, childr } -> do
+        resL <- insertPl (count + 1) pl $ detachSegment childl
+        resM <- insertPl count resL.pl' $ detachSegment childm
+        if count == 1 then do
+          pl' <- vertEdgesRight resM.pl' childm.rslice
+          Right
+            { seg':
+                seg
+                  { op =
+                    Hori
+                      { childl: attachSegment resL.seg' childl.rslice
+                      , childm: attachSegment resM.seg' childm.rslice
+                      , childr: childr { trans { edges = resM.pl' } }
+                      }
+                  }
+            , pl'
+            }
+        else do
+          resR <- insertPl (count - 1) resM.pl' childr
+          Right
+            { seg':
+                seg
+                  { op =
+                    Hori
+                      { childl: attachSegment resL.seg' childl.rslice
+                      , childm: attachSegment resM.seg' childm.rslice
+                      , childr: resR.seg'
+                      }
+                  }
+            , pl': resR.pl'
+            }
+
   matchSlice = case _ of
     Cons pl (Cons pr rest) -> if pl.rslice.id == sliceId then Just (Tuple { pl, pr } rest) else Nothing
     _ -> Nothing
 
-  tryUnvert _ { pl, pr } = case pl.op of
-    Hori { childl, childm, childr } ->
-      Right
-        $ resetExpls (setParents NoParents childl)
-        : resetExpls (setParents NoParents childm)
-        : attachSegment childr pr.rslice
-        : Nil
-    _ -> Left "Operation is not a hori!"
+  tryReInsert { slicel, childm, childr } _ { pl, pr } =
+    Right
+      $ resetExpls (setParents NoParents $ pl { rslice = slicel })
+      : resetExpls (setParents NoParents childm)
+      : attachSegment childr pr.rslice
+      : Nil
 
 noteSetExplanation :: String -> NoteExplanation -> Model -> Either String Model
 noteSetExplanation noteId expl model = case traverseTop Nil model.reduction.segments of
