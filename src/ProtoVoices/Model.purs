@@ -828,7 +828,11 @@ vertAtMid transId model = case doVert model.reduction.start model.reduction.segm
             case ltail of
               Cons segr'' tail'' -> do
                 let
-                  segl' = segl { op = Split { childl: childl', childr: detachSegment childr'' } }
+                  segl' =
+                    segl
+                      { op = Split { childl: childl', childr: detachSegment childr'' }
+                      , trans { edges = parentEdges childl'.rslice }
+                      }
                 pure $ { segl', segr': segr'', tail': tail'', leftover: (_ + 1) <$> lol }
               _ -> Left "Returned tail too short (splitLeft). This is a bug!"
       -- hori: first try to descend on childr, then childm, then childl; pass on remaining leftovers
@@ -842,7 +846,7 @@ vertAtMid transId model = case doVert model.reduction.start model.reduction.segm
             Cons splitChildr' tail' -> do
               let
                 splitOp' = Split { childl: splitChildl', childr: detachSegment splitChildr' }
-              pure { segl', segr': segr { op = splitOp' }, tail', leftover }
+              pure { segl', segr': segr { op = splitOp', trans { edges = parentEdges splitChildl'.rslice } }, tail', leftover }
             _ -> Left "Returned tail too short (splitRight). This is a bug!"
         -- no right split: process hori itself
         Freeze -> case tail of
