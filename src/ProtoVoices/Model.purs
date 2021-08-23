@@ -921,9 +921,9 @@ undoVertAtSlice sliceId model = do
     Nil -> Left "Could not find hori!"
     Cons _ Nil -> Left "Could not find hori!"
     Cons pl (Cons pr rest) ->
-      if pl.rslice.id == sliceId then case pl.op of
-        Hori { childl, childr, childm } ->
-          if pr.op == Freeze then
+      if pl.rslice.id == sliceId then
+        if pr.op == Freeze then case pl.op of
+          Hori { childl, childr, childm } ->
             Right
               { tail: childl { rslice = pl.rslice } : pr : rest
               , result:
@@ -935,16 +935,16 @@ undoVertAtSlice sliceId model = do
                     }
               , surfaceCount: 0
               }
-          else
-            Left "Not a top-level hori!"
-        Freeze ->
-          Right
-            { tail: pl : pr : rest
-            , result: Left 1
-            , surfaceCount: 1
-            }
-        -- TODO: maybe allow split too?
-        _ -> Left "Not a top-level hori!"
+          Freeze ->
+            Right
+              { tail: pl : pr : rest
+              , result: Left 1
+              , surfaceCount: 1
+              }
+          -- TODO: maybe allow split too?
+          _ -> Left "Not a top-level hori!"
+        else
+          Left "Not a top-level hori!"
       else do
         next <- extractVert (Cons pr rest)
         case next.result of
