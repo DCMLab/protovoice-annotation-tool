@@ -39,6 +39,7 @@ You can edit this file as you like.
   , "web-events"
   , "web-file"
   , "web-html"
+  , "web-storage"
   , "web-uievents"
   ]
 , packages = ./packages.dhall

@@ -24,13 +24,16 @@ import Halogen.HTML.Properties as HP
 import Halogen.Query.Event (eventListener)
 import Halogen.VDom.Driver (runUI)
 import ProtoVoices.Folding (evalGraph)
+import ProtoVoices.JSONTransport (modelToJSON)
 import ProtoVoices.Model (Model, getInnerNotes, getParents, loadPiece, mergeAtSlice, noteSetExplanation, undoMergeAtTrans, undoVertAtSlice, vertAtMid)
 import ProtoVoices.Validation (validateReduction)
+import Simple.JSON as JSON
 import Web.DOM.ParentNode (QuerySelector(..))
 import Web.Event.Event as E
 import Web.HTML (window)
 import Web.HTML.HTMLDocument (toEventTarget)
-import Web.HTML.Window (document)
+import Web.HTML.Window (document, localStorage)
+import Web.Storage.Storage as WStore
 import Web.UIEvent.KeyboardEvent as KE
 import Web.UIEvent.KeyboardEvent.EventTypes as KET
 
@@ -45,13 +48,6 @@ main =
 --------------------
 -- main component --
 --------------------
--- setModel :: forall m. MonadEffect m => Maybe Model -> H.HalogenM AppState _ AppSlots _ m Unit
--- setModel = case _ of
---   Nothing -> do
---     H.modify_ \st -> st { model = Nothing }
---   Just model -> do
---     st <- H.get
---     H.put st { model = Just model }
 tryModelAction ::
   forall o a m.
   (MonadEffect m) =>
@@ -79,6 +75,7 @@ tryModelAction selector action actionName clearSel = do
             , undoStack = { m: model, name: actionName } L.: st.undoStack
             , redoStack = L.Nil
             }
+        autoSaveModel
         redrawScore
 
 combineAny :: forall o m. (MonadEffect m) => H.HalogenM AppState GraphAction AppSlots o m Unit
@@ -118,6 +115,19 @@ redrawScore = do
         pure $ liftEffect $ insertScore scoreElt $ renderScore (mkSlice <$> slices) totalWidth scoreScale
     fromMaybe (pure unit) update
 
+autoSaveModel :: forall o m. (MonadEffect m) => H.HalogenM AppState GraphAction AppSlots o m Unit
+autoSaveModel = do
+  model <- H.gets _.model
+  case model of
+    Just m -> case modelToJSON m of
+      Right json ->
+        liftEffect do
+          w <- window
+          s <- localStorage w
+          WStore.setItem "autosave" (JSON.writeJSON json) s
+      Left _err -> pure unit
+    Nothing -> pure unit
+
 handleAction :: forall o m. (MonadEffect m) => GraphAction -> H.HalogenM AppState GraphAction AppSlots o m Unit
 handleAction act = do
   case act of
@@ -140,11 +150,13 @@ handleAction act = do
       _ -> pure unit
     Select s -> do
       H.modify_ \st -> st { selected = s }
+      autoSaveModel
       redrawScore
     HandleImport i -> do
       case i of
         ImportPiece piece -> H.modify_ \st -> st { model = Just $ loadPiece piece }
         ImportModel model -> H.modify_ \st -> st { model = Just model }
+      autoSaveModel
       redrawScore
       H.modify_ \st -> st { selected = SelNone, tab = Nothing, undoStack = L.Nil, redoStack = L.Nil }
     HandleSettings s -> do
@@ -168,12 +180,14 @@ handleAction act = do
       let
         { model, s1, s2 } = swapTops st.model st.undoStack st.redoStack
       H.put $ st { undoStack = s1, redoStack = s2, model = model, selected = SelNone }
+      autoSaveModel
       redrawScore
     Redo -> do
       st <- H.get
       let
         { model, s1, s2 } = swapTops st.model st.redoStack st.undoStack
       H.put $ st { undoStack = s2, redoStack = s1, model = model, selected = SelNone }
+      autoSaveModel
       redrawScore
     -- RenderScore elt slice -> do
     --   log $ "score for slice " <> show slice.id

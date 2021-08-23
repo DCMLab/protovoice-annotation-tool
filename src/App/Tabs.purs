@@ -28,6 +28,9 @@ import Type.Proxy (Proxy(..))
 import Web.DownloadJs (download)
 import Web.File.File (File, toBlob) as File
 import Web.File.FileReader.Aff (readAsText) as File
+import Web.HTML (window)
+import Web.HTML.Window (alert, localStorage)
+import Web.Storage.Storage as WStore
 
 --------------------
 -- sub-components --
@@ -186,6 +189,7 @@ data ImportAction
   | ImportUploadPiece (Maybe File.File)
   | ImportLoadPiece Piece
   | ImportLoadModel Model
+  | ImportRestoreAutosave
 
 importComponent :: forall query input m. MonadAff m => H.Component query input ImportOutput m
 importComponent = H.mkComponent { initialState, render, eval: H.mkEval H.defaultEval { handleAction = handleImportAction } }
@@ -196,6 +200,7 @@ importComponent = H.mkComponent { initialState, render, eval: H.mkEval H.default
     HH.div [ class_ "tab" ]
       [ HH.button [ class_ "pure-button", HE.onClick $ \_ -> ImportLoadPiece examplePiece ] [ HH.text "Load Example" ]
       , HH.button [ class_ "pure-button", HE.onClick $ \_ -> ImportLoadPiece examplePieceLong ] [ HH.text "Load Example (Long)" ]
+      , HH.button [ class_ "pure-button pure-button-primary", HE.onClick $ \_ -> ImportRestoreAutosave ] [ HH.text "Restore Autosave Data" ]
       , HH.div_
           [ HH.h3_ [ HH.text "Import Piece" ]
           , HH.div_
@@ -275,6 +280,15 @@ importComponent = H.mkComponent { initialState, render, eval: H.mkEval H.default
     ImportUploadPiece f -> loadFile f ImportUpdatePieceInput
     ImportLoadPiece p -> H.raise $ ImportPiece p
     ImportLoadModel m -> H.raise $ ImportModel m
+    ImportRestoreAutosave -> do
+      w <- liftEffect window
+      s <- liftEffect $ localStorage w
+      autodata <- liftEffect $ WStore.getItem "autosave" s
+      case autodata of
+        Nothing -> liftEffect $ alert "No autosave data found." w
+        Just str -> case either showJSONErrors modelFromJSON $ readJSON str of
+          Left err -> liftEffect $ alert ("Error loading autosave data: " <> err) w
+          Right model -> H.raise $ ImportModel model
     where
     loadFile f action = case f of
       Nothing -> pure unit
