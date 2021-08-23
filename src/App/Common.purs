@@ -10,6 +10,7 @@ import Halogen as H
 import ProtoVoices.Model (Model, Note, NoteExplanation, Parents(..), Piece, SliceId, StartStop(..), TransId, setHoriExplParent, setLeftExplParent, setRightExplParent)
 import Web.DOM.Element (Element)
 import Web.UIEvent.KeyboardEvent (KeyboardEvent)
+import Web.UIEvent.WheelEvent (WheelEvent)
 
 data Selection
   = SelNone
@@ -136,6 +137,7 @@ data GraphAction
   | HandleSettings AppSettings
   | SwitchTab (Maybe Tab)
   | HandleKey KeyboardEvent
+  | HandleScroll WheelEvent
   | Select Selection
   | MergeAtSelected
   | VertAtSelected

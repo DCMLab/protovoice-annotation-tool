@@ -36,6 +36,8 @@ import Web.HTML.Window (document, localStorage)
 import Web.Storage.Storage as WStore
 import Web.UIEvent.KeyboardEvent as KE
 import Web.UIEvent.KeyboardEvent.EventTypes as KET
+import Web.UIEvent.MouseEvent as ME
+import Web.UIEvent.WheelEvent as WE
 
 main :: Effect Unit
 main =
@@ -148,6 +150,15 @@ handleAction act = do
       " " -> pr ev *> combineAny
       "Backspace" -> pr ev *> removeAny
       _ -> pure unit
+    HandleScroll ev -> do
+      log $ "dx=" <> show (WE.deltaX ev) <> ", dy=" <> show (WE.deltaY ev) <> ", dz=" <> show (WE.deltaZ ev)
+      when (ME.ctrlKey $ WE.toMouseEvent ev) do
+        H.liftEffect $ E.preventDefault $ WE.toEvent ev
+        if ME.shiftKey $ WE.toMouseEvent ev then
+          H.modify_ \st -> st { settings { yscale = min 2.0 (max (-2.0) $ st.settings.yscale - WE.deltaY ev / 1000.0) } }
+        else
+          H.modify_ \st -> st { settings { xscale = min 0.0 (max (-5.0) $ st.settings.xscale - WE.deltaY ev / 1000.0) } }
+      redrawScore
     Select s -> do
       H.modify_ \st -> st { selected = s }
       autoSaveModel
@@ -283,6 +294,10 @@ appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultE
                               ]
                               [ HH.text "Remove (Backspace)" ]
                           ]
-                , HH.div [ class_ "wide" ] [ renderReduction st.settings model.piece graph validation st.selected ]
+                , HH.div
+                    [ class_ "wide"
+                    , HE.onWheel HandleScroll
+                    ]
+                    [ renderReduction st.settings model.piece graph validation st.selected ]
                 ]
       ]
