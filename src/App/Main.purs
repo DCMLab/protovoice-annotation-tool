@@ -151,7 +151,6 @@ handleAction act = do
       "Backspace" -> pr ev *> removeAny
       _ -> pure unit
     HandleScroll ev -> do
-      log $ "dx=" <> show (WE.deltaX ev) <> ", dy=" <> show (WE.deltaY ev) <> ", dz=" <> show (WE.deltaZ ev)
       when (ME.ctrlKey $ WE.toMouseEvent ev) do
         H.liftEffect $ E.preventDefault $ WE.toEvent ev
         if ME.shiftKey $ WE.toMouseEvent ev then
