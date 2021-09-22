@@ -157,7 +157,7 @@ handleAction act = do
           H.modify_ \st -> st { settings { yscale = min 2.0 (max (-2.0) $ st.settings.yscale - WE.deltaY ev / 1000.0) } }
         else
           H.modify_ \st -> st { settings { xscale = min 0.0 (max (-5.0) $ st.settings.xscale - WE.deltaY ev / 1000.0) } }
-      redrawScore
+        redrawScore
     Select s -> do
       H.modify_ \st -> st { selected = s }
       autoSaveModel
