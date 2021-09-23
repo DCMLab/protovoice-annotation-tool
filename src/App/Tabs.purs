@@ -1,15 +1,16 @@
 module App.Tabs where
 
 import Prelude
-import App.Common (AppSettings, AppSlots, AppState, GraphAction(..), ImportOutput(..), Tab(..), defaultSettings)
+import App.Common (AppSettings, AppSlots, AppState, GraphAction(..), ImportThing(..), Tab(..), ImportOutput, defaultSettings)
 import App.Render (class_)
 import App.Utils (copyToClipboard, examplePiece, examplePieceLong, showJSONErrors)
 import DOM.HTML.Indexed.InputAcceptType (InputAcceptTypeAtom(..))
 import Data.Either (Either(..), either)
 import Data.List as L
 import Data.List.NonEmpty (NonEmptyList)
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Number (fromString)
+import Data.String (Pattern(..), stripSuffix)
 import Data.Tuple (Tuple(..))
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect, liftEffect)
@@ -26,7 +27,7 @@ import Simple.JSON (readJSON)
 import Simple.JSON as JSON
 import Type.Proxy (Proxy(..))
 import Web.DownloadJs (download)
-import Web.File.File (File, toBlob) as File
+import Web.File.File (File, name, toBlob) as File
 import Web.File.FileReader.Aff (readAsText) as File
 import Web.HTML (window)
 import Web.HTML.Window (alert, localStorage)
@@ -62,7 +63,7 @@ renderTabs st =
         Nothing -> HH.text ""
         Just HelpTab -> helpText
         Just ImportTab -> HH.slot (Proxy :: Proxy "importTab") 1 importComponent unit HandleImport
-        Just ExportTab -> HH.slot_ (Proxy :: Proxy "exportTab") 0 exportComponent st.model
+        Just ExportTab -> HH.slot_ (Proxy :: Proxy "exportTab") 0 exportComponent { model: st.model, name: st.name }
         Just SettingsTab -> HH.slot (Proxy :: Proxy "settingsTab") 2 settingsComponent st.settings HandleSettings
         Just DebugTab -> debugComponent st
     ]
@@ -185,30 +186,41 @@ settingsComponent = H.mkComponent { initialState, render, eval: H.mkEval H.defau
 data ImportAction
   = ImportUpdateModelInput String
   | ImportUpdatePieceInput String
+  | ImportUpdateName String
   | ImportUploadModel (Maybe File.File)
   | ImportUploadPiece (Maybe File.File)
-  | ImportLoadPiece Piece
-  | ImportLoadModel Model
+  | ImportLoadPiece String Piece
+  | ImportLoadModel String Model
   | ImportRestoreAutosave
 
 importComponent :: forall query input m. MonadAff m => H.Component query input ImportOutput m
 importComponent = H.mkComponent { initialState, render, eval: H.mkEval H.defaultEval { handleAction = handleImportAction } }
   where
-  initialState _ = { modelText: "", pieceText: "" }
+  initialState _ = { modelText: "", pieceText: "", name: "unnamed" }
 
-  render { modelText, pieceText } =
+  render { modelText, pieceText, name } =
     HH.div [ class_ "tab" ]
-      [ HH.button [ class_ "pure-button", HE.onClick $ \_ -> ImportLoadPiece examplePiece ] [ HH.text "Load Example" ]
-      , HH.button [ class_ "pure-button", HE.onClick $ \_ -> ImportLoadPiece examplePieceLong ] [ HH.text "Load Example (Long)" ]
+      [ HH.button [ class_ "pure-button", HE.onClick $ \_ -> ImportLoadPiece "example" examplePiece ] [ HH.text "Load Example" ]
+      , HH.button [ class_ "pure-button", HE.onClick $ \_ -> ImportLoadPiece "example-long" examplePieceLong ] [ HH.text "Load Example (Long)" ]
       , HH.button [ class_ "pure-button pure-button-primary", HE.onClick $ \_ -> ImportRestoreAutosave ] [ HH.text "Restore Autosave Data" ]
       , HH.div_
-          [ HH.h3_ [ HH.text "Import Piece" ]
+          [ HH.p [ class_ "pure-g" ]
+              [ HH.label [ HP.for "piece-name", class_ "pure-u-1-4" ] [ HH.text "Piece Name:" ]
+              , HH.input
+                  [ HP.type_ HP.InputText
+                  , class_ "pure-u-1-2"
+                  , HP.id "piece-name"
+                  , HP.value name
+                  , HE.onValueInput ImportUpdateName
+                  ]
+              ]
+          , HH.h3_ [ HH.text "Import Piece" ]
           , HH.div_
               [ HH.label [ HP.for "upload-piece" ] [ HH.text "Choose a file: " ]
               , HH.input
                   [ HP.type_ HP.InputFile
-                  , HP.name "upload-piece"
-                  , HP.accept $ HP.InputAcceptType [ AcceptFileExtension ".json" ]
+                  , HP.id "upload-piece"
+                  , HP.accept $ HP.InputAcceptType [ AcceptFileExtension ".piece.json" ]
                   , HE.onFileUpload \files -> ImportUploadPiece $ L.head files
                   ]
               ]
@@ -222,13 +234,13 @@ importComponent = H.mkComponent { initialState, render, eval: H.mkEval H.default
                 Left modelWithNewIds ->
                   HH.div_
                     [ HH.p_ [ HH.text "Input valid, but no (or not all) IDs were given. Use generated IDs?" ]
-                    , HH.button [ class_ "pure-button pure-button-primary", HE.onClick $ const $ ImportLoadModel modelWithNewIds ]
+                    , HH.button [ class_ "pure-button pure-button-primary", HE.onClick $ const $ ImportLoadModel name modelWithNewIds ]
                         [ HH.text "Import Piece (New IDs)" ]
                     ]
                 Right modelWithGivenIds ->
                   HH.div_
                     [ HH.p_ [ HH.text "Input valid!" ]
-                    , HH.button [ class_ "pure-button pure-button-primary", HE.onClick $ const $ ImportLoadModel modelWithGivenIds ]
+                    , HH.button [ class_ "pure-button pure-button-primary", HE.onClick $ const $ ImportLoadModel name modelWithGivenIds ]
                         [ HH.text "Import Piece" ]
                     ]
           ]
@@ -238,8 +250,8 @@ importComponent = H.mkComponent { initialState, render, eval: H.mkEval H.default
               [ HH.label [ HP.for "upload-analysis" ] [ HH.text "Choose a file: " ]
               , HH.input
                   [ HP.type_ HP.InputFile
-                  , HP.name "upload-analysis"
-                  , HP.accept $ HP.InputAcceptType [ AcceptFileExtension ".json" ]
+                  , HP.id "upload-analysis"
+                  , HP.accept $ HP.InputAcceptType [ AcceptFileExtension ".analysis.json" ]
                   , HE.onFileUpload \files -> ImportUploadModel $ L.head files
                   ]
               ]
@@ -252,7 +264,7 @@ importComponent = H.mkComponent { initialState, render, eval: H.mkEval H.default
               Right model ->
                 HH.div_
                   [ HH.p_ [ HH.text "Input valid!" ]
-                  , HH.button [ class_ "pure-button pure-button-primary", HE.onClick $ const $ ImportLoadModel model ]
+                  , HH.button [ class_ "pure-button pure-button-primary", HE.onClick $ const $ ImportLoadModel name model ]
                       [ HH.text "Import Analysis" ]
                   ]
           ]
@@ -276,35 +288,51 @@ importComponent = H.mkComponent { initialState, render, eval: H.mkEval H.default
   handleImportAction = case _ of
     ImportUpdateModelInput str -> H.modify_ \st -> st { modelText = str }
     ImportUpdatePieceInput str -> H.modify_ \st -> st { pieceText = str }
-    ImportUploadModel f -> loadFile f ImportUpdateModelInput
-    ImportUploadPiece f -> loadFile f ImportUpdatePieceInput
-    ImportLoadPiece p -> H.raise $ ImportPiece p
-    ImportLoadModel m -> H.raise $ ImportModel m
+    ImportUpdateName str -> H.modify_ \st -> st { name = str }
+    ImportUploadModel f -> loadFile f ".analysis.json" ImportUpdateModelInput
+    ImportUploadPiece f -> loadFile f ".piece.json" ImportUpdatePieceInput
+    ImportLoadPiece n p -> H.raise $ { name: n, thing: ImportPiece p }
+    ImportLoadModel n m -> H.raise $ { name: n, thing: ImportModel m }
     ImportRestoreAutosave -> do
       w <- liftEffect window
       s <- liftEffect $ localStorage w
       autodata <- liftEffect $ WStore.getItem "autosave" s
       case autodata of
         Nothing -> liftEffect $ alert "No autosave data found." w
-        Just str -> case either showJSONErrors modelFromJSON $ readJSON str of
+        Just str -> case either showJSONErrors modelFromAutosave $ readJSON str of
           Left err -> liftEffect $ alert ("Error loading autosave data: " <> err) w
-          Right model -> H.raise $ ImportModel model
+          Right { model, name } -> H.raise $ { name, thing: ImportModel model }
     where
-    loadFile f action = case f of
+    loadFile f ext action = case f of
       Nothing -> pure unit
       Just file -> do
         str <- H.liftAff $ File.readAsText $ File.toBlob file
+        let
+          fname = File.name file
+
+          name = fromMaybe fname $ stripSuffix (Pattern ext) fname
         handleImportAction $ action str
+        H.modify_ \st -> st { name = name }
+
+    modelFromAutosave ::
+      { name :: String, model :: ModelJSON } ->
+      Either String { name :: String, model :: Model }
+    modelFromAutosave { name, model } = do
+      model' <- modelFromJSON model
+      pure { name, model: model' }
 
 -- export component
 -- ----------------
+type ExportInput
+  = { model :: (Maybe Model), name :: String }
+
 data ExportAction
   = CopyToClipboard String
   | DownloadJSON String String
   | TogglePretty
-  | Receive (Maybe Model)
+  | Receive ExportInput
 
-exportComponent :: forall query output m. MonadEffect m => H.Component query (Maybe Model) output m
+exportComponent :: forall query output m. MonadEffect m => H.Component query ExportInput output m
 exportComponent =
   H.mkComponent
     { initialState
@@ -317,9 +345,9 @@ exportComponent =
             }
     }
   where
-  initialState input = { model: input, pretty: false }
+  initialState { model, name } = { model, name, pretty: false }
 
-  render { model: modelMaybe, pretty } = case modelMaybe of
+  render { model: modelMaybe, pretty, name } = case modelMaybe of
     Nothing -> HH.text ""
     Just model ->
       let
@@ -357,7 +385,7 @@ exportComponent =
                           [ HH.text "Copy to Clipboard" ]
                       , HH.button
                           [ class_ "pure-button pure-button-primary pure-u-1-5"
-                          , HE.onClick \_ -> DownloadJSON "analysis.json" jsonStr
+                          , HE.onClick \_ -> DownloadJSON (name <> ".analysis.json") jsonStr
                           ]
                           [ HH.text "Download" ]
                       ]
@@ -396,7 +424,7 @@ exportComponent =
       _ <- liftEffect $ download json filename "application/json"
       pure unit
     TogglePretty -> H.modify_ \st -> st { pretty = not st.pretty }
-    Receive model -> H.modify_ \st -> st { model = model }
+    Receive { model, name } -> H.modify_ \st -> st { model = model, name = name }
 
 -- debug component
 -- ---------------

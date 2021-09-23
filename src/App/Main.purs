@@ -1,7 +1,7 @@
 module App.Main (main) where
 
 import Prelude
-import App.Common (AppSlots, AppState, GraphAction(..), ImportOutput(..), Selection(..), Tab(..), defaultSettings, getSelSlice, getSelTrans, outerSelected)
+import App.Common (AppSlots, AppState, GraphAction(..), ImportThing(..), Selection(..), Tab(..), defaultSettings, getSelSlice, getSelTrans, outerSelected)
 import App.Render (class_, noteSize, renderNoteExplanation, renderReduction, scalex, scoreScale)
 import App.Tabs (renderTabs)
 import App.Utils (insertScore, renderScore)
@@ -120,13 +120,14 @@ redrawScore = do
 autoSaveModel :: forall o m. (MonadEffect m) => H.HalogenM AppState GraphAction AppSlots o m Unit
 autoSaveModel = do
   model <- H.gets _.model
+  name <- H.gets _.name
   case model of
     Just m -> case modelToJSON m of
       Right json ->
         liftEffect do
           w <- window
           s <- localStorage w
-          WStore.setItem "autosave" (JSON.writeJSON json) s
+          WStore.setItem "autosave" (JSON.writeJSON { name, model: json }) s
       Left _err -> pure unit
     Nothing -> pure unit
 
@@ -162,10 +163,10 @@ handleAction act = do
       H.modify_ \st -> st { selected = s }
       autoSaveModel
       redrawScore
-    HandleImport i -> do
-      case i of
-        ImportPiece piece -> H.modify_ \st -> st { model = Just $ loadPiece piece }
-        ImportModel model -> H.modify_ \st -> st { model = Just model }
+    HandleImport { name, thing } -> do
+      case thing of
+        ImportPiece piece -> H.modify_ \st -> st { model = Just $ loadPiece piece, name = name }
+        ImportModel model -> H.modify_ \st -> st { model = Just model, name = name }
       autoSaveModel
       redrawScore
       H.modify_ \st -> st { selected = SelNone, tab = Nothing, undoStack = L.Nil, redoStack = L.Nil }
@@ -227,6 +228,7 @@ appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultE
   initialState _ =
     { selected: SelNone
     , model: Nothing
+    , name: "unnamed"
     , undoStack: L.Nil
     , redoStack: L.Nil
     , tab: Just ImportTab
@@ -239,7 +241,7 @@ appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultE
       [ HH.div [ class_ "content" ]
           [ HH.h1_ [ HH.text "Proto-Voice Annotation Tool" ]
           , renderTabs st
-          , HH.h2_ [ HH.text "Annotation" ]
+          , HH.h2_ [ HH.text $ "Annotations for " <> st.name ]
           ]
       , case st.model of
           Nothing -> HH.text ""

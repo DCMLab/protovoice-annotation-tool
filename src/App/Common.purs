@@ -21,6 +21,7 @@ data Selection
 type AppState
   = { selected :: Selection
     , model :: Maybe Model
+    , name :: String
     , undoStack :: L.List { m :: Model, name :: String }
     , redoStack :: L.List { m :: Model, name :: String }
     , tab :: Maybe Tab
@@ -109,9 +110,12 @@ data Tab
 
 derive instance eqTab :: Eq Tab
 
-data ImportOutput
+data ImportThing
   = ImportPiece Piece
   | ImportModel Model
+
+type ImportOutput
+  = { name :: String, thing :: ImportThing }
 
 type AppSettings
   = { flatHori :: Boolean
