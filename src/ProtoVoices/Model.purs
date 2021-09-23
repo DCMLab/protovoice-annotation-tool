@@ -14,7 +14,7 @@ import Data.Map as M
 import Data.Maybe (Maybe(..), maybe)
 import Data.Monoid (power)
 import Data.Ordering (invert)
-import Data.Pitches (class Interval, Pitch, SPitch, direction, ic, isStep, pc, pto)
+import Data.Pitches (class Interval, Pitch, SPitch, degree, direction, ic, isStep, pc, pto, unison)
 import Data.Set as S
 import Data.Show.Generic (genericShow)
 import Data.Traversable (scanl)
@@ -169,6 +169,16 @@ findDoubleOrn child { pitch: left } { pitch: right }
   | pc child == pc left, pc child == pc right = Just FullRepeat
   | pc child == pc left, isStep (ic (child `pto` right)) = Just RightRepeatOfLeft
   | pc child == pc right, isStep (ic (child `pto` left)) = Just LeftRepeatOfRight
+  | degree (pc child) == degree (pc left)
+  , i1 <- ic $ left `pto` child
+  , i2 <- ic $ child `pto` right
+  , isStep i2
+  , compare i1 unison /= direction i2 = Just RightRepeatOfLeft
+  | degree (pc child) == degree (pc right)
+  , i1 <- ic $ left `pto` child
+  , i2 <- ic $ child `pto` right
+  , isStep i1
+  , direction i1 /= compare unison i2 = Just LeftRepeatOfRight
   | pc left == pc right, isStep (ic (child `pto` left)) = Just FullNeighbor
   | otherwise =
     if isStep (ic (child `pto` left)) then
