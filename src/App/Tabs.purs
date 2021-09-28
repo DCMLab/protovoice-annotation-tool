@@ -3,7 +3,7 @@ module App.Tabs where
 import Prelude
 import App.Common (AppSettings, AppSlots, AppState, GraphAction(..), ImportThing(..), Tab(..), ImportOutput, defaultSettings)
 import App.Render (class_)
-import App.Utils (copyToClipboard, examplePiece, examplePieceLong, showJSONErrors)
+import App.Utils (convertMusicXML, copyToClipboard, examplePiece, examplePieceLong, showJSONErrors)
 import DOM.HTML.Indexed.InputAcceptType (InputAcceptTypeAtom(..))
 import Data.Either (Either(..), either)
 import Data.List as L
@@ -15,6 +15,7 @@ import Data.Tuple (Tuple(..))
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect, liftEffect)
 import Foreign (ForeignError)
+import Halogen (liftAff)
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
@@ -187,18 +188,28 @@ data ImportAction
   = ImportUpdateModelInput String
   | ImportUpdatePieceInput String
   | ImportUpdateName String
+  | ImportUpdateMusicXMLInput String
+  | ImportToggleMusicXMLUnfold
   | ImportUploadModel (Maybe File.File)
   | ImportUploadPiece (Maybe File.File)
+  | ImportUploadMusicXML (Maybe File.File)
   | ImportLoadPiece String Piece
   | ImportLoadModel String Model
+  | ImportConvertMusicXML String
   | ImportRestoreAutosave
 
 importComponent :: forall query input m. MonadAff m => H.Component query input ImportOutput m
 importComponent = H.mkComponent { initialState, render, eval: H.mkEval H.defaultEval { handleAction = handleImportAction } }
   where
-  initialState _ = { modelText: "", pieceText: "", name: "unnamed" }
+  initialState _ =
+    { modelText: ""
+    , pieceText: ""
+    , musicXMLText: ""
+    , musicXMLUnfold: true
+    , name: "unnamed"
+    }
 
-  render { modelText, pieceText, name } =
+  render { modelText, pieceText, name, musicXMLText, musicXMLUnfold } =
     HH.div [ class_ "tab" ]
       [ HH.button [ class_ "pure-button", HE.onClick $ \_ -> ImportLoadPiece "example" examplePiece ] [ HH.text "Load Example" ]
       , HH.button [ class_ "pure-button", HE.onClick $ \_ -> ImportLoadPiece "example-long" examplePieceLong ] [ HH.text "Load Example (Long)" ]
@@ -245,6 +256,37 @@ importComponent = H.mkComponent { initialState, render, eval: H.mkEval H.default
                     ]
           ]
       , HH.div_
+          [ HH.h3_ [ HH.text "Import MusicXML" ]
+          , HH.div_
+              [ HH.label [ HP.for "upload-musicxml" ] [ HH.text "Choose a file: " ]
+              , HH.input
+                  [ HP.type_ HP.InputFile
+                  , HP.id "upload-musicxml"
+                  , HP.accept $ HP.InputAcceptType [ AcceptFileExtension ".musicxml" ]
+                  , HE.onFileUpload \files -> ImportUploadMusicXML $ L.head files
+                  ]
+              ]
+          , HH.p_ [ HH.text "or enter MusicXML directly:" ]
+          , HH.textarea [ HP.value musicXMLText, HE.onValueInput ImportUpdateMusicXMLInput ]
+          , HH.p_
+              [ HH.input
+                  [ HP.type_ $ HP.InputCheckbox
+                  , HP.checked musicXMLUnfold
+                  , HE.onChange \_ -> ImportToggleMusicXMLUnfold
+                  , HP.id "unfoldReps"
+                  ]
+              , HH.label [ HP.for "unfoldReps" ] [ HH.text " unfold repetitions" ]
+              ]
+          , if musicXMLText == "" then
+              HH.text ""
+            else
+              HH.div_
+                [ HH.button
+                    [ class_ "pure-button pure-button-primary", HE.onClick $ const $ ImportConvertMusicXML musicXMLText ]
+                    [ HH.text "Convert MusicXML to Piece JSON" ]
+                ]
+          ]
+      , HH.div_
           [ HH.h3_ [ HH.text "Import Analysis" ]
           , HH.div_
               [ HH.label [ HP.for "upload-analysis" ] [ HH.text "Choose a file: " ]
@@ -288,11 +330,21 @@ importComponent = H.mkComponent { initialState, render, eval: H.mkEval H.default
   handleImportAction = case _ of
     ImportUpdateModelInput str -> H.modify_ \st -> st { modelText = str }
     ImportUpdatePieceInput str -> H.modify_ \st -> st { pieceText = str }
+    ImportUpdateMusicXMLInput str -> H.modify_ \st -> st { musicXMLText = str }
+    ImportToggleMusicXMLUnfold -> H.modify_ \st -> st { musicXMLUnfold = not st.musicXMLUnfold }
     ImportUpdateName str -> H.modify_ \st -> st { name = str }
     ImportUploadModel f -> loadFile f ".analysis.json" ImportUpdateModelInput
     ImportUploadPiece f -> loadFile f ".piece.json" ImportUpdatePieceInput
+    ImportUploadMusicXML f -> loadFile f ".musicxml" ImportUpdateMusicXMLInput
     ImportLoadPiece n p -> H.raise $ { name: n, thing: ImportPiece p }
     ImportLoadModel n m -> H.raise $ { name: n, thing: ImportModel m }
+    ImportConvertMusicXML xml -> do
+      unfold <- H.gets _.musicXMLUnfold
+      res <- liftAff $ convertMusicXML unfold xml
+      w <- liftEffect $ window
+      case res of
+        Left err -> liftEffect $ alert ("Error converting file:" <> err) w
+        Right str -> handleImportAction $ ImportUpdatePieceInput str
     ImportRestoreAutosave -> do
       w <- liftEffect window
       s <- liftEffect $ localStorage w

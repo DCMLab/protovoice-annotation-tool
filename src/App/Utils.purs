@@ -1,12 +1,16 @@
 module App.Utils where
 
 import Prelude
+import Affjax (printError, post) as AX
+import Affjax.RequestBody (string) as Req
+import Affjax.ResponseFormat (string) as Resp
 import Data.Array (sort)
 import Data.Either (Either(..))
 import Data.Foldable (class Foldable, intercalate)
-import Data.Maybe (fromJust)
+import Data.Maybe (Maybe(..), fromJust)
 import Data.Pitches (alteration, letter, octaves)
 import Effect (Effect)
+import Effect.Aff (Aff)
 import Foreign (ForeignError, renderForeignError)
 import Partial.Unsafe (unsafePartial)
 import ProtoVoices.Common (MBS)
@@ -49,3 +53,15 @@ renderScore slices = drawScore (mkSlice <$> slices)
   mkSlice s = s { notes = pitchToVex <$> sort (_.pitch <$> s.notes) }
 
   pitchToVex p = { name: letter p, oct: octaves p, accs: alteration p }
+
+convertMusicXML :: Boolean -> String -> Aff (Either String String)
+convertMusicXML unfold xmlstr = do
+  let
+    url = "https://musicology.epfl.ch/musicxml2pv/musicxml2pv?unfold=" <> show unfold
+  --url = "http://localhost:8081/musicxml2pv?unfold=" <> show unfold
+  response <-
+    AX.post Resp.string url (Just $ Req.string xmlstr)
+  pure
+    $ case response of
+        Left err -> Left $ AX.printError err
+        Right res -> Right $ res.body

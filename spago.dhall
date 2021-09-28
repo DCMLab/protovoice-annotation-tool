@@ -5,6 +5,7 @@ You can edit this file as you like.
 { name = "protovoice-annotation-tool"
 , dependencies =
   [ "aff"
+  , "affjax"
   , "arrays"
   , "console"
   , "control"
