@@ -178,7 +178,7 @@ findDoubleOrn child { pitch: left } { pitch: right }
   , i1 <- ic $ left `pto` child
   , i2 <- ic $ child `pto` right
   , isStep i1
-  , direction i1 /= compare unison i2 = Just LeftRepeatOfRight
+  , direction i1 /= compare i2 unison = Just LeftRepeatOfRight
   | pc left == pc right, isStep (ic (child `pto` left)) = Just FullNeighbor
   | otherwise =
     if isStep (ic (child `pto` left)) then
