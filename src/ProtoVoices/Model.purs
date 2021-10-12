@@ -95,20 +95,20 @@ explParentEdge :: NoteExplanation -> Edges
 explParentEdge = case _ of
   DoubleExpl { orn, leftParent: l, rightParent: r } ->
     let
-      parentEdge = S.singleton { left: Inner l, right: Inner r }
+      parentEdge = { left: Inner l, right: Inner r }
     in
       case orn of
-        Just PassingMid -> emptyEdges { passing = parentEdge }
-        Just PassingLeft -> emptyEdges { passing = parentEdge }
-        Just PassingRight -> emptyEdges { passing = parentEdge }
-        _ -> emptyEdges { regular = parentEdge }
+        Just PassingMid -> emptyEdges { passing = [ parentEdge ] }
+        Just PassingLeft -> emptyEdges { passing = [ parentEdge ] }
+        Just PassingRight -> emptyEdges { passing = [ parentEdge ] }
+        _ -> emptyEdges { regular = S.singleton parentEdge }
   RootExpl -> emptyEdges { regular = S.singleton { left: Start, right: Stop } }
   _ -> emptyEdges
 
 explLeftEdge :: { note :: Note, expl :: NoteExplanation } -> Edges
 explLeftEdge { note: m, expl } = case expl of
   DoubleExpl { orn, leftParent } -> case orn of
-    Just PassingRight -> emptyEdges { passing = edge leftParent }
+    Just PassingRight -> emptyEdges { passing = [ { left: Inner leftParent, right: Inner m } ] }
     _ -> emptyEdges { regular = edge leftParent }
   RightExpl { leftParent } -> emptyEdges { regular = edge leftParent }
   RootExpl -> emptyEdges { regular = S.singleton { left: Start, right: Inner m } }
@@ -119,7 +119,7 @@ explLeftEdge { note: m, expl } = case expl of
 explRightEdge :: { note :: Note, expl :: NoteExplanation } -> Edges
 explRightEdge { note: m, expl } = case expl of
   DoubleExpl { orn, rightParent } -> case orn of
-    Just PassingLeft -> emptyEdges { passing = edge rightParent }
+    Just PassingLeft -> emptyEdges { passing = [ { left: Inner m, right: Inner rightParent } ] }
     _ -> emptyEdges { regular = edge rightParent }
   LeftExpl { rightParent } -> emptyEdges { regular = edge rightParent }
   RootExpl -> emptyEdges { regular = S.singleton { left: Inner m, right: Stop } }
@@ -311,7 +311,7 @@ sortNotes = sortBy (\a b -> invert $ compare a.note.pitch b.note.pitch)
 
 type Edges
   = { regular :: S.Set Edge
-    , passing :: S.Set Edge
+    , passing :: Array Edge
     }
 
 emptyEdges :: Edges
@@ -321,7 +321,7 @@ regularEdge :: Edge -> Edges
 regularEdge edge = emptyEdges { regular = S.singleton edge }
 
 passingEdge :: Edge -> Edges
-passingEdge edge = emptyEdges { passing = S.singleton edge }
+passingEdge edge = emptyEdges { passing = [ edge ] }
 
 newtype SliceId
   = SliceId Int
@@ -398,7 +398,7 @@ emptyTrans :: TransId -> Boolean -> Transition
 emptyTrans id is2nd = { id, is2nd, edges: emptyEdges }
 
 transEdges :: Transition -> Array Edge
-transEdges trans = S.toUnfoldable $ trans.edges.regular <> trans.edges.passing
+transEdges trans = S.toUnfoldable trans.edges.regular <> trans.edges.passing
 
 data Op
   = Freeze
@@ -498,7 +498,7 @@ thawTrans ties id slice =
   , is2nd: false
   , edges:
       { regular: S.fromFoldable $ A.catMaybes $ map findSecond ties
-      , passing: S.empty
+      , passing: []
       }
   }
   where
@@ -635,7 +635,7 @@ vertEdgesLeft edges slice
   | Inner notes <- slice.notes =
     Right
       $ { regular: S.catMaybes $ S.map replaceRight edges.regular
-        , passing: S.catMaybes $ S.map replaceRight edges.passing
+        , passing: A.catMaybes $ map replaceRight edges.passing
         }
     where
     replaceRight { left, right }
@@ -650,7 +650,7 @@ vertEdgesRight edges slice
   | Inner notes <- slice.notes =
     Right
       $ { regular: S.catMaybes $ S.map replaceLeft edges.regular
-        , passing: S.catMaybes $ S.map replaceLeft edges.passing
+        , passing: A.catMaybes $ map replaceLeft edges.passing
         }
     where
     replaceLeft { left, right }

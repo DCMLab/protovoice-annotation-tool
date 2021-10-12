@@ -165,7 +165,7 @@ horiToJSON (HoriOp { midEdges, children, ids, unexplained }) =
       { parent, child }
 
 edgesToJSON :: Edges -> EdgesJSON
-edgesToJSON edges = { regular: A.fromFoldable edges.regular, passing: A.fromFoldable edges.passing }
+edgesToJSON edges = { regular: A.fromFoldable edges.regular, passing: edges.passing }
 
 -- decoding JSON
 -- -------------
@@ -260,7 +260,7 @@ horiFromJSON :: HoriJSON -> Either String HoriOp
 horiFromJSON { midEdges, children, ids, unexplained } =
   Right
     $ HoriOp
-        { midEdges: { regular: S.fromFoldable midEdges.regular, passing: S.fromFoldable midEdges.passing }
+        { midEdges: { regular: S.fromFoldable midEdges.regular, passing: midEdges.passing }
         , children: M.fromFoldable (childFromJSON <$> children)
         , ids
         , unexplained

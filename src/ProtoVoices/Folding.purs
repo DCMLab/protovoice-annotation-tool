@@ -1,6 +1,7 @@
 module ProtoVoices.Folding where
 
 import Prelude
+import Control.Alternative (guard)
 import Control.Bind (bindFlipped)
 import Control.Monad.State as ST
 import Data.Array as A
@@ -283,6 +284,18 @@ reductionToLeftmost { reduction, piece } = do
     mkSplit seg childl childr =
       let
         { t, n, r, l } = partitionElaborations $ A.catMaybes $ map getElaboration $ getInnerNotes childl.rslice
+
+        pls = do
+          Tuple parent children <- A.fromFoldable n
+          child <- children
+          guard $ child.orn == Just PassingRight
+          pure { left: parent.left, right: Inner child.child }
+
+        prs = do
+          Tuple parent children <- A.fromFoldable n
+          child <- children
+          guard $ child.orn == Just PassingLeft
+          pure { left: Inner child.child, right: parent.right }
       in
         SplitOp
           { regular: M.fromFoldableWith (<>) t
@@ -292,8 +305,8 @@ reductionToLeftmost { reduction, piece } = do
           , unexplained: getUnexplained childl.rslice
           , keepLeft: A.fromFoldable childl.trans.edges.regular
           , keepRight: A.fromFoldable childr.trans.edges.regular
-          , passLeft: A.fromFoldable childl.trans.edges.passing
-          , passRight: A.fromFoldable childr.trans.edges.passing
+          , passLeft: childl.trans.edges.passing `A.difference` pls
+          , passRight: childr.trans.edges.passing `A.difference` prs
           , ids: { left: childl.trans.id, slice: childl.rslice.id, right: childr.trans.id }
           }
       where
@@ -455,7 +468,7 @@ leftmostToReduction topSegments deriv = do
           , piece = A.snoc st.piece { notes: pieceNotes, time: fop.prevTime }
           }
     pure
-      $ { trans: { id: tid, edges: { passing: S.empty, regular: S.fromFoldable fop.ties }, is2nd: false }
+      $ { trans: { id: tid, edges: { passing: [], regular: S.fromFoldable fop.ties }, is2nd: false }
         , rslice: { id: sid, notes, parents, x: st.x }
         , op: Freeze
         }
