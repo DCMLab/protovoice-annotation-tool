@@ -123,3 +123,4 @@ in  upstream
     , repo = "https://github.com/DCMLab/purescript-pitches.git"
     , version = "b1dd0528d2838ad9afb9ef8a6c8f9a52c0482c20"
     }
+  with protovoice-model = ./model/spago.dhall as Location

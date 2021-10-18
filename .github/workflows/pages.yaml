@@ -19,18 +19,24 @@ jobs:
         with:
           key: ${{ runner.os }}-spago-${{ hashFiles('**/*.dhall') }}
           path: |
-            .spago
-            output
-            node_modules
+            model/.spago
+            model/output
+            model/node_modules
+            annotation-tool/.spago
+            annotation-tool/output
+            annotation-tool/node_modules
+            viewer/.spago
+            viewer/output
+            viewer/node_modules
 
       - name: Install build dependencies
-        run: npm install
+        run: cd annotation-tool; npm install
             
       - name: Build
-        run: npm run build-prod
+        run: cd annotation-tool; npm run build-prod
 
       - name: Deploy build
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist
+          publish_dir: ./annotation-tool/dist

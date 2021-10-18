@@ -8,7 +8,6 @@ You can edit this file as you like.
   , "affjax"
   , "arrays"
   , "console"
-  , "control"
   , "debug"
   , "dom-filereader"
   , "dom-indexed"
@@ -31,18 +30,16 @@ You can edit this file as you like.
   , "psci-support"
   , "rationals"
   , "simple-json"
-  , "string-parsers"
   , "strings"
-  , "transformers"
   , "tuples"
-  , "variant"
   , "web-dom"
   , "web-events"
   , "web-file"
   , "web-html"
   , "web-storage"
   , "web-uievents"
+  , "protovoice-model"
   ]
-, packages = ./packages.dhall
+, packages = ../packages.dhall
 , sources = [ "src/**/*.purs", "test/**/*.purs" ]
 }
