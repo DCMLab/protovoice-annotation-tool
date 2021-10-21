@@ -16,12 +16,18 @@ data ViewerAction
   | Select Selection
   | Forward
   | Backward
+  | ToFirst
+  | ToLast
   | RegisterScoreElt Element
+  | ToggleSettings
+  | SetXScale String
+  | SetYScale String
 
 type AppSettings
   = { flatHori :: Boolean
     , xscale :: Number
     , yscale :: Number
+    , showSettings :: Boolean
     }
 
 defaultSettings :: AppSettings
@@ -29,6 +35,7 @@ defaultSettings =
   { flatHori: true
   , xscale: 0.0
   , yscale: 0.0
+  , showSettings: false
   }
 
 type Selection

@@ -2,10 +2,11 @@ module Pruning where
 
 import Prelude
 import Control.Monad.State as ST
+import Data.Array as A
 import Data.Either (Either(..))
 import Data.List (List(..))
 import ProtoVoices.Folding (AgendaAlg, nothingMore, walkGraph)
-import ProtoVoices.Model (Model, Op(..), Reduction, Segment, attachSegment, detachSegment)
+import ProtoVoices.Model (Model, Op(..), Reduction, Segment, Slice, attachSegment, detachSegment)
 
 pruneModel :: Int -> Model -> Either String Model
 pruneModel n model = do
@@ -35,17 +36,17 @@ pruneReduction nsteps red = do
           if n <= 0 then
             Cons (seg1 { op = Freeze }) <$> Cons (seg2 { op = Freeze }) <$> go rest2
           else do
-            ST.put (n - 1)
-            res <- go (Cons s.childl (Cons (attachSegment s.childr seg2.rslice) rest2))
+            ST.modify_ (_ - 1)
+            res <- go $ Cons seg1 $ Cons s.childl $ Cons (attachSegment s.childr seg2.rslice) rest2
             case res of
-              Cons childl' (Cons childr' rest2') -> pure (Cons seg1 (Cons (seg2 { op = Split { childl: childl', childr: detachSegment childr' } }) rest2'))
+              Cons seg1' (Cons childl' (Cons childr' rest2')) -> pure (Cons seg1' (Cons (seg2 { op = Split { childl: childl', childr: detachSegment childr' } }) rest2'))
               _ -> ST.lift $ Left "invalid result of right split"
         _ -> do
           n <- ST.get
           if n <= 0 then
             Cons (seg1 { op = Freeze }) <$> go rest1
           else do
-            ST.put (n - 1)
+            ST.modify_ (_ - 1)
             res <- go (Cons h.childl (Cons h.childm (Cons (attachSegment h.childr seg2.rslice) rest2)))
             case res of
               Cons childl' (Cons childm' (Cons childr' rest2')) -> pure (Cons (seg1 { op = Hori { childl: childl', childm: childm', childr: detachSegment childr' } }) (Cons seg2 rest2'))
@@ -56,7 +57,7 @@ pruneReduction nsteps red = do
     if n <= 0 then
       go (Cons (seg { op = Freeze }) rest)
     else do
-      ST.put (n - 1)
+      ST.modify_ (_ - 1)
       res <- go (Cons childl (Cons (attachSegment childr seg.rslice) rest))
       case res of
         Cons childl' (Cons childr' rest') -> pure (Cons (seg { op = Split { childl: childl', childr: detachSegment childr' } }) rest')
@@ -85,5 +86,25 @@ countSteps red = flip ST.execState 0 $ walkGraph countingAlg red.start agenda
     , splitLeft: split
     , splitOnly: split
     , splitRight
+    , hori
+    }
+
+surfaceSlices :: Reduction -> Array Slice
+surfaceSlices red = flip ST.execState [] $ walkGraph surfaceAlg red.start agenda
+  where
+  agenda = nothingMore <$> red.segments
+
+  split ag { childl, childr } = pure $ map nothingMore $ Cons childl $ Cons (attachSegment childr ag.seg.rslice) Nil
+
+  hori _ _ ag2 { childl, childm, childr } = pure $ map nothingMore $ Cons childl $ Cons childm $ Cons (attachSegment childr ag2.seg.rslice) Nil
+
+  surfaceAlg :: AgendaAlg Unit (Array Slice)
+  surfaceAlg =
+    { init: \_ -> pure unit
+    , freezeLeft: \s _ -> ST.modify_ \st -> A.snoc st s
+    , freezeOnly: \s _ -> ST.modify_ \st -> A.snoc st s
+    , splitLeft: \_ -> split
+    , splitOnly: \_ -> split
+    , splitRight: \_ _ -> split
     , hori
     }

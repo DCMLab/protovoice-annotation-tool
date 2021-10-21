@@ -1,7 +1,7 @@
 module Render where
 
 import Prelude
-import Common (AppSettings, Selection, ViewerAction(..), noteIsSelected)
+import Common (AppSettings, Selection, ViewerAction(..), class_, noteIsSelected)
 import Data.Array as A
 import Data.Either (Either(..))
 import Data.Int (toNumber)
@@ -150,7 +150,7 @@ renderSlice sett selection { slice: slice@{ id, notes, x, parents }, depth: d } 
         , SA.y ycoord
         , SA.text_anchor SA.AnchorMiddle
         , SA.dominant_baseline SA.BaselineMiddle
-        , SA.fill if selStatus == Related then white else lightgray
+        , SA.fill if selStatus == NotSelected then black else white
         ]
         text
 
@@ -312,7 +312,7 @@ renderScore =
 renderReduction :: forall p. AppSettings -> Piece -> Graph -> Selection -> HH.HTML p ViewerAction
 renderReduction sett piece graph selection =
   HH.div
-    [ HP.style "overflow-x: scroll; max-width: max-content;" ]
+    [ class_ "pv-graph" ]
     [ SE.svg
         [ SA.width width
         , SA.height height
@@ -327,7 +327,7 @@ renderReduction sett piece graph selection =
 
   extraHeight = axisHeight + scoreHeight
 
-  height = scaley sett (maxd + 2.0) + extraHeight
+  height = scaley sett (maxd + 1.0) + extraHeight
 
   svgSlices = map (renderSlice sett selection) $ A.fromFoldable $ M.values slices
 

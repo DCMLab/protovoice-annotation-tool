@@ -18,19 +18,51 @@
     max-width: max-content;
 }
 
-#graph {
+.pv-graph {
     height: 100%;
     overflow-x: scroll;
+    max-width: max-content;
 }
 
-.pure-menu-selected {
-    background: #eee;
+.pv-toolbar {
+    display: flex;
+    align-items: center;
 }
 
-.tab {
-    background: #eee;
-    padding: 1em;
+/* .pv-button:disabled { */
+/*     color: gray; */
+/* } */
+
+.pv-step {
+    padding: 0 0.5em;
 }
+
+.pv-spacer {
+    flex-grow: 1;
+}
+
+.pv-control-box {
+    display: flex;
+    gap: 1em;
+}
+
+.pv-control-label {
+    width: 20%;
+}
+
+.pv-control-range {
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+
+/* .pure-menu-selected { */
+/*     background: #eee; */
+/* } */
+
+/* .tab { */
+/*     background: #eee; */
+/*     padding: 1em; */
+/* } */
 
 /* .center { */
 /*     margin-left: auto; */
