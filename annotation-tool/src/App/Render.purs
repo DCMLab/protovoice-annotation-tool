@@ -13,7 +13,6 @@ import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Core as HC
 import Halogen.HTML.Events as HE
-import Halogen.HTML.Properties as HA
 import Halogen.HTML.Properties as HP
 import Halogen.Query.Input (Input(..))
 import Halogen.Svg.Attributes as SA
@@ -375,13 +374,13 @@ renderReduction sett piece graph validation selection =
   svgScore = if sett.showScore then [ renderScore ] else []
 
 class_ :: forall r i. String -> HH.IProp ( class :: String | r ) i
-class_ str = HA.class_ $ HH.ClassName str
+class_ str = HP.class_ $ HH.ClassName str
 
 mkOption :: forall o p. (Maybe o -> GraphAction) -> { k :: Maybe o, v :: String, s :: Boolean } -> HH.HTML p GraphAction
 mkOption updateAction { k, v, s } =
   HH.option
-    [ HA.value v
-    , HA.selected s
+    [ HP.value v
+    , HP.selected s
     , HE.onClick \_ -> updateAction k
     ]
     [ HH.text v ]
@@ -404,7 +403,7 @@ doubleOrnaments =
 
 renderNoteExplanation :: forall p. Graph -> Note -> NoteExplanation -> Parents SliceId -> HH.HTML p GraphAction
 renderNoteExplanation graph note expl parents =
-  HH.div [ class_ "pure-g", HA.style "height:30px;" ]
+  HH.div [ class_ "pure-g", HP.style "height:30px;" ]
     $ [ HH.label [ class_ "pure-u-1-4" ] [ HH.text $ "Note selected: " <> show note.pitch ] ]
     <> case expl of
         NoExpl -> [ HH.label [ class_ "pure-u-1-4" ] [ HH.text "no parents" ] ]
