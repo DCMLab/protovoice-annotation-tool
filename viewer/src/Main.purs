@@ -1,7 +1,7 @@
-module Main where
+module Main (mainJSON) where
 
 import Prelude
-import Common (AppSettings, Selection, ViewerAction(..), class_, defaultSettings)
+import Common (AppSettings, Selection, ViewerAction(..), ViewerCache, cacheGetGraph, cacheGetPruned, cacheGetSurface, class_, defaultSettings, emptyCache, fillCache)
 import Data.Array as A
 import Data.Either (hush)
 import Data.Foldable (for_)
@@ -18,10 +18,10 @@ import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Halogen.VDom.Driver (runUI)
-import ProtoVoices.Folding (evalGraph)
+import ProtoVoices.Folding (Graph)
 import ProtoVoices.JSONTransport (ModelJSON, modelFromJSON)
 import ProtoVoices.Model (Model, getInnerNotes)
-import Pruning (countSteps, pruneModel, surfaceSlices)
+import Pruning (Surface, countSteps)
 import Render (noteSize, renderReduction, scalex, scoreScale)
 import Simple.JSON (readJSON)
 import Utils (insertScore, renderScore)
@@ -36,18 +36,46 @@ mainJSON eltSelector json =
         elt <- HA.selectElement (QuerySelector eltSelector)
         for_ elt (runUI viewerComponent json)
 
+type ViewerModel
+  = { model :: Model
+    , step :: Int
+    , max :: Int
+    , modelPruned :: Model
+    , graph :: Graph
+    , surface :: Surface
+    }
+
 type ViewerState
-  = { model :: Maybe { model :: Model, modelPruned :: Model, step :: Int, max :: Int }
+  = { model :: Maybe ViewerModel
+    , cache :: ViewerCache
     , settings :: AppSettings
     , selected :: Selection
     , scoreElt :: Maybe Element
     }
 
+updateStepModel :: Int -> Int -> Model -> ViewerCache -> Maybe ViewerModel
+updateStepModel step max model cache = do
+  modelPruned <- hush $ cacheGetPruned model step cache
+  let
+    graph = cacheGetGraph modelPruned step cache
+
+    surface = cacheGetSurface modelPruned step cache
+  pure { model, step, max, modelPruned, graph, surface }
+
 viewerComponent :: forall query output m. MonadEffect m => MonadAff m => H.Component query String output m
 viewerComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultEval { handleAction = handleAction, initialize = Just Init } }
   where
   initialState :: String -> ViewerState
-  initialState json = { model, settings: defaultSettings, selected: Nothing, scoreElt: Nothing }
+  initialState json =
+    { model:
+        case model of
+          Just m -> updateStepModel m.step m.max m.model cache
+          Nothing -> Nothing
+    , cache
+    , settings: defaultSettings
+    , selected: Nothing
+    , scoreElt: Nothing
+    }
     where
     model = do -- Maybe
       mjson :: ModelJSON <- hush (readJSON json)
@@ -56,9 +84,13 @@ viewerComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defau
         max = countSteps m.reduction
       pure { model: m, modelPruned: m, step: max, max: max }
 
+    cache = case model of
+      Just m -> fillCache m.model m.step emptyCache
+      Nothing -> emptyCache
+
   render st = case st.model of
     Nothing -> HH.div [ class_ "pv-content" ] [ HH.text "No analysis loaded." ]
-    Just { model, modelPruned, step, max } ->
+    Just { model, modelPruned, graph, surface, step, max } ->
       HH.div_
         [ HH.div [ class_ "pv-content" ]
             [ HH.div [ class_ "pv-toolbar" ]
@@ -133,12 +165,10 @@ viewerComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defau
               else
                 HH.text ""
             ]
-        , let
-            graph = evalGraph st.settings.flatHori true modelPruned.reduction
-          in
-            HH.div
-              [ class_ "pv-wide" ]
-              [ renderReduction st.settings modelPruned.piece graph st.selected ]
+        , HH.div
+            [ class_ "pv-wide" ]
+            [ renderReduction st.settings modelPruned.piece graph surface st.selected ]
+        , HH.p_ [ HH.text $ show surface ]
         ]
 
   setStep f st =
@@ -146,8 +176,8 @@ viewerComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defau
       { model, step, max: mx } <- st.model
       let
         step' = max 0 (min mx (f step))
-      modelPruned <- hush $ pruneModel step' model
-      pure $ st { model = Just { model, modelPruned, step: step', max: mx } }
+      model' <- updateStepModel step' mx model st.cache
+      pure $ st { model = Just model' }
 
   handleAction = case _ of
     NoOp -> pure unit
@@ -187,12 +217,10 @@ redrawScore = do
   st <- H.get
   let
     update = do -- Maybe
-      { model, modelPruned } <- st.model
+      { model, surface: { slices } } <- st.model
       scoreElt <- st.scoreElt
       let
         mkSlice slice = { x: scalex st.settings slice.x - (noteSize / 2.0), notes: _.note <$> getInnerNotes slice }
-
-        slices = surfaceSlices modelPruned.reduction
 
         totalWidth = (1.0 / scoreScale) * scalex st.settings (toNumber $ A.length model.piece + 1)
       pure $ H.liftEffect $ insertScore scoreElt $ renderScore (mkSlice <$> slices) totalWidth scoreScale

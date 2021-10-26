@@ -5,8 +5,10 @@ import Control.Monad.State as ST
 import Data.Array as A
 import Data.Either (Either(..))
 import Data.List (List(..))
-import ProtoVoices.Folding (AgendaAlg, nothingMore, walkGraph)
-import ProtoVoices.Model (Model, Op(..), Reduction, Segment, Slice, attachSegment, detachSegment)
+import Data.Maybe (Maybe(..))
+import Data.Set as S
+import ProtoVoices.Folding (AgendaAlg, addUnusedEdgesLeft, addUnusedEdgesRight, nothingMore, walkGraph)
+import ProtoVoices.Model (Edges, Model, NoteExplanation(..), Op(..), Reduction, Segment, Slice, StartStop(..), attachSegment, detachSegment)
 
 pruneModel :: Int -> Model -> Either String Model
 pruneModel n model = do
@@ -89,20 +91,73 @@ countSteps red = flip ST.execState 0 $ walkGraph countingAlg red.start agenda
     , hori
     }
 
-surfaceSlices :: Reduction -> Array Slice
-surfaceSlices red = flip ST.execState [] $ walkGraph surfaceAlg red.start agenda
+type Surface
+  = { slices :: Array Slice, transs :: Array Edges }
+
+horiEdgesLeft :: Edges -> Slice -> Edges
+horiEdgesLeft edgesl slicel
+  | Inner notes <- slicel.notes =
+    { regular: S.catMaybes $ S.map replaceRight edgesl.regular
+    , passing: A.catMaybes $ map replaceRight edgesl.passing
+    }
+    where
+    replaceRight { left, right }
+      | Inner rightNote <- right
+      , Just sliceNote <-
+          A.find
+            ( \n -> case n.expl of
+                HoriExpl parent -> parent.id == rightNote.id
+                _ -> false
+            )
+            notes = Just { left, right: Inner sliceNote.note }
+      | otherwise = Nothing
+  | otherwise = edgesl
+
+horiEdgesRight :: Slice -> Edges -> Edges
+horiEdgesRight slicer edgesr
+  | Inner notes <- slicer.notes =
+    { regular: S.catMaybes $ S.map replaceLeft edgesr.regular
+    , passing: A.catMaybes $ map replaceLeft edgesr.passing
+    }
+    where
+    replaceLeft { left, right }
+      | Inner leftNote <- left
+      , Just sliceNote <-
+          A.find
+            ( \n -> case n.expl of
+                HoriExpl parent -> parent.id == leftNote.id
+                _ -> false
+            )
+            notes = Just { left: Inner sliceNote.note, right }
+      | otherwise = Nothing
+  | otherwise = edgesr
+
+findSurface :: Reduction -> Surface
+findSurface red = flip ST.execState { slices: [], transs: [] } $ walkGraph surfaceAlg red.start agenda
   where
   agenda = nothingMore <$> red.segments
 
-  split ag { childl, childr } = pure $ map nothingMore $ Cons childl $ Cons (attachSegment childr ag.seg.rslice) Nil
+  split ag { childl, childr } = pure $ map nothingMore $ Cons (addUnusedEdgesLeft childl) $ Cons (addUnusedEdgesRight childl.rslice childr') Nil
+    where
+    childr' = attachSegment childr ag.seg.rslice
 
-  hori _ _ ag2 { childl, childm, childr } = pure $ map nothingMore $ Cons childl $ Cons childm $ Cons (attachSegment childr ag2.seg.rslice) Nil
+  hori _ ag1 ag2 { childl, childm, childr } = pure $ map nothingMore $ Cons childl' $ Cons childm $ Cons childr' Nil
+    where
+    childl' = childl { trans { edges = horiEdgesLeft ag1.seg.trans.edges childl.rslice } }
 
-  surfaceAlg :: AgendaAlg Unit (Array Slice)
+    childr' = (attachSegment childr ag2.seg.rslice) { trans { edges = horiEdgesRight childm.rslice ag2.seg.trans.edges } }
+
+  freeze lslice ag = do
+    ST.modify_ \st ->
+      { slices: A.snoc st.slices ag.seg.rslice
+      , transs: A.snoc st.transs ag.seg.trans.edges
+      }
+
+  surfaceAlg :: AgendaAlg Unit Surface
   surfaceAlg =
-    { init: \_ -> pure unit
-    , freezeLeft: \s _ -> ST.modify_ \st -> A.snoc st s
-    , freezeOnly: \s _ -> ST.modify_ \st -> A.snoc st s
+    { init: \s -> ST.modify_ \st -> st { slices = A.snoc st.slices s }
+    , freezeLeft: freeze
+    , freezeOnly: freeze
     , splitLeft: \_ -> split
     , splitOnly: \_ -> split
     , splitRight: \_ _ -> split

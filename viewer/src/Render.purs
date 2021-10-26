@@ -4,10 +4,13 @@ import Prelude
 import Common (AppSettings, Selection, ViewerAction(..), class_, noteIsSelected)
 import Data.Array as A
 import Data.Either (Either(..))
+import Data.Foldable (maximum, minimum)
 import Data.Int (toNumber)
 import Data.Map as M
 import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Pitches (diasteps)
 import Data.Rational ((%))
+import Data.Tuple (Tuple(..))
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Core as HC
@@ -19,7 +22,9 @@ import Halogen.Svg.Elements as SE
 import Math (exp)
 import ProtoVoices.Common (MBS(..))
 import ProtoVoices.Folding (GraphSlice, GraphTransition, Graph)
-import ProtoVoices.Model (Note, NoteExplanation(..), Notes, Piece, SliceId, StartStop(..), Edge, explHasParent, getInnerNotes, getParents)
+import ProtoVoices.Model (Edge, Note, NoteExplanation(..), Notes, Piece, SliceId, StartStop(..), explHasParent, getInnerNotes, getParents)
+import Pruning (Surface)
+import Web.HTML.Window (innerHeight)
 
 scalex :: AppSettings -> Number -> Number
 scalex { xscale } x = x * 70.0 * exp xscale
@@ -101,6 +106,15 @@ data SelectionStatus
 
 derive instance eqSelectionStatus :: Eq SelectionStatus
 
+noteSelectionStatus :: Selection -> Note -> SelectionStatus
+noteSelectionStatus sel note = if selected then Selected else if parentSelected then Related else NotSelected
+  where
+  selected = noteIsSelected sel (Inner note)
+
+  parentSelected = case sel of
+    Just { expl } -> explHasParent note.id expl
+    Nothing -> false
+
 renderSlice :: forall p. AppSettings -> Selection -> GraphSlice -> HH.HTML p ViewerAction
 renderSlice sett selection { slice: slice@{ id, notes, x, parents }, depth: d } = case notes of
   Inner inotes ->
@@ -112,18 +126,17 @@ renderSlice sett selection { slice: slice@{ id, notes, x, parents }, depth: d } 
                   , SA.width noteSize
                   , SA.height $ offset (A.length inotes - 1) + noteSize
                   , SA.fill white
-                  , SA.stroke $ if activeParent then parentColor else white
                   ]
               ]
             <> A.mapWithIndex mknote inotes
         ]
-  startstop -> mknode [ HH.text $ show startstop ] (scalex sett x) (scaley sett d) (if activeParent then Related else NotSelected) []
+  startstop -> mknode [ HH.text $ show startstop ] (scalex sett x) (scaley sett d) (if selIsRoot then Related else NotSelected) []
   where
   svgx = scalex sett x - (noteSize / 2.0)
 
-  activeParent = case selection of
-    Just { parents: noteParents } -> A.elem id $ getParents noteParents
-    _ -> false
+  selIsRoot = case selection of
+    Just { expl } -> expl == RootExpl
+    Nothing -> false
 
   isTopLevel = d == 0.0
 
@@ -145,11 +158,12 @@ renderSlice sett selection { slice: slice@{ id, notes, x, parents }, depth: d } 
         ]
 
     label =
-      SE.text
+      SE.element (HH.ElemName "text")
         [ SA.x xcoord
         , SA.y ycoord
         , SA.text_anchor SA.AnchorMiddle
         , SA.dominant_baseline SA.BaselineMiddle
+        , HP.style "pointer-events: none;"
         , SA.fill if selStatus == NotSelected then black else white
         ]
         text
@@ -163,17 +177,11 @@ renderSlice sett selection { slice: slice@{ id, notes, x, parents }, depth: d } 
       nodeselected
       (if clickable then attrsSel else [])
     where
-    nselected = noteIsSelected selection (Inner note)
-
-    nselectedParent = case selection of
-      Just { expl: selExpl } -> explHasParent note.id selExpl
-      _ -> false
-
-    nodeselected = if nselected then Selected else if nselectedParent then Related else NotSelected
+    nodeselected = noteSelectionStatus selection note
 
     nselectable = d /= 0.0
 
-    clickable = nselectable || activeParent
+    clickable = nselectable
 
     label =
       [ HH.text $ show note.pitch
@@ -185,7 +193,7 @@ renderSlice sett selection { slice: slice@{ id, notes, x, parents }, depth: d } 
       , HE.onClick
           $ \ev ->
               if nselectable then
-                Select if nselected then Nothing else Just { note, expl, parents }
+                Select if nodeselected == Selected then Nothing else Just { note, expl }
               else
                 NoOp
       ]
@@ -284,11 +292,93 @@ renderHori sett selection slices { child, parent } =
     HoriExpl parentNote -> Just { childNote: note.note, parentNote }
     _ -> Nothing
 
-renderTime :: forall r p. AppSettings -> Int -> { time :: Either String MBS | r } -> HH.HTML p ViewerAction
-renderTime sett i { time } =
+renderInner :: forall p. AppSettings -> Selection -> Number -> Surface -> { height :: Number, svg :: HH.HTML p ViewerAction }
+renderInner sett sel maxx { slices, transs } = { height, svg }
+  where
+  extractNotes slice = M.fromFoldable $ (\n -> Tuple n.note.id { note: n, x: slice.x }) <$> getInnerNotes slice
+
+  notes = M.unions $ extractNotes <$> slices
+
+  miny = fromMaybe 0 $ minimum $ map (_.note.note.pitch >>> diasteps) $ M.values notes
+
+  maxy = fromMaybe 0 $ maximum $ map (_.note.note.pitch >>> diasteps) $ M.values notes
+
+  height = 2.0 * (offset $ maxy - miny + 1)
+
+  selIsRoot = case sel of
+    Just { expl } -> expl == RootExpl
+    Nothing -> false
+
+  notePosition :: StartStop Note -> { x :: Number, y :: Number }
+  notePosition = case _ of
+    Inner note ->
+      { x: scalex sett $ fromMaybe 0.0 $ _.x <$> M.lookup note.id notes
+      , y: 2.0 * (offset $ maxy - diasteps note.pitch)
+      }
+    Start -> { x: 0.0, y: height / 2.0 - offset 1 }
+    Stop -> { x: scalex sett maxx, y: height / 2.0 - offset 1 }
+
+  mkNode { x, y } label selected selAttr =
+    SE.g []
+      [ SE.circle
+          $ [ SA.cx x
+            , SA.cy y
+            , SA.r 15.0
+            , SA.stroke black
+            , SA.fill case selected of
+                NotSelected -> white
+                Selected -> selColorInner
+                Related -> selColorInner'
+            , cursor "pointer"
+            ]
+          <> selAttr
+      , SE.element (H.ElemName "text")
+          [ SA.x x
+          , SA.y y
+          , SA.text_anchor SA.AnchorMiddle
+          , SA.dominant_baseline SA.BaselineMiddle
+          , HP.style "pointer-events: none;"
+          , SA.fill $ if selected == NotSelected then black else white
+          ]
+          [ HH.text $ label ]
+      ]
+
+  mkNote { note: { note, expl }, x: notex } = mkNode (notePosition $ Inner note) (show note.pitch) selected selAttr
+    where
+    selected = noteSelectionStatus sel note
+
+    selAttr =
+      [ HE.onClick \ev ->
+          Select if selected == Selected then Nothing else Just { note, expl }
+      ]
+
+  mkStartStop s = mkNode (notePosition s) (show s) (if selIsRoot then Related else NotSelected) []
+
+  mkEdge isRegular { left, right } = SE.line [ SA.x1 x1, SA.x2 x2, SA.y1 y1, SA.y2 y2, SA.stroke black ]
+    where
+    { x: x1, y: y1 } = notePosition left
+
+    { x: x2, y: y2 } = notePosition right
+
+  svgNotes = A.fromFoldable $ mkNote <$> M.values notes
+
+  svgArrows = do -- Array
+    edges <- transs
+    (mkEdge true <$> A.fromFoldable edges.regular) <> (mkEdge false <$> edges.passing)
+
+  svg =
+    SE.element (H.ElemName "svg")
+      [ SA.x 0.0
+      , SA.y $ negate height
+      , HP.style "overflow: visible;"
+      ]
+      (svgArrows <> svgNotes <> [ mkStartStop Start, mkStartStop Stop ])
+
+renderTime :: forall r p. AppSettings -> Number -> Int -> { time :: Either String MBS | r } -> HH.HTML p ViewerAction
+renderTime sett yoff i { time } =
   SE.text
     [ SA.x $ scalex sett $ toNumber (i + 1)
-    , SA.y $ negate (axisHeight / 2.0)
+    , SA.y $ negate ((axisHeight / 2.0) + yoff)
     , SA.text_anchor SA.AnchorMiddle
     , SA.dominant_baseline SA.BaselineMiddle
     ]
@@ -298,19 +388,19 @@ renderTime sett i { time } =
     Right (MBS { m, b, s }) -> if s == 0 % 1 then show m <> "." <> show b else ""
     Left str -> str
 
-renderScore :: forall p. HH.HTML p ViewerAction
-renderScore =
+renderScore :: forall p. Number -> HH.HTML p ViewerAction
+renderScore innerHeight =
   SE.element (H.ElemName "svg")
     [ SA.x 0.0
-    , SA.y (negate $ scoreHeight + axisHeight)
+    , SA.y (negate $ scoreHeight + axisHeight + innerHeight)
     , HP.style "overflow: visible;"
     , HP.ref $ H.RefLabel $ "scoreStaff"
     , HP.IProp $ HC.ref $ map (Action <<< RegisterScoreElt)
     ]
     []
 
-renderReduction :: forall p. AppSettings -> Piece -> Graph -> Selection -> HH.HTML p ViewerAction
-renderReduction sett piece graph selection =
+renderReduction :: forall p. AppSettings -> Piece -> Graph -> Surface -> Selection -> HH.HTML p ViewerAction
+renderReduction sett piece graph surface selection =
   HH.div
     [ class_ "pv-graph" ]
     [ SE.svg
@@ -318,14 +408,16 @@ renderReduction sett piece graph selection =
         , SA.height height
         , SA.viewBox (negate $ scalex sett 1.0) (negate extraHeight) width height
         ]
-        (svgScore <> svgTranss <> svgHoris <> svgSlices <> svgAxis)
+        (svgScore <> [ svgInner ] <> svgTranss <> svgHoris <> svgSlices <> svgAxis)
     ]
   where
   { slices, transitions, horis, maxx, maxd } = graph
 
   width = scalex sett (maxx + 2.0)
 
-  extraHeight = axisHeight + scoreHeight
+  { height: innerHeight, svg: svgInner } = renderInner sett selection maxx surface
+
+  extraHeight = axisHeight + scoreHeight + innerHeight
 
   height = scaley sett (maxd + 1.0) + extraHeight
 
@@ -335,6 +427,6 @@ renderReduction sett piece graph selection =
 
   svgHoris = map (renderHori sett selection slices) $ A.fromFoldable horis
 
-  svgAxis = A.mapWithIndex (renderTime sett) piece
+  svgAxis = A.mapWithIndex (renderTime sett innerHeight) piece
 
-  svgScore = [ renderScore ]
+  svgScore = [ renderScore innerHeight ]
