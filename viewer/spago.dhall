@@ -24,7 +24,9 @@ to generate this file without the comments in this block.
   , "lists"
   , "math"
   , "maybe"
+  , "numbers"
   , "ordered-collections"
+  , "pitches"
   , "prelude"
   , "protovoice-model"
   , "psci-support"
@@ -32,6 +34,7 @@ to generate this file without the comments in this block.
   , "simple-json"
   , "transformers"
   , "web-dom"
+  , "web-html"
   ]
 , packages = ../packages.dhall
 , sources = [ "src/**/*.purs", "test/**/*.purs" ]
