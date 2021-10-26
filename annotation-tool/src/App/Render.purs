@@ -157,11 +157,12 @@ renderSlice sett selection validation { slice: slice@{ id, notes, x, parents }, 
         ]
 
     label =
-      SE.text
+      SE.element (HH.ElemName "text")
         [ SA.x xcoord
         , SA.y ycoord
         , SA.text_anchor SA.AnchorMiddle
         , SA.dominant_baseline SA.BaselineMiddle
+        , HP.style "pointer-events: none;"
         , SA.fill case valid of
             Nothing -> if selStatus == Related then white else lightgray
             Just NSNoExpl -> case selStatus of
