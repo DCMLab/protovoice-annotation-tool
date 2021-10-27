@@ -8,7 +8,7 @@ import Data.List (List(..))
 import Data.Maybe (Maybe(..))
 import Data.Set as S
 import ProtoVoices.Folding (AgendaAlg, addUnusedEdgesLeft, addUnusedEdgesRight, nothingMore, walkGraph)
-import ProtoVoices.Model (Edges, Model, NoteExplanation(..), Op(..), Reduction, Segment, Slice, StartStop(..), attachSegment, detachSegment)
+import ProtoVoices.Model (Edges, Model, NoteExplanation(..), Op(..), Reduction, Segment, Slice, StartStop(..), attachSegment, detachSegment, horiEdgesMid)
 
 pruneModel :: Int -> Model -> Either String Model
 pruneModel n model = do
@@ -144,6 +144,8 @@ findSurface red = flip ST.execState { slices: [], transs: [] } $ walkGraph surfa
   hori _ ag1 ag2 { childl, childm, childr } = pure $ map nothingMore $ Cons childl' $ Cons childm $ Cons childr' Nil
     where
     childl' = childl { trans { edges = horiEdgesLeft ag1.seg.trans.edges childl.rslice } }
+
+    childm' = childm { trans { edges = horiEdgesMid childl.rslice childm.trans.edges childm.rslice } }
 
     childr' = (attachSegment childr ag2.seg.rslice) { trans { edges = horiEdgesRight childm.rslice ag2.seg.trans.edges } }
 

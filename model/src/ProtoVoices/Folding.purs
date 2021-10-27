@@ -14,7 +14,7 @@ import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Set as S
 import Data.Tuple (Tuple(..))
 import ProtoVoices.Leftmost (FreezeOp(..), HoriChildren(..), HoriOp(..), Leftmost(..), RootOrnament(..), SplitOp(..), horiLeftChildren, horiRightChildren, splitGetChildNotes)
-import ProtoVoices.Model (DoubleOrnament(..), Edge, Edges, EndSegment, Model, Note, NoteExplanation(..), Notes, Op(..), Parents(..), Piece, Reduction, Segment, Slice, SliceId(..), StartStop(..), Time, TransId(..), Transition, attachSegment, detachSegment, explLeftEdge, explRightEdge, getInnerNotes, incS, incT, parentEdges, sortNotes, vertEdgesLeft, vertEdgesRight)
+import ProtoVoices.Model (DoubleOrnament(..), Edge, Edges, EndSegment, Model, Note, NoteExplanation(..), Notes, Op(..), Parents(..), Piece, Reduction, Segment, Slice, SliceId(..), StartStop(..), Time, TransId(..), Transition, attachSegment, detachSegment, explLeftEdge, explRightEdge, getInnerNotes, horiEdgesLeft, horiEdgesMid, horiEdgesRight, incS, incT, parentEdges, sortNotes, vertEdgesLeft, vertEdgesRight)
 
 type AgendaItem a
   = { seg :: Segment, more :: a }
@@ -205,15 +205,25 @@ graphAlg flatHori showAllEdges =
     addHoriEdge childm.rslice left.seg.rslice
     addGraphTrans left.seg.rslice.id right.seg.trans right.seg.rslice.id
     let
+      childr' = attachSegment childr right.seg.rslice
+
       dsub =
         if flatHori then
           left.more.rdepth + 1.0
         else
           max currentDepth (max left.more.rdepth right.more.rdepth) + 1.0
     pure
-      $ { seg: childl, more: { rdepth: dsub } }
-      : { seg: childm, more: { rdepth: dsub } }
-      : { seg: attachSegment childr right.seg.rslice, more: { rdepth: right.more.rdepth } }
+      $ { seg:
+            if showAllEdges then childl { trans { edges = horiEdgesLeft left.seg.trans.edges childl.rslice } } else childl
+        , more: { rdepth: dsub }
+        }
+      : { seg: if showAllEdges then childm { trans { edges = horiEdgesMid childl.rslice childm.trans.edges childm.rslice } } else childm
+        , more: { rdepth: dsub }
+        }
+      : { seg:
+            if showAllEdges then childr' { trans { edges = horiEdgesRight childm.rslice right.seg.trans.edges } } else childr'
+        , more: { rdepth: right.more.rdepth }
+        }
       : Nil
 
 evalGraph :: Boolean -> Boolean -> Reduction -> Graph

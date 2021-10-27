@@ -203,7 +203,7 @@ viewerComponent prefix = H.mkComponent { initialState, render, eval: H.mkEval $ 
               [ class_ "pv-wide" ]
               [ HH.div [ class_ "pv-graph" ]
                   [ if st.settings.showInner then
-                      renderInner st.settings st.selected graph.maxx surface
+                      renderInner st.settings st.selected surface graph
                     else
                       HH.text ""
                   , if st.settings.showScore then

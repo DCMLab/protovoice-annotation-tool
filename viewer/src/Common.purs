@@ -8,7 +8,7 @@ import Data.Maybe (Maybe(..))
 import Halogen.HTML as HH
 import Halogen.HTML.Properties as HP
 import ProtoVoices.Folding (Graph, evalGraph)
-import ProtoVoices.Model (Model, Note, NoteExplanation, Parents, SliceId, StartStop(..))
+import ProtoVoices.Model (Model, Note, NoteExplanation, StartStop(..))
 import Pruning (Surface, findSurface, pruneModel)
 import Web.DOM.Element (Element)
 

@@ -630,6 +630,8 @@ setParents p seg = case p of
             _ -> child
     | otherwise = child
 
+-- | Replace the edges in the left child of a hori with the corresponding left parent edges.
+-- The mapping is obtained from the notes in the left child slice.
 vertEdgesLeft :: Edges -> Slice -> Either String Edges
 vertEdgesLeft edges slice
   | Inner notes <- slice.notes =
@@ -645,6 +647,8 @@ vertEdgesLeft edges slice
       | otherwise = Nothing
   | otherwise = Left "The current reduction is invalid: Trying to vert a Start or Stop slice."
 
+-- | Replace the edges in the right child of a hori with the corresponding right parent edges.
+-- The mapping is obtained from the notes in the right child slice.
 vertEdgesRight :: Edges -> Slice -> Either String Edges
 vertEdgesRight edges slice
   | Inner notes <- slice.notes =
@@ -659,6 +663,72 @@ vertEdgesRight edges slice
       , HoriExpl parent <- sliceNote.expl = Just { left: Inner parent, right }
       | otherwise = Nothing
   | otherwise = Left "The current reduction is invalid: Trying to vert a Start or Stop slice."
+
+-- | Replace the edges in the left parent of a hori with the corresponding left child edges.
+-- The mapping is obtained from the notes in the left child slice.
+horiEdgesLeft :: Edges -> Slice -> Edges
+horiEdgesLeft edgesl slicel
+  | Inner notes <- slicel.notes =
+    { regular: S.catMaybes $ S.map replaceRight edgesl.regular
+    , passing: A.catMaybes $ map replaceRight edgesl.passing
+    }
+    where
+    replaceRight { left, right }
+      | Inner rightNote <- right
+      , Just sliceNote <-
+          A.find
+            ( \n -> case n.expl of
+                HoriExpl parent -> parent.id == rightNote.id
+                _ -> false
+            )
+            notes = Just { left, right: Inner sliceNote.note }
+      | otherwise = Nothing
+  | otherwise = edgesl
+
+-- | Replace the edges in the right parent of a hori with the corresponding right child edges.
+-- The mapping is obtained from the notes in the left child slice.
+horiEdgesRight :: Slice -> Edges -> Edges
+horiEdgesRight slicer edgesr
+  | Inner notes <- slicer.notes =
+    { regular: S.catMaybes $ S.map replaceLeft edgesr.regular
+    , passing: A.catMaybes $ map replaceLeft edgesr.passing
+    }
+    where
+    replaceLeft { left, right }
+      | Inner leftNote <- left
+      , Just sliceNote <-
+          A.find
+            ( \n -> case n.expl of
+                HoriExpl parent -> parent.id == leftNote.id
+                _ -> false
+            )
+            notes = Just { left: Inner sliceNote.note, right }
+      | otherwise = Nothing
+  | otherwise = edgesr
+
+-- | Add all middle edges at a horizontalization between notes that are distributed to both sides
+horiEdgesMid :: Slice -> Edges -> Slice -> Edges
+horiEdgesMid slicel edges slicer = edges <> emptyEdges { regular = toBoth }
+  where
+  toLeft =
+    foldl
+      ( \acc left -> case left.expl of
+          HoriExpl parent -> M.insert parent.id left.note acc
+          _ -> acc
+      )
+      M.empty
+      $ getInnerNotes slicel
+
+  toBoth =
+    foldl
+      ( \acc right -> case right.expl of
+          HoriExpl parent -> case M.lookup parent.id toLeft of
+            Just left -> S.insert { left: Inner left, right: Inner right.note } acc
+            Nothing -> acc
+          _ -> acc
+      )
+      S.empty
+      $ getInnerNotes slicer
 
 -- | Merges two segment into a new segment with a 'Split' operation.
 mkMerge :: TransId -> Slice -> Segment -> Segment -> Segment

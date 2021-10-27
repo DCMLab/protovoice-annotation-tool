@@ -1,7 +1,7 @@
 module Render where
 
 import Prelude
-import Common (Selection, ViewerAction(..), AppSettings, class_, noteIsSelected)
+import Common (AppSettings, Selection, ViewerAction(..), noteIsSelected)
 import Data.Array as A
 import Data.Either (Either(..))
 import Data.Foldable (maximum, minimum)
@@ -11,12 +11,12 @@ import Data.Map as M
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Pitches (diasteps)
 import Data.Rational ((%))
+import Data.Set as S
 import Data.Tuple (Tuple(..))
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Core as HC
 import Halogen.HTML.Events as HE
-import Halogen.HTML.Properties (height)
 import Halogen.HTML.Properties as HP
 import Halogen.Query.Input (Input(..))
 import Halogen.Svg.Attributes as SA
@@ -24,9 +24,8 @@ import Halogen.Svg.Elements as SE
 import Math (exp)
 import ProtoVoices.Common (MBS(..))
 import ProtoVoices.Folding (GraphSlice, GraphTransition, Graph)
-import ProtoVoices.Model (Edge, Note, NoteExplanation(..), Notes, Piece, SliceId, StartStop(..), explHasParent, getInnerNotes, getParents)
+import ProtoVoices.Model (Edge, Note, NoteExplanation(..), Notes, Piece, SliceId, StartStop(..), explHasParent, getInnerNotes)
 import Pruning (Surface)
-import Web.HTML.Window (innerHeight)
 
 scalex :: AppSettings -> Number -> Number
 scalex { xscale } x = x * 70.0 * exp xscale
@@ -297,18 +296,24 @@ renderHori sett selection slices { child, parent } =
     HoriExpl parentNote -> Just { childNote: note.note, parentNote }
     _ -> Nothing
 
-renderInner :: forall p. AppSettings -> Selection -> Number -> Surface -> HH.HTML p ViewerAction
-renderInner sett sel maxx { slices, transs } = svg
+renderInner :: forall p. AppSettings -> Selection -> Surface -> Graph -> HH.HTML p ViewerAction
+renderInner sett sel { slices, transs } graph = svg
   where
   extractNotes slice = M.fromFoldable $ (\n -> Tuple n.note.id { note: n, x: slice.x }) <$> getInnerNotes slice
 
   notes = M.unions $ extractNotes <$> slices
 
+  surfaceEdges =
+    S.fromFoldable
+      $ do
+          trans <- transs
+          A.fromFoldable trans.regular <> trans.passing
+
   miny = fromMaybe 0 $ minimum $ map (_.note.note.pitch >>> diasteps) $ M.values notes
 
   maxy = fromMaybe 0 $ maximum $ map (_.note.note.pitch >>> diasteps) $ M.values notes
 
-  width = scalex sett (maxx + 2.0)
+  width = scalex sett (graph.maxx + 2.0)
 
   height = innerFactor * (offset $ maxy - miny + 2)
 
@@ -323,7 +328,12 @@ renderInner sett sel maxx { slices, transs } = svg
       , y: innerFactor * (offset $ maxy - diasteps note.pitch)
       }
     Start -> { x: 0.0, y: (offset $ maxy - miny) * innerFactor / 2.0 }
-    Stop -> { x: scalex sett maxx, y: (offset $ maxy - miny) * innerFactor / 2.0 }
+    Stop -> { x: scalex sett graph.maxx, y: (offset $ maxy - miny) * innerFactor / 2.0 }
+
+  surfaceNote :: StartStop Note -> Boolean
+  surfaceNote = case _ of
+    Inner note -> M.member note.id notes
+    _ -> true
 
   mkNode { x, y } label selected selAttr =
     SE.g []
@@ -361,17 +371,32 @@ renderInner sett sel maxx { slices, transs } = svg
 
   mkStartStop s = mkNode (notePosition s) (show s) (if selIsRoot then Related else NotSelected) []
 
-  mkEdge isRegular { left, right } = SE.line [ SA.x1 x1, SA.x2 x2, SA.y1 y1, SA.y2 y2, SA.stroke black ]
-    where
-    { x: x1, y: y1 } = notePosition left
+  mkEdge isRegular { left, right }
+    | surfaceNote left && surfaceNote right =
+      SE.line
+        $ [ SA.x1 x1
+          , SA.x2 x2
+          , SA.y1 y1
+          , SA.y2 y2
+          , SA.stroke
+              if edgeSelected then
+                selColorInner
+              else if S.member { left, right } surfaceEdges then black else lightgray
+          ]
+        <> if isRegular then [] else [ SA.attr (HH.AttrName "stroke-dasharray") "6,3" ]
+      where
+      { x: x1, y: y1 } = notePosition left
 
-    { x: x2, y: y2 } = notePosition right
+      { x: x2, y: y2 } = notePosition right
+
+      edgeSelected = noteIsSelected sel left || noteIsSelected sel right
+    | otherwise = HH.text ""
 
   svgNotes = A.fromFoldable $ mkNote <$> M.values notes
 
   svgArrows = do -- Array
-    edges <- transs
-    (mkEdge true <$> A.fromFoldable edges.regular) <> (mkEdge false <$> edges.passing)
+    trans <- A.fromFoldable $ M.values graph.transitions
+    (mkEdge true <$> A.fromFoldable trans.edges.regular) <> (mkEdge false <$> trans.edges.passing)
 
   svg =
     HH.div_
