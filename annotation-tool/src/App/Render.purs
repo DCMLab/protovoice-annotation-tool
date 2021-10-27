@@ -120,7 +120,7 @@ renderSlice sett selection validation { slice: slice@{ id, notes, x, parents }, 
               ]
             <> mapWithIndex mknote inotes
         ]
-  startstop -> mknode [ HH.text $ show startstop ] (scalex sett x) (scaley sett d) (if activeParent then Related else NotSelected) Nothing []
+  startstop -> mknode (show startstop) (show startstop) (scalex sett x) (scaley sett d) (if activeParent then Related else NotSelected) Nothing []
   where
   svgx = scalex sett x - (noteSize / 2.0)
 
@@ -139,9 +139,9 @@ renderSlice sett selection validation { slice: slice@{ id, notes, x, parents }, 
     , HE.onClick $ \ev -> if ctrlKey ev then NoOp else Select (if selected then SelNone else SelSlice id)
     ]
 
-  mknode text xcoord ycoord selStatus valid attr =
+  mknode text title xcoord ycoord selStatus valid attr =
     SE.g attr
-      $ [ bg, label ]
+      $ [ bg, label, SE.title [] [ HH.text title ] ]
     where
     bg =
       SE.rect
@@ -170,12 +170,13 @@ renderSlice sett selection validation { slice: slice@{ id, notes, x, parents }, 
               _ -> black
             Just NSInvalidExplanation -> warnColor
         ]
-        text
+        [ HH.text text ]
 
   mknote :: Int -> { note :: Note, expl :: NoteExplanation } -> HH.HTML p GraphAction
   mknote i { note, expl } =
     mknode
-      label
+      (show note.pitch)
+      note.id
       (scalex sett x)
       (scaley sett d + offset i)
       nodeselected
@@ -193,11 +194,6 @@ renderSlice sett selection validation { slice: slice@{ id, notes, x, parents }, 
     nselectable = d /= 0.0
 
     clickable = nselectable || activeParent
-
-    label =
-      [ HH.text $ show note.pitch
-      , SE.title [] [ HH.text note.id ]
-      ]
 
     attrsSel =
       [ cursor "pointer"
