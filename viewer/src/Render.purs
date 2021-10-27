@@ -1,7 +1,7 @@
 module Render where
 
 import Prelude
-import Common (AppSettings, Selection, ViewerAction(..), noteIsSelected)
+import Common (AppSettings, Selection, ViewerAction(..), noteIsSelected, showExplanation)
 import Data.Array as A
 import Data.Either (Either(..))
 import Data.Foldable (maximum, minimum)
@@ -134,7 +134,7 @@ renderSlice sett selection { slice: slice@{ id, notes, x, parents }, depth: d } 
               ]
             <> A.mapWithIndex mknote inotes
         ]
-  startstop -> mknode [ HH.text $ show startstop ] (scalex sett x) (scaley sett d) (if selIsRoot then Related else NotSelected) []
+  startstop -> mknode (show startstop) (show startstop) (scalex sett x) (scaley sett d) (if selIsRoot then Related else NotSelected) []
   where
   svgx = scalex sett x - (noteSize / 2.0)
 
@@ -144,9 +144,9 @@ renderSlice sett selection { slice: slice@{ id, notes, x, parents }, depth: d } 
 
   isTopLevel = d == 0.0
 
-  mknode text xcoord ycoord selStatus attr =
+  mknode text title xcoord ycoord selStatus attr =
     SE.g attr
-      $ [ bg, label ]
+      $ [ bg, label, SE.title [] [ HH.text title ] ]
     where
     bg =
       SE.rect
@@ -170,12 +170,13 @@ renderSlice sett selection { slice: slice@{ id, notes, x, parents }, depth: d } 
         , HP.style "pointer-events: none;"
         , SA.fill if selStatus == NotSelected then black else white
         ]
-        text
+        [ HH.text $ text ]
 
   mknote :: Int -> { note :: Note, expl :: NoteExplanation } -> HH.HTML p ViewerAction
   mknote i { note, expl } =
     mknode
-      label
+      (show note.pitch)
+      (showExplanation expl)
       (scalex sett x)
       (scaley sett d + offset i)
       nodeselected
@@ -186,11 +187,6 @@ renderSlice sett selection { slice: slice@{ id, notes, x, parents }, depth: d } 
     nselectable = d /= 0.0
 
     clickable = nselectable
-
-    label =
-      [ HH.text $ show note.pitch
-      , SE.title [] [ HH.text note.id ]
-      ]
 
     attrsSel =
       [ cursor "pointer"
@@ -335,7 +331,7 @@ renderInner sett sel { slices, transs } graph = svg
     Inner note -> M.member note.id notes
     _ -> true
 
-  mkNode { x, y } label selected selAttr =
+  mkNode { x, y } label title selected selAttr =
     SE.g []
       [ SE.circle
           $ [ SA.cx x
@@ -358,9 +354,10 @@ renderInner sett sel { slices, transs } graph = svg
           , SA.fill $ if selected == NotSelected then black else white
           ]
           [ HH.text $ label ]
+      , SE.title [] [ HH.text title ]
       ]
 
-  mkNote { note: { note, expl }, x: notex } = mkNode (notePosition $ Inner note) (show note.pitch) selected selAttr
+  mkNote { note: { note, expl }, x: notex } = mkNode (notePosition $ Inner note) (show note.pitch) (showExplanation expl) selected selAttr
     where
     selected = noteSelectionStatus sel note
 
@@ -369,7 +366,7 @@ renderInner sett sel { slices, transs } graph = svg
           Select if selected == Selected then Nothing else Just { note, expl }
       ]
 
-  mkStartStop s = mkNode (notePosition s) (show s) (if selIsRoot then Related else NotSelected) []
+  mkStartStop s = mkNode (notePosition s) (show s) (show s) (if selIsRoot then Related else NotSelected) []
 
   mkEdge isRegular { left, right }
     | surfaceNote left && surfaceNote right =

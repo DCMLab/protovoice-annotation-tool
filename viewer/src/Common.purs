@@ -1,14 +1,17 @@
 module Common where
 
 import Prelude
+import Control.Monad.Except (runExcept)
 import Control.Monad.State as ST
-import Data.Either (Either(..))
+import Data.Either (Either(..), fromRight)
 import Data.Map as M
 import Data.Maybe (Maybe(..))
+import Foreign as F
+import Foreign.Index as FI
 import Halogen.HTML as HH
 import Halogen.HTML.Properties as HP
 import ProtoVoices.Folding (Graph, evalGraph)
-import ProtoVoices.Model (Model, Note, NoteExplanation, StartStop(..))
+import ProtoVoices.Model (DoubleOrnament(..), LeftOrnament(..), Model, Note, NoteExplanation(..), RightOrnament(..), StartStop(..))
 import Pruning (Surface, findSurface, pruneModel)
 import Web.DOM.Element (Element)
 
@@ -52,6 +55,17 @@ defaultSettings =
   , showScore: true
   }
 
+readOptions :: F.Foreign -> AppSettings
+readOptions obj =
+  { flatHori: fromRight defaultSettings.flatHori $ runExcept $ obj FI.! "flatHori" >>= F.readBoolean
+  , xscale: fromRight defaultSettings.xscale $ runExcept $ obj FI.! "xscale" >>= F.readNumber
+  , yscale: fromRight defaultSettings.yscale $ runExcept $ obj FI.! "yscale" >>= F.readNumber
+  , showSettings: fromRight defaultSettings.showSettings $ runExcept $ obj FI.! "showSettings" >>= F.readBoolean
+  , showInner: fromRight defaultSettings.showInner $ runExcept $ obj FI.! "showInner" >>= F.readBoolean
+  , showOuter: fromRight defaultSettings.showOuter $ runExcept $ obj FI.! "showOuter" >>= F.readBoolean
+  , showScore: fromRight defaultSettings.showScore $ runExcept $ obj FI.! "showScore" >>= F.readBoolean
+  }
+
 type Selection
   = Maybe { note :: Note, expl :: NoteExplanation }
 
@@ -65,6 +79,41 @@ type ViewerCache
     , graph :: M.Map Int Graph
     , surface :: M.Map Int Surface
     }
+
+showExplanation :: NoteExplanation -> String
+showExplanation = case _ of
+  NoExpl -> "unexplained"
+  RootExpl -> "root note"
+  DoubleExpl { leftParent, rightParent, orn } ->
+    let
+      ornStr = case orn of
+        Just FullNeighbor -> "full neighbor"
+        Just FullRepeat -> "full repeat"
+        Just LeftRepeatOfRight -> "left repeat"
+        Just RightRepeatOfLeft -> "right repeat"
+        Just PassingMid -> "middle passing note"
+        Just PassingLeft -> "left passing note"
+        Just PassingRight -> "right passing note"
+        Nothing -> "unexplained"
+    in
+      ornStr <> " between " <> show leftParent.pitch <> " and " <> show rightParent.pitch
+  RightExpl { leftParent, orn } ->
+    let
+      ornStr = case orn of
+        Just RightRepeat -> "repeat"
+        Just RightNeighbor -> "neighbor"
+        Nothing -> "ornament (unexplained)"
+    in
+      "right " <> ornStr <> " of " <> show leftParent.pitch
+  LeftExpl { rightParent, orn } ->
+    let
+      ornStr = case orn of
+        Just LeftRepeat -> "repeat"
+        Just LeftNeighbor -> "neighbor"
+        Nothing -> "ornament (unexplained)"
+    in
+      "left " <> ornStr <> " of " <> show rightParent.pitch
+  HoriExpl parent -> "spread from " <> show parent.pitch
 
 emptyCache :: ViewerCache
 emptyCache = { modelPruned: M.empty, graph: M.empty, surface: M.empty }
