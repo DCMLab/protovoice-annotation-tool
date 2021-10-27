@@ -12,6 +12,7 @@ import Effect (Effect)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect)
 import Effect.Class.Console (log)
+import Effect.Random (random)
 import Halogen as H
 import Halogen.Aff as HA
 import Halogen.HTML as HH
@@ -22,19 +23,20 @@ import ProtoVoices.Folding (Graph)
 import ProtoVoices.JSONTransport (ModelJSON, modelFromJSON)
 import ProtoVoices.Model (Model, getInnerNotes)
 import Pruning (Surface, countSteps)
-import Render (noteSize, renderReduction, scalex, scoreScale)
+import Render (noteSize, renderInner, renderReduction, renderScoreSVG, scalex, scoreScale)
 import Simple.JSON (readJSON)
 import Utils (insertScore, renderScore)
 import Web.DOM.Element (Element)
 import Web.DOM.ParentNode (QuerySelector(..))
 
 mainJSON :: String -> String -> Effect Unit
-mainJSON eltSelector json =
+mainJSON eltSelector json = do
+  pfx <- show <$> random
   HA.runHalogenAff
     $ do
         HA.awaitLoad
         elt <- HA.selectElement (QuerySelector eltSelector)
-        for_ elt (runUI viewerComponent json)
+        for_ elt (runUI (viewerComponent pfx) json)
 
 type ViewerModel
   = { model :: Model
@@ -62,8 +64,8 @@ updateStepModel step max model cache = do
     surface = cacheGetSurface modelPruned step cache
   pure { model, step, max, modelPruned, graph, surface }
 
-viewerComponent :: forall query output m. MonadEffect m => MonadAff m => H.Component query String output m
-viewerComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultEval { handleAction = handleAction, initialize = Just Init } }
+viewerComponent :: forall query output m. MonadEffect m => MonadAff m => String -> H.Component query String output m
+viewerComponent prefix = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultEval { handleAction = handleAction, initialize = Just Init } }
   where
   initialState :: String -> ViewerState
   initialState json =
@@ -91,85 +93,130 @@ viewerComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defau
   render st = case st.model of
     Nothing -> HH.div [ class_ "pv-content" ] [ HH.text "No analysis loaded." ]
     Just { model, modelPruned, graph, surface, step, max } ->
-      HH.div_
-        [ HH.div [ class_ "pv-content" ]
-            [ HH.div [ class_ "pv-toolbar" ]
-                [ HH.button
-                    [ class_ "pv-button pure-button"
-                    , HE.onClick $ \_ -> ToFirst
-                    , HP.disabled $ step <= 0
-                    , HP.title "Move to first step"
+      let
+        buttons =
+          [ HH.button
+              [ class_ "pv-button pure-button"
+              , HE.onClick $ \_ -> ToFirst
+              , HP.disabled $ step <= 0
+              , HP.title "Move to first step"
+              ]
+              [ HH.text "<< First"
+              ]
+          , HH.button
+              [ class_ "pv-button pure-button"
+              , HE.onClick $ \_ -> Backward
+              , HP.disabled $ step <= 0
+              , HP.title "Move one step back"
+              ]
+              [ HH.text "< Previous"
+              ]
+          , HH.button
+              [ class_ "pv-button pure-button"
+              , HE.onClick $ \_ -> Forward
+              , HP.disabled $ step >= max
+              , HP.title "Move one step forward"
+              ]
+              [ HH.text "Next >" ]
+          , HH.button
+              [ class_ "pv-button pure-button"
+              , HE.onClick $ \_ -> ToLast
+              , HP.disabled $ step >= max
+              , HP.title "Move to last step"
+              ]
+              [ HH.text "Last >>" ]
+          , HH.span [ class_ "pv-step" ] [ HH.text $ " Step " <> show step <> " of " <> show max ]
+          ]
+      in
+        HH.div [ class_ "pv-widget" ]
+          [ HH.header [ class_ "pv-content pv-controls" ]
+              [ HH.div [ class_ "pv-toolbar" ]
+                  $ buttons
+                  <> [ HH.div [ class_ "pv-spacer" ] []
+                    , HH.button
+                        [ class_ $ "pv-button pure-button" <> if st.settings.showSettings then " pv-button-pressed pure-button-active" else ""
+                        , HE.onClick $ \_ -> ToggleSettings
+                        , HP.title "Show or hide settings"
+                        ]
+                        [ HH.text "Settings" ]
                     ]
-                    [ HH.text "<< First"
+              , if st.settings.showSettings then
+                  HH.div_
+                    [ HH.div [ class_ "pv-control-box" ]
+                        [ HH.label [ class_ "pv-control-label", HP.for "xscale" ] [ HH.text $ "horizontal zoom: " <> show st.settings.xscale ]
+                        , HH.input
+                            [ class_ "pv-control-range"
+                            , HP.type_ $ HP.InputRange
+                            , HP.min (-5.0)
+                            , HP.max 0.0
+                            , HP.step $ HP.Step 0.01
+                            , HP.value $ show st.settings.xscale
+                            , HE.onValueChange SetXScale
+                            , HP.name "xscale"
+                            ]
+                        ]
+                    , HH.div [ class_ "pv-control-box" ]
+                        [ HH.label [ class_ "pv-control-label", HP.for "yscale" ] [ HH.text $ "vertical zoom: " <> show st.settings.yscale ]
+                        , HH.input
+                            [ class_ "pv-control-range"
+                            , HP.type_ $ HP.InputRange
+                            , HP.min (-2.0)
+                            , HP.max 2.0
+                            , HP.step $ HP.Step 0.01
+                            , HP.value $ show st.settings.yscale
+                            , HE.onValueChange SetYScale
+                            , HP.name "yscale"
+                            ]
+                        ]
+                    , HH.div [ class_ "pv-control-box" ]
+                        [ HH.input
+                            [ HP.type_ $ HP.InputCheckbox
+                            , HP.checked st.settings.showInner
+                            , HE.onChange \_ -> ToggleInner
+                            , HP.id $ prefix <> "showInnerGraph"
+                            ]
+                        , HH.label [ HP.for $ prefix <> "showInnerGraph" ] [ HH.text "show inner graph" ]
+                        ]
+                    , HH.div [ class_ "pv-control-box" ]
+                        [ HH.input
+                            [ HP.type_ $ HP.InputCheckbox
+                            , HP.checked st.settings.showScore
+                            , HE.onChange \_ -> ToggleScore
+                            , HP.id $ prefix <> "showScore"
+                            ]
+                        , HH.label [ HP.for $ prefix <> "showScore" ] [ HH.text "show score" ]
+                        ]
+                    , HH.div [ class_ "pv-control-box" ]
+                        [ HH.input
+                            [ HP.type_ $ HP.InputCheckbox
+                            , HP.checked st.settings.showOuter
+                            , HE.onChange \_ -> ToggleOuter
+                            , HP.id $ prefix <> "showOuterGraph"
+                            ]
+                        , HH.label [ HP.for $ prefix <> "showOuterGraph" ] [ HH.text "show outer graph" ]
+                        ]
                     ]
-                , HH.button
-                    [ class_ "pv-button pure-button"
-                    , HE.onClick $ \_ -> Backward
-                    , HP.disabled $ step <= 0
-                    , HP.title "Move one step back"
-                    ]
-                    [ HH.text "< Previous"
-                    ]
-                , HH.button
-                    [ class_ "pv-button pure-button"
-                    , HE.onClick $ \_ -> Forward
-                    , HP.disabled $ step >= max
-                    , HP.title "Move one step forward"
-                    ]
-                    [ HH.text "Next >" ]
-                , HH.button
-                    [ class_ "pv-button pure-button"
-                    , HE.onClick $ \_ -> ToLast
-                    , HP.disabled $ step >= max
-                    , HP.title "Move to last step"
-                    ]
-                    [ HH.text "Last >>" ]
-                , HH.span [ class_ "pv-step" ] [ HH.text $ " Step " <> show step <> " of " <> show max ]
-                , HH.div [ class_ "pv-spacer" ] []
-                , HH.button
-                    [ class_ $ "pv-button pure-button" <> if st.settings.showSettings then " pv-button-pressed pure-button-active" else ""
-                    , HE.onClick $ \_ -> ToggleSettings
-                    , HP.title "Show or hide settings"
-                    ]
-                    [ HH.text "Settings" ]
-                ]
-            , if st.settings.showSettings then
-                HH.div_
-                  [ HH.div [ class_ "pv-control-box" ]
-                      [ HH.label [ class_ "pv-control-label", HP.for "xscale" ] [ HH.text $ "horizontal zoom: " <> show st.settings.xscale ]
-                      , HH.input
-                          [ class_ "pv-control-range"
-                          , HP.type_ $ HP.InputRange
-                          , HP.min (-5.0)
-                          , HP.max 0.0
-                          , HP.step $ HP.Step 0.01
-                          , HP.value $ show st.settings.xscale
-                          , HE.onValueChange SetXScale
-                          , HP.name "xscale"
-                          ]
-                      ]
-                  , HH.div [ class_ "pv-control-box" ]
-                      [ HH.label [ class_ "pv-control-label", HP.for "yscale" ] [ HH.text $ "vertical zoom: " <> show st.settings.yscale ]
-                      , HH.input
-                          [ class_ "pv-control-range"
-                          , HP.type_ $ HP.InputRange
-                          , HP.min (-2.0)
-                          , HP.max 2.0
-                          , HP.step $ HP.Step 0.01
-                          , HP.value $ show st.settings.yscale
-                          , HE.onValueChange SetYScale
-                          , HP.name "yscale"
-                          ]
-                      ]
+                else
+                  HH.text ""
+              ]
+          , HH.div
+              [ class_ "pv-wide" ]
+              [ HH.div [ class_ "pv-graph" ]
+                  [ if st.settings.showInner then
+                      renderInner st.settings st.selected graph.maxx surface
+                    else
+                      HH.text ""
+                  , if st.settings.showScore then
+                      renderScoreSVG st.settings modelPruned.piece graph.maxx
+                    else
+                      HH.text ""
+                  , if st.settings.showOuter then
+                      renderReduction st.settings modelPruned.piece graph surface st.selected
+                    else
+                      HH.text ""
                   ]
-              else
-                HH.text ""
-            ]
-        , HH.div
-            [ class_ "pv-wide" ]
-            [ renderReduction st.settings modelPruned.piece graph surface st.selected ]
-        , HH.p_ [ HH.text $ show surface ]
-        ]
+              ]
+          ]
 
   setStep f st =
     fromMaybe st do
@@ -201,6 +248,9 @@ viewerComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defau
       H.modify_ \st -> st { scoreElt = Just elt }
       redrawScore
     ToggleSettings -> H.modify_ \st -> st { settings { showSettings = not st.settings.showSettings } }
+    ToggleInner -> H.modify_ \st -> st { settings { showInner = not st.settings.showInner } }
+    ToggleOuter -> H.modify_ \st -> st { settings { showOuter = not st.settings.showOuter } }
+    ToggleScore -> H.modify_ \st -> st { settings { showScore = not st.settings.showScore } }
     SetXScale s -> case fromString s of
       Nothing -> pure unit
       Just n -> do

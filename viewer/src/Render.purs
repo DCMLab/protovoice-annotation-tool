@@ -1,11 +1,12 @@
 module Render where
 
 import Prelude
-import Common (AppSettings, Selection, ViewerAction(..), class_, noteIsSelected)
+import Common (Selection, ViewerAction(..), AppSettings, class_, noteIsSelected)
 import Data.Array as A
 import Data.Either (Either(..))
 import Data.Foldable (maximum, minimum)
 import Data.Int (toNumber)
+import Data.List as L
 import Data.Map as M
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Pitches (diasteps)
@@ -15,6 +16,7 @@ import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Core as HC
 import Halogen.HTML.Events as HE
+import Halogen.HTML.Properties (height)
 import Halogen.HTML.Properties as HP
 import Halogen.Query.Input (Input(..))
 import Halogen.Svg.Attributes as SA
@@ -38,6 +40,9 @@ offset i = toNumber i * 20.0
 noteSize :: Number
 noteSize = 29.0
 
+innerFactor :: Number
+innerFactor = 1.6
+
 scoreHeight :: Number
 scoreHeight = 150.0
 
@@ -45,7 +50,7 @@ scoreScale :: Number
 scoreScale = 0.9
 
 axisHeight :: Number
-axisHeight = 60.0
+axisHeight = offset 2
 
 findPitchIndex :: StartStop Note -> StartStop Notes -> Int
 findPitchIndex (Inner note) (Inner notes) =
@@ -292,8 +297,8 @@ renderHori sett selection slices { child, parent } =
     HoriExpl parentNote -> Just { childNote: note.note, parentNote }
     _ -> Nothing
 
-renderInner :: forall p. AppSettings -> Selection -> Number -> Surface -> { height :: Number, svg :: HH.HTML p ViewerAction }
-renderInner sett sel maxx { slices, transs } = { height, svg }
+renderInner :: forall p. AppSettings -> Selection -> Number -> Surface -> HH.HTML p ViewerAction
+renderInner sett sel maxx { slices, transs } = svg
   where
   extractNotes slice = M.fromFoldable $ (\n -> Tuple n.note.id { note: n, x: slice.x }) <$> getInnerNotes slice
 
@@ -303,7 +308,9 @@ renderInner sett sel maxx { slices, transs } = { height, svg }
 
   maxy = fromMaybe 0 $ maximum $ map (_.note.note.pitch >>> diasteps) $ M.values notes
 
-  height = 2.0 * (offset $ maxy - miny + 1)
+  width = scalex sett (maxx + 2.0)
+
+  height = innerFactor * (offset $ maxy - miny + 2)
 
   selIsRoot = case sel of
     Just { expl } -> expl == RootExpl
@@ -313,10 +320,10 @@ renderInner sett sel maxx { slices, transs } = { height, svg }
   notePosition = case _ of
     Inner note ->
       { x: scalex sett $ fromMaybe 0.0 $ _.x <$> M.lookup note.id notes
-      , y: 2.0 * (offset $ maxy - diasteps note.pitch)
+      , y: innerFactor * (offset $ maxy - diasteps note.pitch)
       }
-    Start -> { x: 0.0, y: height / 2.0 - offset 1 }
-    Stop -> { x: scalex sett maxx, y: height / 2.0 - offset 1 }
+    Start -> { x: 0.0, y: (offset $ maxy - miny) * innerFactor / 2.0 }
+    Stop -> { x: scalex sett maxx, y: (offset $ maxy - miny) * innerFactor / 2.0 }
 
   mkNode { x, y } label selected selAttr =
     SE.g []
@@ -367,18 +374,20 @@ renderInner sett sel maxx { slices, transs } = { height, svg }
     (mkEdge true <$> A.fromFoldable edges.regular) <> (mkEdge false <$> edges.passing)
 
   svg =
-    SE.element (H.ElemName "svg")
-      [ SA.x 0.0
-      , SA.y $ negate height
-      , HP.style "overflow: visible;"
+    HH.div_
+      [ SE.svg
+          [ SA.width width
+          , SA.height height
+          , SA.viewBox (negate $ scalex sett 1.0) (negate $ innerFactor * offset 1) width height
+          ]
+          (svgArrows <> svgNotes <> [ mkStartStop Start, mkStartStop Stop ])
       ]
-      (svgArrows <> svgNotes <> [ mkStartStop Start, mkStartStop Stop ])
 
 renderTime :: forall r p. AppSettings -> Number -> Int -> { time :: Either String MBS | r } -> HH.HTML p ViewerAction
 renderTime sett yoff i { time } =
   SE.text
     [ SA.x $ scalex sett $ toNumber (i + 1)
-    , SA.y $ negate ((axisHeight / 2.0) + yoff)
+    , SA.y $ (axisHeight - offset 1) + yoff
     , SA.text_anchor SA.AnchorMiddle
     , SA.dominant_baseline SA.BaselineMiddle
     ]
@@ -388,38 +397,48 @@ renderTime sett yoff i { time } =
     Right (MBS { m, b, s }) -> if s == 0 % 1 then show m <> "." <> show b else ""
     Left str -> str
 
-renderScore :: forall p. Number -> HH.HTML p ViewerAction
-renderScore innerHeight =
-  SE.element (H.ElemName "svg")
-    [ SA.x 0.0
-    , SA.y (negate $ scoreHeight + axisHeight + innerHeight)
-    , HP.style "overflow: visible;"
-    , HP.ref $ H.RefLabel $ "scoreStaff"
-    , HP.IProp $ HC.ref $ map (Action <<< RegisterScoreElt)
-    ]
-    []
-
-renderReduction :: forall p. AppSettings -> Piece -> Graph -> Surface -> Selection -> HH.HTML p ViewerAction
-renderReduction sett piece graph surface selection =
-  HH.div
-    [ class_ "pv-graph" ]
+renderScoreSVG :: forall p. AppSettings -> Piece -> Number -> HH.HTML p ViewerAction
+renderScoreSVG sett piece maxx =
+  HH.div_
     [ SE.svg
         [ SA.width width
         , SA.height height
-        , SA.viewBox (negate $ scalex sett 1.0) (negate extraHeight) width height
+        , SA.viewBox (negate $ scalex sett 1.0) 0.0 width height
         ]
-        (svgScore <> [ svgInner ] <> svgTranss <> svgHoris <> svgSlices <> svgAxis)
+        $ [ SE.element (H.ElemName "svg")
+              [ HP.style "overflow: visible;"
+              , HP.ref $ H.RefLabel $ "scoreStaff"
+              , HP.IProp $ HC.ref $ map (Action <<< RegisterScoreElt)
+              ]
+              []
+          ]
+        <> (A.mapWithIndex (renderTime sett scoreHeight) piece)
+    ]
+  where
+  width = scalex sett (maxx + 2.0)
+
+  height = scoreHeight + axisHeight
+
+renderReduction :: forall p. AppSettings -> Piece -> Graph -> Surface -> Selection -> HH.HTML p ViewerAction
+renderReduction sett piece graph surface selection =
+  HH.div_
+    [ SE.svg
+        [ SA.width width
+        , SA.height height
+        , SA.viewBox (negate $ scalex sett 1.0) (-offset 1) width height
+        ]
+        (svgTranss <> svgHoris <> svgSlices)
     ]
   where
   { slices, transitions, horis, maxx, maxd } = graph
 
   width = scalex sett (maxx + 2.0)
 
-  { height: innerHeight, svg: svgInner } = renderInner sett selection maxx surface
+  -- { height: innerHeight, svg: svgInner } = renderInner sett selection maxx surface
+  -- extraHeight = axisHeight + scoreHeight -- + innerHeight
+  height = scaley sett maxd + offset (deepestSize + 1) -- + extraHeight
 
-  extraHeight = axisHeight + scoreHeight + innerHeight
-
-  height = scaley sett (maxd + 1.0) + extraHeight
+  deepestSize = fromMaybe 1 $ maximum $ map (_.slice >>> getInnerNotes >>> \ns -> max (A.length ns) 1) $ L.filter (\s -> s.depth == maxd) $ M.values graph.slices
 
   svgSlices = map (renderSlice sett selection) $ A.fromFoldable $ M.values slices
 
@@ -427,6 +446,5 @@ renderReduction sett piece graph surface selection =
 
   svgHoris = map (renderHori sett selection slices) $ A.fromFoldable horis
 
-  svgAxis = A.mapWithIndex (renderTime sett innerHeight) piece
-
-  svgScore = [ renderScore innerHeight ]
+-- svgAxis = A.mapWithIndex (renderTime sett 0.0) piece
+-- svgScore = [ renderScore ]

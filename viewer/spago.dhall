@@ -30,9 +30,11 @@ to generate this file without the comments in this block.
   , "prelude"
   , "protovoice-model"
   , "psci-support"
+  , "random"
   , "rationals"
   , "simple-json"
   , "transformers"
+  , "tuples"
   , "web-dom"
   , "web-html"
   ]

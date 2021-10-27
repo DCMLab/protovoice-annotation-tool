@@ -25,6 +25,9 @@ data ViewerAction
   | ToLast
   | RegisterScoreElt Element
   | ToggleSettings
+  | ToggleInner
+  | ToggleOuter
+  | ToggleScore
   | SetXScale String
   | SetYScale String
 
@@ -33,6 +36,9 @@ type AppSettings
     , xscale :: Number
     , yscale :: Number
     , showSettings :: Boolean
+    , showInner :: Boolean
+    , showOuter :: Boolean
+    , showScore :: Boolean
     }
 
 defaultSettings :: AppSettings
@@ -41,6 +47,9 @@ defaultSettings =
   , xscale: 0.0
   , yscale: 0.0
   , showSettings: false
+  , showInner: true
+  , showOuter: true
+  , showScore: true
   }
 
 type Selection

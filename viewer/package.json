@@ -14,13 +14,16 @@
         "module": {
             "outputFormat": "esmodule",
             "source": "prod/module.js"
+        },
+        "css": {
+            "source": "prod/pv-style.css"
         }
     },
     "scripts": {
         "build": "spago build",
         "test": "spago test",
         "serve": "parcel dev/index.html --open",
-        "build-prod": "rm -rf dist prod && mkdir -p prod && cp dev/pv-viewer.js prod/ && cp -r dev/css prod/ && spago bundle-module --to prod/module.js && parcel build --no-cache"
+        "build-prod": "rm -rf dist prod && mkdir -p prod && cp dev/pv-viewer.js prod/ && cp dev/css/pv-style.css prod/ && spago bundle-module --to prod/module.js && parcel build --no-cache"
     },
     "dependencies": {
         "vexflow": "^3.0.9"

@@ -5,6 +5,10 @@
 /*     padding: 0 10px; */
 /* } */
 
+.pv-widget {
+    position: relative;
+}
+
 .pv-content {
     margin-left: auto;
     margin-right: auto;
@@ -18,15 +22,22 @@
     max-width: max-content;
 }
 
-.pv-graph {
-    height: 100%;
-    overflow-x: scroll;
-    max-width: max-content;
+.pv-controls {
+    position: sticky;
+    top: 0;
+    /* padding: 1rem; */
+    background: white;
 }
 
 .pv-toolbar {
     display: flex;
     align-items: center;
+}
+
+.pv-graph {
+    height: 100%;
+    overflow-x: scroll;
+    max-width: max-content;
 }
 
 /* .pv-button:disabled { */
