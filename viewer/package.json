@@ -19,7 +19,8 @@
             "source": "prod/css/pv-style.css"
         },
         "viewer": {
-            "source": "prod/demo/index.html"
+            "source": "prod/demo/index.html",
+            "publicUrl": "./"
         }
     },
     "scripts": {
