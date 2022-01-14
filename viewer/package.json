@@ -16,14 +16,17 @@
             "source": "prod/module.js"
         },
         "css": {
-            "source": "prod/pv-style.css"
+            "source": "prod/css/pv-style.css"
+        },
+        "viewer": {
+            "source": "prod/demo/index.html"
         }
     },
     "scripts": {
         "build": "spago build",
         "test": "spago test",
-        "serve": "parcel dev/index.html --open",
-        "build-prod": "rm -rf dist prod && mkdir -p prod && cp dev/pv-viewer.js prod/ && cp dev/css/pv-style.css prod/ && spago bundle-module --to prod/module.js && parcel build --no-cache"
+        "serve": "parcel dev/index.html dev/viewer.html --open",
+        "build-prod": "rm -rf dist prod && mkdir -p prod && cp -r dev/pv-viewer.js dev/css/ dev/demo/ prod/ && spago bundle-module --to prod/module.js && parcel build --no-cache"
     },
     "dependencies": {
         "vexflow": "^3.0.9"
