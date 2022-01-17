@@ -26,7 +26,7 @@
     "scripts": {
         "build": "spago build",
         "test": "spago test",
-        "serve": "parcel dev/index.html dev/viewer.html --open",
+        "serve": "parcel dev/index.html dev/demo.html --open",
         "build-prod": "rm -rf dist prod && mkdir -p prod && cp -r dev/pv-viewer.js dev/css/ dev/demo-main.js prod/ && cp dev/demo.html prod/index.html  && spago bundle-module --to prod/module.js && parcel build --no-cache"
     },
     "dependencies": {
