@@ -63,9 +63,9 @@ tikzTrans slices { left, right, edges } = tTrans <> F.fold tEdges
       r <- M.lookup right slices
       pure $ "\\draw[transition] "
         <> if l.depth == 0.0 && r.depth == 0.0 then
-            "(" <> sliceName l.slice <> ".east |- 0,0) -- (" <> sliceName r.slice <> ".west |- 0,0);\n"
+            "(" <> sliceName l.slice <> ".east |- 0,0) to (" <> sliceName r.slice <> ".west |- 0,0);\n"
           else
-            "(" <> sliceName l.slice <> ") -- (" <> sliceName r.slice <> ");\n"
+            "(" <> sliceName l.slice <> ") to (" <> sliceName r.slice <> ");\n"
 
   sliceName slice = case slice.notes of
     Start -> "start"
@@ -93,7 +93,7 @@ tikzHori slices { child, parent } =
   fromMaybe "" do
     c <- M.lookup child slices
     p <- M.lookup parent slices
-    pure $ "\\draw[hori] " <> sliceName c <> " -- " <> sliceName p <> ";\n"
+    pure $ "\\draw[hori] " <> sliceName c <> " to " <> sliceName p <> ";\n"
   where
   sliceName { slice } = parens $ idToName $ show slice.id
 
