@@ -61,11 +61,11 @@ tikzTrans slices { left, right, edges } = tTrans <> F.fold tEdges
     fromMaybe "" do
       l <- M.lookup left slices
       r <- M.lookup right slices
-      pure $ "\\draw[transition] "
+      pure $ "{[on background layer] \\draw[transition] "
         <> if l.depth == 0.0 && r.depth == 0.0 then
-            "(" <> sliceName l.slice <> ".east |- 0,0) to (" <> sliceName r.slice <> ".west |- 0,0);\n"
+            "(" <> sliceName l.slice <> ".east |- 0,0) to (" <> sliceName r.slice <> ".west |- 0,0);}\n"
           else
-            "(" <> sliceName l.slice <> ") to (" <> sliceName r.slice <> ");\n"
+            "(" <> sliceName l.slice <> ") to (" <> sliceName r.slice <> ");}\n"
 
   sliceName slice = case slice.notes of
     Start -> "start"
@@ -76,7 +76,7 @@ tikzTrans slices { left, right, edges } = tTrans <> F.fold tEdges
 -- Just note -> parens $ idToName (show slice.id) <> "." <> (if isFirst then "east" else "west") <> " |- " <> idToName note.note.id
 -- Nothing -> parens $ idToName $ show slice.id
 tikzEdge :: String -> SliceId -> SliceId -> Edge -> String
-tikzEdge style sleft sright { left, right } = "\\draw[" <> style <> "] (" <> nodeFrom <> ") to (" <> nodeTo <> ");\n"
+tikzEdge style sleft sright { left, right } = "\\draw[" <> style <> "] (" <> nodeFrom <> ") to (" <> nodeTo <> "); % " <> show (_.pitch <$> left) <> " -> " <> show (_.pitch <$> right) <> "\n"
   where
   nodeFrom = case left of
     Start -> "start"
