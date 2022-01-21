@@ -3,6 +3,7 @@ module App.Tabs where
 import Prelude
 import App.Common (AppSettings, AppSlots, AppState, GraphAction(..), ImportThing(..), Tab(..), ImportOutput, defaultSettings)
 import App.Render (class_)
+import App.TikZ (tikzReduction)
 import App.Utils (convertMusicXML, copyToClipboard, examplePiece, examplePieceLong, showJSONErrors)
 import DOM.HTML.Indexed.InputAcceptType (InputAcceptTypeAtom(..))
 import Data.Either (Either(..), either)
@@ -20,7 +21,7 @@ import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
-import ProtoVoices.Folding (reductionToLeftmost)
+import ProtoVoices.Folding (evalGraph, reductionToLeftmost)
 import ProtoVoices.JSONTransport (ModelJSON, addJSONIds, modelFromJSON, modelToJSON, pieceFromJSON, pieceToJSON, stripJSONIds, writeJSONPretty)
 import ProtoVoices.Model (Model, Piece, loadPiece)
 import ProtoVoices.Validation (validateReduction, validationIsOk)
@@ -382,6 +383,7 @@ data ExportAction
   = CopyToClipboard String
   | DownloadJSON String String
   | TogglePretty
+  | ToggleTikzStandalone
   | Receive ExportInput
 
 exportComponent :: forall query output m. MonadEffect m => H.Component query ExportInput output m
@@ -397,9 +399,9 @@ exportComponent =
             }
     }
   where
-  initialState { model, name } = { model, name, pretty: false }
+  initialState { model, name } = { model, name, pretty: false, tikzStandalone: false }
 
-  render { model: modelMaybe, pretty, name } = case modelMaybe of
+  render { model: modelMaybe, pretty, name, tikzStandalone } = case modelMaybe of
     Nothing -> HH.text ""
     Just model ->
       let
@@ -410,6 +412,8 @@ exportComponent =
         val = validateReduction model.reduction
 
         reLoad = modelFromJSON =<< json
+
+        tikzStrOrErr = Right $ tikzReduction tikzStandalone $ evalGraph true true model.reduction
       in
         HH.div [ class_ "tab" ]
           [ if validationIsOk val then
@@ -468,6 +472,34 @@ exportComponent =
                     , HH.text " re-read:"
                     , HH.pre_ [ HH.text $ show sre ]
                     ]
+          , HH.h3_ [ HH.text "TikZ Code" ]
+          , case tikzStrOrErr of
+              Right tikzStr ->
+                HH.div_
+                  [ HH.div [ class_ "pure-g" ]
+                      [ HH.div [ class_ "pure-u-3-5" ]
+                          [ HH.input
+                              [ HP.type_ $ HP.InputCheckbox
+                              , HP.checked tikzStandalone
+                              , HE.onChange \_ -> ToggleTikzStandalone
+                              , HP.id "tikzStandalone"
+                              ]
+                          , HH.label [ HP.for "prettyJSON" ] [ HH.text " standalone document" ]
+                          ]
+                      , HH.button
+                          [ class_ "pure-button pure-u-1-5"
+                          , HE.onClick \_ -> CopyToClipboard tikzStr
+                          ]
+                          [ HH.text "Copy to Clipboard" ]
+                      , HH.button
+                          [ class_ "pure-button pure-button-primary pure-u-1-5"
+                          , HE.onClick \_ -> DownloadJSON (name <> ".tex") tikzStr
+                          ]
+                          [ HH.text "Download" ]
+                      ]
+                  , HH.pre_ [ HH.text $ tikzStr ]
+                  ]
+              Left err -> HH.p [ class_ "alert" ] [ HH.text $ "Cannot create TikZ code:" <> err ]
           ]
 
   handleExportAction = case _ of
@@ -476,6 +508,7 @@ exportComponent =
       _ <- liftEffect $ download json filename "application/json"
       pure unit
     TogglePretty -> H.modify_ \st -> st { pretty = not st.pretty }
+    ToggleTikzStandalone -> H.modify_ \st -> st { tikzStandalone = not st.tikzStandalone }
     Receive { model, name } -> H.modify_ \st -> st { model = model, name = name }
 
 -- debug component

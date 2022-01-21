@@ -62,46 +62,46 @@ findPitchIndex _ _ = 0
 
 -- custom elements and attributes
 cursor :: forall r i. String -> HH.IProp r i
-cursor = SA.attr $ HH.AttrName "cursor"
+cursor = HP.attr $ HH.AttrName "cursor"
 
 tspan :: forall p r i. Array (HH.IProp r i) -> Array (HH.HTML p i) -> HH.HTML p i
 tspan = SE.element $ HH.ElemName "tspan"
 
 dy :: forall r i. String -> HH.IProp r i
-dy = SA.attr $ HH.AttrName "dy"
+dy = HP.attr $ HH.AttrName "dy"
 
 svgFilter :: forall r i. String -> HH.IProp r i
-svgFilter = SA.attr $ HH.AttrName "filter"
+svgFilter = HP.attr $ HH.AttrName "filter"
 
-selColorOuter :: Maybe SA.Color
-selColorOuter = Just $ SA.RGB 30 144 255
+selColorOuter :: SA.Color
+selColorOuter = SA.RGB 30 144 255
 
-selColorOuter' :: Maybe SA.Color
-selColorOuter' = Just $ SA.RGB 135 206 250
+selColorOuter' :: SA.Color
+selColorOuter' = SA.RGB 135 206 250
 
-selColorInner :: Maybe SA.Color
-selColorInner = selColorOuter -- Just $ SA.RGB 51 160 44
+selColorInner :: SA.Color
+selColorInner = selColorOuter -- SA.RGB 51 160 44
 
-selColorInner' :: Maybe SA.Color
-selColorInner' = selColorOuter' -- Just $ SA.RGB 178 223 138
+selColorInner' :: SA.Color
+selColorInner' = selColorOuter' -- SA.RGB 178 223 138
 
-parentColor :: Maybe SA.Color
+parentColor :: SA.Color
 parentColor = selColorInner'
 
-warnColor :: Maybe SA.Color
-warnColor = Just $ SA.RGB 255 165 0
+warnColor :: SA.Color
+warnColor = SA.RGB 255 165 0
 
-errColor :: Maybe SA.Color
-errColor = Just $ SA.RGB 255 0 0
+errColor :: SA.Color
+errColor = SA.RGB 255 0 0
 
-white :: Maybe SA.Color
-white = Just $ SA.RGB 255 255 255
+white :: SA.Color
+white = SA.RGB 255 255 255
 
-black :: Maybe SA.Color
-black = Just $ SA.RGB 0 0 0
+black :: SA.Color
+black = SA.RGB 0 0 0
 
-lightgray :: Maybe SA.Color
-lightgray = Just $ SA.RGB 211 211 211
+lightgray :: SA.Color
+lightgray = SA.RGB 211 211 211
 
 data SelectionStatus
   = NotSelected
@@ -165,8 +165,8 @@ renderSlice sett selection { slice: slice@{ id, notes, x, parents }, depth: d } 
       SE.element (HH.ElemName "text")
         [ SA.x xcoord
         , SA.y ycoord
-        , SA.text_anchor SA.AnchorMiddle
-        , SA.dominant_baseline SA.BaselineMiddle
+        , SA.textAnchor SA.AnchorMiddle
+        , SA.dominantBaseline SA.BaselineMiddle
         , HP.style "pointer-events: none;"
         , SA.fill if selStatus == NotSelected then black else white
         ]
@@ -231,7 +231,7 @@ renderTrans sett selection slices { id, left, right, edges } =
                   else
                     black
               , SA.strokeWidth 1.0
-              , SA.attr (HH.AttrName "stroke-dasharray") (if isPassing then "6,3" else "")
+              , HP.attr (HH.AttrName "stroke-dasharray") (if isPassing then "6,3" else "")
               ]
             where
             offl = findPitchIndex p1 nl
@@ -264,7 +264,7 @@ renderHori sett selection slices { child, parent } =
                   , SA.y2 $ scaley sett yc
                   , SA.stroke lightgray
                   , SA.strokeWidth 5.0
-                  , SA.attr (HH.AttrName "stroke-dasharray") "10,5"
+                  , HP.attr (HH.AttrName "stroke-dasharray") "10,5"
                   ]
             ]
 
@@ -348,8 +348,8 @@ renderInner sett sel { slices, transs } graph = svg
       , SE.element (H.ElemName "text")
           [ SA.x x
           , SA.y y
-          , SA.text_anchor SA.AnchorMiddle
-          , SA.dominant_baseline SA.BaselineMiddle
+          , SA.textAnchor SA.AnchorMiddle
+          , SA.dominantBaseline SA.BaselineMiddle
           , HP.style "pointer-events: none;"
           , SA.fill $ if selected == NotSelected then black else white
           ]
@@ -380,7 +380,7 @@ renderInner sett sel { slices, transs } graph = svg
                 selColorInner
               else if S.member { left, right } surfaceEdges then black else lightgray
           ]
-        <> if isRegular then [] else [ SA.attr (HH.AttrName "stroke-dasharray") "6,3" ]
+        <> if isRegular then [] else [ HP.attr (HH.AttrName "stroke-dasharray") "6,3" ]
       where
       { x: x1, y: y1 } = notePosition left
 
@@ -410,8 +410,8 @@ renderTime sett yoff i { time } =
   SE.text
     [ SA.x $ scalex sett $ toNumber (i + 1)
     , SA.y $ (axisHeight - offset 1) + yoff
-    , SA.text_anchor SA.AnchorMiddle
-    , SA.dominant_baseline SA.BaselineMiddle
+    , SA.textAnchor SA.AnchorMiddle
+    , SA.dominantBaseline SA.BaselineMiddle
     ]
     [ HH.text label ]
   where

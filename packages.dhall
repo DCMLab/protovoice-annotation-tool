@@ -105,21 +105,22 @@ in  upstream
 -------------------------------
 -}
 let upstream =
-      https://github.com/purescript/package-sets/releases/download/psc-0.14.0-20210409/packages.dhall sha256:e81c2f2ce790c0e0d79869d22f7a37d16caeb5bd81cfda71d46c58f6199fd33f
+      https://github.com/purescript/package-sets/releases/download/psc-0.14.5-20220110/packages.dhall sha256:8dbf71bfc6c7a11043619eebe90ff85f7d884541048aa8cc48eef1ee781cbc0e
 
 in  upstream
+  with halogen-svg-elems.version = "v5.0.1"
   with pitches =
     { dependencies =
-        [ "console"
-        , "effect"
-        , "group"
-        , "partial"
-        , "quickcheck"
-        , "spec"
-        , "spec-quickcheck"
-        , "string-parsers"
-        , "strings"
-        ]
+      [ "console"
+      , "effect"
+      , "group"
+      , "partial"
+      , "quickcheck"
+      , "spec"
+      , "spec-quickcheck"
+      , "string-parsers"
+      , "strings"
+      ]
     , repo = "https://github.com/DCMLab/purescript-pitches.git"
     , version = "b1dd0528d2838ad9afb9ef8a6c8f9a52c0482c20"
     }

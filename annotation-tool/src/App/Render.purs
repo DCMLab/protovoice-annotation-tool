@@ -56,46 +56,46 @@ findPitchIndex _ _ = 0
 
 -- custom elements and attributes
 cursor :: forall r i. String -> HH.IProp r i
-cursor = SA.attr $ HH.AttrName "cursor"
+cursor = HP.attr $ HH.AttrName "cursor"
 
 tspan :: forall p r i. Array (HH.IProp r i) -> Array (HH.HTML p i) -> HH.HTML p i
 tspan = SE.element $ HH.ElemName "tspan"
 
 dy :: forall r i. String -> HH.IProp r i
-dy = SA.attr $ HH.AttrName "dy"
+dy = HP.attr $ HH.AttrName "dy"
 
 svgFilter :: forall r i. String -> HH.IProp r i
-svgFilter = SA.attr $ HH.AttrName "filter"
+svgFilter = HP.attr $ HH.AttrName "filter"
 
-selColorOuter :: Maybe SA.Color
-selColorOuter = Just $ SA.RGB 30 144 255
+selColorOuter :: SA.Color
+selColorOuter = SA.RGB 30 144 255
 
-selColorOuter' :: Maybe SA.Color
-selColorOuter' = Just $ SA.RGB 135 206 250
+selColorOuter' :: SA.Color
+selColorOuter' = SA.RGB 135 206 250
 
-selColorInner :: Maybe SA.Color
+selColorInner :: SA.Color
 selColorInner = selColorOuter -- Just $ SA.RGB 51 160 44
 
-selColorInner' :: Maybe SA.Color
+selColorInner' :: SA.Color
 selColorInner' = selColorOuter' -- Just $ SA.RGB 178 223 138
 
-parentColor :: Maybe SA.Color
+parentColor :: SA.Color
 parentColor = selColorInner'
 
-warnColor :: Maybe SA.Color
-warnColor = Just $ SA.RGB 255 165 0
+warnColor :: SA.Color
+warnColor = SA.RGB 255 165 0
 
-errColor :: Maybe SA.Color
-errColor = Just $ SA.RGB 255 0 0
+errColor :: SA.Color
+errColor = SA.RGB 255 0 0
 
-white :: Maybe SA.Color
-white = Just $ SA.RGB 255 255 255
+white :: SA.Color
+white = SA.RGB 255 255 255
 
-black :: Maybe SA.Color
-black = Just $ SA.RGB 0 0 0
+black :: SA.Color
+black = SA.RGB 0 0 0
 
-lightgray :: Maybe SA.Color
-lightgray = Just $ SA.RGB 211 211 211
+lightgray :: SA.Color
+lightgray = SA.RGB 211 211 211
 
 data SelectionStatus
   = NotSelected
@@ -105,7 +105,7 @@ data SelectionStatus
 derive instance eqSelectionStatus :: Eq SelectionStatus
 
 renderSlice :: forall p. AppSettings -> Selection -> Validation -> GraphSlice -> HH.HTML p GraphAction
-renderSlice sett selection validation { slice: slice@{ id, notes, x, parents }, depth: d } = case notes of
+renderSlice sett selection validation { slice: { id, notes, x, parents }, depth: d } = case notes of
   Inner inotes ->
     SE.g []
       $ [ SE.g (if isTopLevel then selectionAttr else [])
@@ -160,8 +160,8 @@ renderSlice sett selection validation { slice: slice@{ id, notes, x, parents }, 
       SE.element (HH.ElemName "text")
         [ SA.x xcoord
         , SA.y ycoord
-        , SA.text_anchor SA.AnchorMiddle
-        , SA.dominant_baseline SA.BaselineMiddle
+        , SA.textAnchor SA.AnchorMiddle
+        , SA.dominantBaseline SA.BaselineMiddle
         , HP.style "pointer-events: none;"
         , SA.fill case valid of
             Nothing -> if selStatus == Related then white else lightgray
@@ -247,7 +247,7 @@ renderTrans sett selection validation slices { id, left, right, edges } =
                     Just ESNotRepetition -> errColor
                     _ -> black
               , SA.strokeWidth 1.0
-              , SA.attr (HH.AttrName "stroke-dasharray") (if isPassing then "6,3" else "")
+              , HP.attr (HH.AttrName "stroke-dasharray") (if isPassing then "6,3" else "")
               ]
             where
             offl = findPitchIndex p1 nl
@@ -287,7 +287,7 @@ renderHori sett selection slices { child, parent } =
                   , SA.y2 $ scaley sett yc
                   , SA.stroke lightgray
                   , SA.strokeWidth 5.0
-                  , SA.attr (HH.AttrName "stroke-dasharray") "10,5"
+                  , HP.attr (HH.AttrName "stroke-dasharray") "10,5"
                   ]
             ]
 
@@ -320,8 +320,8 @@ renderTime sett i { time } =
   SE.text
     [ SA.x $ scalex sett $ toNumber (i + 1)
     , SA.y $ negate (axisHeight / 2.0)
-    , SA.text_anchor SA.AnchorMiddle
-    , SA.dominant_baseline SA.BaselineMiddle
+    , SA.textAnchor SA.AnchorMiddle
+    , SA.dominantBaseline SA.BaselineMiddle
     ]
     [ HH.text label ]
   where
@@ -399,7 +399,7 @@ doubleOrnaments =
   ]
 
 renderNoteExplanation :: forall p. Graph -> Note -> NoteExplanation -> Parents SliceId -> HH.HTML p GraphAction
-renderNoteExplanation graph note expl parents =
+renderNoteExplanation _graph note expl _parents =
   HH.div [ class_ "pure-g", HP.style "height:30px;" ]
     $ [ HH.label [ class_ "pure-u-1-4" ] [ HH.text $ "Note selected: " <> show note.pitch ] ]
     <> case expl of
