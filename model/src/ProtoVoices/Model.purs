@@ -1,6 +1,6 @@
 module ProtoVoices.Model where
 
-import Prelude
+import Prelude hiding (degree)
 import Control.Alt ((<|>))
 import Data.Array (filter, sortBy)
 import Data.Array as A
@@ -197,7 +197,7 @@ setLeftExplParent child leftParentMaybe expl = case leftParentMaybe of
             , leftParent
             , rightParent
             }
-    DoubleExpl { orn, rightParent } ->
+    DoubleExpl { rightParent } ->
       Just
         $ DoubleExpl
             { orn: findDoubleOrn child leftParent rightParent
@@ -215,7 +215,7 @@ setRightExplParent :: SPitch -> Maybe Note -> NoteExplanation -> Maybe NoteExpla
 setRightExplParent child rightParentMaybe expl = case rightParentMaybe of
   Just rightParent -> case expl of
     NoExpl -> Just $ LeftExpl { orn: findLeftOrn child rightParent, rightParent }
-    LeftExpl { orn } -> Just $ LeftExpl { orn: findLeftOrn child rightParent, rightParent }
+    LeftExpl _ -> Just $ LeftExpl { orn: findLeftOrn child rightParent, rightParent }
     RightExpl { leftParent } ->
       Just
         $ DoubleExpl
@@ -233,12 +233,12 @@ setRightExplParent child rightParentMaybe expl = case rightParentMaybe of
     _ -> Nothing
   Nothing -> case expl of
     RightExpl r -> Just $ RightExpl r
-    DoubleExpl { orn, leftParent } -> Just $ RightExpl { orn: findRightOrn child leftParent, leftParent }
+    DoubleExpl { leftParent } -> Just $ RightExpl { orn: findRightOrn child leftParent, leftParent }
     HoriExpl _ -> Nothing
     _ -> Just NoExpl
 
 setHoriExplParent :: SPitch -> Maybe Note -> NoteExplanation -> Maybe NoteExplanation
-setHoriExplParent child parentMaybe expl = case parentMaybe of
+setHoriExplParent _child parentMaybe expl = case parentMaybe of
   Just parent -> case expl of
     NoExpl -> Just $ HoriExpl parent
     HoriExpl _ -> Just $ HoriExpl parent
@@ -826,7 +826,7 @@ vertAtMid transId model = case doVert model.reduction.start model.reduction.segm
             , nextSliceId = incS nextSId
             }
           }
-    Just dang -> Left "Failed to insert hori!"
+    Just _dangling -> Left "Failed to insert hori!"
   Left err -> Left err
   where
   nextTId = model.reduction.nextTransId
@@ -900,7 +900,7 @@ vertAtMid transId model = case doVert model.reduction.start model.reduction.segm
         -- fix the parent of childl after inserting under childr
         childlFixed <-
           if dist == 0 then case childl.rslice.parents of
-            MergeParents { left } -> Right $ setParents (MergeParents { left: leftSlice, right: topSlice }) $ resetExpls childl
+            MergeParents _ -> Right $ setParents (MergeParents { left: leftSlice, right: topSlice }) $ resetExpls childl
             _ -> Left "invalid derivation structure: non-merge parents on merge slice"
           else
             pure childl
@@ -1042,7 +1042,7 @@ undoVertAtSlice sliceId model = do
       else do
         next <- extractVert (Cons pr rest)
         case next.result of
-          Right res -> pure $ { tail: Cons pl next.tail, result: next.result, surfaceCount: 0 }
+          Right _res -> pure $ { tail: Cons pl next.tail, result: next.result, surfaceCount: 0 }
           Left count -> do
             pl'Maybe <- tryExtract count (detachSegment pl)
             case pl'Maybe of
@@ -1168,8 +1168,6 @@ noteSetExplanation noteId expl model = case traverseTop Nil model.reduction.segm
 
   setNoteExplInSlice :: Slice -> Slice
   setNoteExplInSlice slice = slice { notes = map (\n -> if n.note.id == noteId then n { expl = expl } else n) <$> slice.notes }
-
-  notFound = Left $ "Note " <> noteId <> " not found"
 
   traverseTop :: List Edges -> List Segment -> Either String (List Segment)
   traverseTop upFromLeft = case _ of

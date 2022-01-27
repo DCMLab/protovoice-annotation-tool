@@ -99,7 +99,7 @@ validateNote note = do
 validationAlg :: AgendaAlg Unit Validation
 validationAlg = { init, freezeLeft, freezeOnly, splitLeft, splitOnly, splitRight, hori }
   where
-  init start = pure unit
+  init _start = pure unit
 
   freezeLeft _ { seg } = do
     ST.modify_ $ validateSlice seg.rslice

@@ -137,7 +137,7 @@ handleAction act = do
     NoOp -> log "NoOp"
     Init -> do
       doc <- H.liftEffect $ document =<< window
-      H.subscribe' \sid ->
+      H.subscribe' \_sid ->
         eventListener KET.keyup (toEventTarget doc) (KE.fromEvent >>> map HandleKey)
     SwitchTab t -> H.modify_ \st -> st { tab = t }
     HandleKey ev -> case KE.key ev of

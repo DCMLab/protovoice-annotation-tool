@@ -67,6 +67,7 @@ foldAgenda alg leftSlice (Cons item Nil) = do
     Hori _ -> pure unit -- TODO: fail in this case?
 
 -- two or more transitions left
+-- TODO: check for right hori and allow to fail?
 foldAgenda alg leftSlice (Cons left agenda1@(Cons right agenda2)) = do
   case left.seg.op of
     -- left freeze
@@ -86,11 +87,6 @@ foldAgenda alg leftSlice (Cons left agenda1@(Cons right agenda2)) = do
       _ -> do
         children <- alg.hori leftSlice left right hori
         foldAgenda alg leftSlice $ children <> agenda2
-  -- TODO: check for right hori and allow to fail?
-  where
-  midSlice = left.seg.rslice
-
-  rightSlice = right.seg.rslice
 
 walkGraph ::
   forall a s.
@@ -291,7 +287,7 @@ reductionToLeftmost { reduction, piece } = do
 
     mkFreeze seg time = FreezeOp { ties: A.fromFoldable seg.trans.edges.regular, prevTime: time }
 
-    mkSplit seg childl childr =
+    mkSplit childl childr =
       let
         { t, n, r, l } = partitionElaborations $ A.catMaybes $ map getElaboration $ getInnerNotes childl.rslice
 
@@ -331,7 +327,7 @@ reductionToLeftmost { reduction, piece } = do
         RootExpl -> Just $ ET $ Tuple { left: Start, right: Stop } [ { child: n.note, orn: Left RootNote } ]
         _ -> Nothing
 
-    mkHori seg childl childm childr =
+    mkHori childl childm childr =
       let
         children = A.catMaybes $ map (horiChild LeftChild) (getInnerNotes childl.rslice) <> map (horiChild RightChild) (getInnerNotes childm.rslice)
       in
@@ -348,30 +344,30 @@ reductionToLeftmost { reduction, piece } = do
 
     modifyEither = ST.modify_ <<< bindFlipped
 
-    freezeOnly lSlice { seg } =
+    freezeOnly _lSlice { seg } =
       modifyEither \st -> case st.piece of
         Nil -> Left "Piece and reduction do not fit together: piece is too short!"
         Cons nextSlice piece' -> Right st { lm = Cons (LMFreezeOnly $ mkFreeze seg nextSlice.time) st.lm, piece = piece' }
 
-    freezeLeft lSlice { seg } =
+    freezeLeft _lSlice { seg } =
       modifyEither \st -> case st.piece of
         Nil -> Left "Piece and reduction do not fit together: piece is too short!"
         Cons nextSlice piece' -> Right st { lm = Cons (LMFreezeLeft $ mkFreeze seg nextSlice.time) st.lm, piece = piece' }
 
     splitOnly _ { seg } { childl, childr } = do
-      modifyEither \st -> Right st { lm = Cons (LMSplitOnly $ mkSplit seg childl childr) st.lm }
+      modifyEither \st -> Right st { lm = Cons (LMSplitOnly $ mkSplit childl childr) st.lm }
       pure $ nothingMore <$> childl : attachSegment childr seg.rslice : Nil
 
     splitLeft _ { seg } { childl, childr } = do
-      modifyEither \st -> Right st { lm = Cons (LMSplitLeft $ mkSplit seg childl childr) st.lm }
+      modifyEither \st -> Right st { lm = Cons (LMSplitLeft $ mkSplit childl childr) st.lm }
       pure $ nothingMore <$> childl : attachSegment childr seg.rslice : Nil
 
     splitRight _ _ { seg } { childl, childr } = do
-      modifyEither \st -> Right st { lm = Cons (LMSplitRight $ mkSplit seg childl childr) st.lm }
+      modifyEither \st -> Right st { lm = Cons (LMSplitRight $ mkSplit childl childr) st.lm }
       pure $ nothingMore <$> childl : attachSegment childr seg.rslice : Nil
 
     hori _ _ { seg } { childl, childm, childr } = do
-      modifyEither \st -> Right st { lm = Cons (LMHorizontalize $ mkHori seg childl childm childr) st.lm }
+      modifyEither \st -> Right st { lm = Cons (LMHorizontalize $ mkHori childl childm childr) st.lm }
       pure $ nothingMore <$> childl : childm : attachSegment childr seg.rslice : Nil
 
 -- unfold a leftmost derivation to a reduction

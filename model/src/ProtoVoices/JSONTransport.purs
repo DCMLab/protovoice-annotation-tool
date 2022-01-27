@@ -14,7 +14,7 @@ import Data.Variant (Variant, case_, inj, on)
 import ProtoVoices.Common (parseTime)
 import ProtoVoices.Folding (leftmostToReduction, reductionToLeftmost)
 import ProtoVoices.Leftmost (FreezeOp(..), HoriChildren(..), HoriOp(..), Leftmost(..), RootOrnament(..), SplitOp(..))
-import ProtoVoices.Model (DoubleOrnament(..), Edge, Edges, LeftOrnament(..), Model, Note, Piece, RightOrnament(..), SliceId(..), StartStop, TransId(..), sortNotes)
+import ProtoVoices.Model (DoubleOrnament(..), Edge, Edges, LeftOrnament(..), Model, Note, Piece, RightOrnament(..), SliceId, StartStop, TransId, sortNotes)
 import Simple.JSON as JSON
 import Type.Proxy (Proxy(..))
 
@@ -152,8 +152,6 @@ horiToJSON (HoriOp { midEdges, children, ids, unexplained }) =
   , unexplained
   }
   where
-  { left: TransId left, lslice: SliceId lslice, mid: TransId mid, rslice: SliceId rslice, right: TransId right } = ids
-
   childToJSON (Tuple parent dist) =
     let
       child = case dist of
