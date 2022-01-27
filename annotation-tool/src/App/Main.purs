@@ -167,6 +167,12 @@ handleAction act = do
       case thing of
         ImportPiece piece -> H.modify_ \st -> st { model = Just $ loadPiece piece, name = name }
         ImportModel model -> H.modify_ \st -> st { model = Just model, name = name }
+      -- ImportCurrentSurface ->
+      --   H.modify_ \st ->
+      --     st
+      --       { model = surfaceToModel <$> st.model
+      --       , name = name
+      --       }
       autoSaveModel
       redrawScore
       H.modify_ \st -> st { selected = SelNone, tab = Nothing, undoStack = L.Nil, redoStack = L.Nil }

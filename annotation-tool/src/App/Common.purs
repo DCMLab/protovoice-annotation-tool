@@ -112,6 +112,7 @@ derive instance eqTab :: Eq Tab
 
 data ImportThing
   = ImportPiece Piece
+  -- | ImportCurrentSurface
   | ImportModel Model
 
 type ImportOutput

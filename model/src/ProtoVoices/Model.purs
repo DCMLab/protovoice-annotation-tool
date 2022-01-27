@@ -556,6 +556,20 @@ thawPiece piece =
 loadPiece :: Piece -> Model
 loadPiece piece = { piece, reduction: thawPiece piece }
 
+surfaceToModel :: Model -> Model
+surfaceToModel model = { piece, reduction: model.reduction { segments = segs } }
+  where
+  toSlice seg =
+    { time: Left ""
+    , notes: (\n -> { note: n.note, hold: false }) <$> getInnerNotes seg.rslice
+    }
+
+  convertSegment i seg = seg { op = Freeze, rslice = seg.rslice { x = toNumber i + 1.0 } }
+
+  piece = A.fromFoldable $ toSlice <$> L.dropEnd 1 model.reduction.segments
+
+  segs = L.mapWithIndex convertSegment model.reduction.segments
+
 -- outer structure operations
 -- ==========================
 --

@@ -196,6 +196,7 @@ data ImportAction
   | ImportUploadMusicXML (Maybe File.File)
   | ImportLoadPiece String Piece
   | ImportLoadModel String Model
+  -- | ImportLoadSurface String
   | ImportConvertMusicXML String
   | ImportRestoreAutosave
 
@@ -212,21 +213,38 @@ importComponent = H.mkComponent { initialState, render, eval: H.mkEval H.default
 
   render { modelText, pieceText, name, musicXMLText, musicXMLUnfold } =
     HH.div [ class_ "tab" ]
-      [ HH.button [ class_ "pure-button", HE.onClick $ \_ -> ImportLoadPiece "example" examplePiece ] [ HH.text "Load Example" ]
-      , HH.button [ class_ "pure-button", HE.onClick $ \_ -> ImportLoadPiece "example-long" examplePieceLong ] [ HH.text "Load Example (Long)" ]
-      , HH.button [ class_ "pure-button pure-button-primary", HE.onClick $ \_ -> ImportRestoreAutosave ] [ HH.text "Restore Autosave Data" ]
-      , HH.div_
-          [ HH.p [ class_ "pure-g" ]
-              [ HH.label [ HP.for "piece-name", class_ "pure-u-1-4" ] [ HH.text "Piece Name:" ]
-              , HH.input
-                  [ HP.type_ HP.InputText
-                  , class_ "pure-u-1-2"
-                  , HP.id "piece-name"
-                  , HP.value name
-                  , HE.onValueInput ImportUpdateName
-                  ]
+      [ HH.button
+          [ class_ "pure-button"
+          , HE.onClick $ \_ -> ImportLoadPiece "example" examplePiece
+          ]
+          [ HH.text "Load Example" ]
+      , HH.button
+          [ class_ "pure-button"
+          , HE.onClick $ \_ -> ImportLoadPiece "example-long" examplePieceLong
+          ]
+          [ HH.text "Load Example (Long)" ]
+      , HH.button
+          [ class_ "pure-button pure-button-primary"
+          , HE.onClick $ \_ -> ImportRestoreAutosave
+          ]
+          [ HH.text "Restore Autosave Data" ]
+      , HH.p [ class_ "pure-g" ]
+          [ HH.label [ HP.for "piece-name", class_ "pure-u-1-4" ] [ HH.text "Piece Name:" ]
+          , HH.input
+              [ HP.type_ HP.InputText
+              , class_ "pure-u-1-2"
+              , HP.id "piece-name"
+              , HP.value name
+              , HE.onValueInput ImportUpdateName
               ]
-          , HH.h3_ [ HH.text "Import Piece" ]
+          ]
+      -- , HH.button
+      --     [ class_ "pure-button pure-button-primary"
+      --     , HE.onClick $ \_ -> ImportLoadSurface name
+      --     ]
+      --     [ HH.text "Restart from Current Surface" ]
+      , HH.div_
+          [ HH.h3_ [ HH.text "Import Piece" ]
           , HH.div_
               [ HH.label [ HP.for "upload-piece" ] [ HH.text "Choose a file: " ]
               , HH.input
@@ -339,6 +357,7 @@ importComponent = H.mkComponent { initialState, render, eval: H.mkEval H.default
     ImportUploadMusicXML f -> loadFile f ".musicxml" ImportUpdateMusicXMLInput
     ImportLoadPiece n p -> H.raise $ { name: n, thing: ImportPiece p }
     ImportLoadModel n m -> H.raise $ { name: n, thing: ImportModel m }
+    -- ImportLoadSurface n -> H.raise $ { name: n, thing: ImportCurrentSurface }
     ImportConvertMusicXML xml -> do
       unfold <- H.gets _.musicXMLUnfold
       res <- liftAff $ convertMusicXML unfold xml
