@@ -8346,7 +8346,7 @@ var $6294b4872ddc213a$var$PS = {
         return function(slicel) {
             var v = function(v1) {
                 if (Data_Boolean.otherwise) return edgesl;
-                throw new Error("Failed pattern match at ProtoVoices.Model (line 669, column 1 - line 669, column 41): " + [
+                throw new Error("Failed pattern match at ProtoVoices.Model (line 683, column 1 - line 683, column 41): " + [
                     edgesl.constructor.name,
                     slicel.constructor.name
                 ]);
@@ -8355,7 +8355,7 @@ var $6294b4872ddc213a$var$PS = {
                 var replaceRight = function(v1) {
                     var v2 = function(v3) {
                         if (Data_Boolean.otherwise) return Data_Maybe.Nothing.value;
-                        throw new Error("Failed pattern match at ProtoVoices.Model (line 669, column 1 - line 669, column 41): " + [
+                        throw new Error("Failed pattern match at ProtoVoices.Model (line 683, column 1 - line 683, column 41): " + [
                             v1.constructor.name
                         ]);
                     };
@@ -8432,7 +8432,7 @@ var $6294b4872ddc213a$var$PS = {
         return function(edgesr) {
             var v = function(v1) {
                 if (Data_Boolean.otherwise) return edgesr;
-                throw new Error("Failed pattern match at ProtoVoices.Model (line 690, column 1 - line 690, column 42): " + [
+                throw new Error("Failed pattern match at ProtoVoices.Model (line 704, column 1 - line 704, column 42): " + [
                     slicer.constructor.name,
                     edgesr.constructor.name
                 ]);
@@ -8441,7 +8441,7 @@ var $6294b4872ddc213a$var$PS = {
                 var replaceLeft = function(v1) {
                     var v2 = function(v3) {
                         if (Data_Boolean.otherwise) return Data_Maybe.Nothing.value;
-                        throw new Error("Failed pattern match at ProtoVoices.Model (line 690, column 1 - line 690, column 42): " + [
+                        throw new Error("Failed pattern match at ProtoVoices.Model (line 704, column 1 - line 704, column 42): " + [
                             v1.constructor.name
                         ]);
                     };
@@ -8518,7 +8518,7 @@ var $6294b4872ddc213a$var$PS = {
         return function(slice) {
             var v = function(v1) {
                 if (Data_Boolean.otherwise) return new Data_Either.Left("The current reduction is invalid: Trying to vert a Start or Stop slice.");
-                throw new Error("Failed pattern match at ProtoVoices.Model (line 635, column 1 - line 635, column 55): " + [
+                throw new Error("Failed pattern match at ProtoVoices.Model (line 649, column 1 - line 649, column 55): " + [
                     edges.constructor.name,
                     slice.constructor.name
                 ]);
@@ -8527,7 +8527,7 @@ var $6294b4872ddc213a$var$PS = {
                 var replaceRight = function(v1) {
                     var v2 = function(v3) {
                         if (Data_Boolean.otherwise) return Data_Maybe.Nothing.value;
-                        throw new Error("Failed pattern match at ProtoVoices.Model (line 635, column 1 - line 635, column 55): " + [
+                        throw new Error("Failed pattern match at ProtoVoices.Model (line 649, column 1 - line 649, column 55): " + [
                             v1.constructor.name
                         ]);
                     };
@@ -8606,7 +8606,7 @@ var $6294b4872ddc213a$var$PS = {
         return function(slice) {
             var v = function(v1) {
                 if (Data_Boolean.otherwise) return new Data_Either.Left("The current reduction is invalid: Trying to vert a Start or Stop slice.");
-                throw new Error("Failed pattern match at ProtoVoices.Model (line 652, column 1 - line 652, column 56): " + [
+                throw new Error("Failed pattern match at ProtoVoices.Model (line 666, column 1 - line 666, column 56): " + [
                     edges.constructor.name,
                     slice.constructor.name
                 ]);
@@ -8615,7 +8615,7 @@ var $6294b4872ddc213a$var$PS = {
                 var replaceLeft = function(v1) {
                     var v2 = function(v3) {
                         if (Data_Boolean.otherwise) return Data_Maybe.Nothing.value;
-                        throw new Error("Failed pattern match at ProtoVoices.Model (line 652, column 1 - line 652, column 56): " + [
+                        throw new Error("Failed pattern match at ProtoVoices.Model (line 666, column 1 - line 666, column 56): " + [
                             v1.constructor.name
                         ]);
                     };
@@ -8918,7 +8918,7 @@ var $6294b4872ddc213a$var$PS = {
                                 right: new Inner1(right.note)
                             })(acc);
                             if (v instanceof Data_Maybe.Nothing) return acc;
-                            throw new Error("Failed pattern match at ProtoVoices.Model (line 725, column 30 - line 727, column 27): " + [
+                            throw new Error("Failed pattern match at ProtoVoices.Model (line 739, column 30 - line 741, column 27): " + [
                                 v.constructor.name
                             ]);
                         }
@@ -9666,7 +9666,7 @@ var $6294b4872ddc213a$var$PS = {
                                 });
                                 return Control_Monad_Trans_Class.lift(Control_Monad_State_Trans.monadTransStateT)(Data_Either.monadEither)(new Data_Either.Left("Applying a non-single operation to a single transition!"));
                             }
-                            throw new Error("Failed pattern match at ProtoVoices.Folding (line 424, column 48 - line 462, column 84): " + [
+                            throw new Error("Failed pattern match at ProtoVoices.Folding (line 420, column 48 - line 458, column 84): " + [
                                 v1.value1.constructor.name
                             ]);
                         }
@@ -9721,7 +9721,7 @@ var $6294b4872ddc213a$var$PS = {
                             return foldAgenda(v)(v1)(Data_Semigroup.append(Data_List_Types.semigroupList)(children)(v2.value1.value1));
                         });
                     }
-                    throw new Error("Failed pattern match at ProtoVoices.Folding (line 71, column 3 - line 88, column 55): " + [
+                    throw new Error("Failed pattern match at ProtoVoices.Folding (line 72, column 3 - line 89, column 55): " + [
                         v2.value0.seg.op.constructor.name
                     ]);
                 }
@@ -15280,7 +15280,7 @@ var $6294b4872ddc213a$var$PS = {
             if (v1 instanceof Data_Maybe.Just && v1.value0 === "RightRepeat") return Data_Either.Right.create(new Data_Maybe.Just(ProtoVoices_Model.RightRepeat.value));
             if (v1 instanceof Data_Maybe.Just) return Data_Either.Left.create("Expected right ornament type but got " + v1.value0);
             if (v1 instanceof Data_Maybe.Nothing) return new Data_Either.Right(Data_Maybe.Nothing.value);
-            throw new Error("Failed pattern match at ProtoVoices.JSONTransport (line 247, column 23 - line 251, column 29): " + [
+            throw new Error("Failed pattern match at ProtoVoices.JSONTransport (line 245, column 23 - line 249, column 29): " + [
                 v1.constructor.name
             ]);
         };
@@ -15290,7 +15290,7 @@ var $6294b4872ddc213a$var$PS = {
             if (v1 instanceof Data_Maybe.Just && v1.value0 === "PassingRight") return Data_Either.Right.create(new Data_Maybe.Just(ProtoVoices_Model.PassingRight.value));
             if (v1 instanceof Data_Maybe.Just) return Data_Either.Left.create("Expected passing ornament type but got " + v1.value0);
             if (v1 instanceof Data_Maybe.Nothing) return new Data_Either.Right(Data_Maybe.Nothing.value);
-            throw new Error("Failed pattern match at ProtoVoices.JSONTransport (line 240, column 25 - line 245, column 29): " + [
+            throw new Error("Failed pattern match at ProtoVoices.JSONTransport (line 238, column 25 - line 243, column 29): " + [
                 v1.constructor.name
             ]);
         };
@@ -15299,7 +15299,7 @@ var $6294b4872ddc213a$var$PS = {
             if (v1 instanceof Data_Maybe.Just && v1.value0 === "LeftRepeat") return Data_Either.Right.create(new Data_Maybe.Just(ProtoVoices_Model.LeftRepeat.value));
             if (v1 instanceof Data_Maybe.Just) return Data_Either.Left.create("Expected left ornament type but got " + v1.value0);
             if (v1 instanceof Data_Maybe.Nothing) return new Data_Either.Right(Data_Maybe.Nothing.value);
-            throw new Error("Failed pattern match at ProtoVoices.JSONTransport (line 253, column 22 - line 257, column 29): " + [
+            throw new Error("Failed pattern match at ProtoVoices.JSONTransport (line 251, column 22 - line 255, column 29): " + [
                 v1.constructor.name
             ]);
         };
@@ -15311,7 +15311,7 @@ var $6294b4872ddc213a$var$PS = {
             if (v1 instanceof Data_Maybe.Just && v1.value0 === "RightRepeatOfLeft") return Data_Either.Right.create(Data_Either.Right.create(new Data_Maybe.Just(ProtoVoices_Model.RightRepeatOfLeft.value)));
             if (v1 instanceof Data_Maybe.Just) return Data_Either.Left.create("Expected double ornament type but got " + v1.value0);
             if (v1 instanceof Data_Maybe.Nothing) return Data_Either.Right.create(new Data_Either.Right(Data_Maybe.Nothing.value));
-            throw new Error("Failed pattern match at ProtoVoices.JSONTransport (line 231, column 24 - line 238, column 37): " + [
+            throw new Error("Failed pattern match at ProtoVoices.JSONTransport (line 229, column 24 - line 236, column 37): " + [
                 v1.constructor.name
             ]);
         };
@@ -15474,54 +15474,54 @@ var $6294b4872ddc213a$var$PS = {
             return "hori";
         }
     })(Type_Proxy["Proxy"].value)(function() {
-        var $144 = Data_Functor.map(Data_Either.functorEither)(ProtoVoices_Leftmost.LMHorizontalize.create);
-        return function($145) {
-            return $144(horiFromJSON($145));
+        var $138 = Data_Functor.map(Data_Either.functorEither)(ProtoVoices_Leftmost.LMHorizontalize.create);
+        return function($139) {
+            return $138(horiFromJSON($139));
         };
     }())(Data_Variant.on()({
         reflectSymbol: function() {
             return "splitRight";
         }
     })(Type_Proxy["Proxy"].value)(function() {
-        var $146 = Data_Functor.map(Data_Either.functorEither)(ProtoVoices_Leftmost.LMSplitRight.create);
-        return function($147) {
-            return $146(splitFromJSON($147));
+        var $140 = Data_Functor.map(Data_Either.functorEither)(ProtoVoices_Leftmost.LMSplitRight.create);
+        return function($141) {
+            return $140(splitFromJSON($141));
         };
     }())(Data_Variant.on()({
         reflectSymbol: function() {
             return "splitOnly";
         }
     })(Type_Proxy["Proxy"].value)(function() {
-        var $148 = Data_Functor.map(Data_Either.functorEither)(ProtoVoices_Leftmost.LMSplitOnly.create);
-        return function($149) {
-            return $148(splitFromJSON($149));
+        var $142 = Data_Functor.map(Data_Either.functorEither)(ProtoVoices_Leftmost.LMSplitOnly.create);
+        return function($143) {
+            return $142(splitFromJSON($143));
         };
     }())(Data_Variant.on()({
         reflectSymbol: function() {
             return "splitLeft";
         }
     })(Type_Proxy["Proxy"].value)(function() {
-        var $150 = Data_Functor.map(Data_Either.functorEither)(ProtoVoices_Leftmost.LMSplitLeft.create);
-        return function($151) {
-            return $150(splitFromJSON($151));
+        var $144 = Data_Functor.map(Data_Either.functorEither)(ProtoVoices_Leftmost.LMSplitLeft.create);
+        return function($145) {
+            return $144(splitFromJSON($145));
         };
     }())(Data_Variant.on()({
         reflectSymbol: function() {
             return "freezeOnly";
         }
     })(Type_Proxy["Proxy"].value)(function() {
-        var $152 = Data_Functor.map(Data_Either.functorEither)(ProtoVoices_Leftmost.LMFreezeOnly.create);
-        return function($153) {
-            return $152(freezeFromJSON($153));
+        var $146 = Data_Functor.map(Data_Either.functorEither)(ProtoVoices_Leftmost.LMFreezeOnly.create);
+        return function($147) {
+            return $146(freezeFromJSON($147));
         };
     }())(Data_Variant.on()({
         reflectSymbol: function() {
             return "freezeLeft";
         }
     })(Type_Proxy["Proxy"].value)(function() {
-        var $154 = Data_Functor.map(Data_Either.functorEither)(ProtoVoices_Leftmost.LMFreezeLeft.create);
-        return function($155) {
-            return $154(freezeFromJSON($155));
+        var $148 = Data_Functor.map(Data_Either.functorEither)(ProtoVoices_Leftmost.LMFreezeLeft.create);
+        return function($149) {
+            return $148(freezeFromJSON($149));
         };
     }())(Data_Variant.case_))))));
     var modelFromJSON = function(v) {
