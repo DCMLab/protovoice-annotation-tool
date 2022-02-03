@@ -205,7 +205,7 @@ renderSlice sett selection validation { slice: { id, notes, x, parents }, depth:
                 else
                   NoOp
               else if nselectable then
-                Select if nselected then SelNone else SelNote { note, expl, parents }
+                Select if nselected then SelNone else SelNote { note, expl, parents, slice: id }
               else
                 NoOp
       ]

@@ -16,7 +16,7 @@ data Selection
   = SelNone
   | SelSlice SliceId
   | SelTrans TransId
-  | SelNote { note :: Note, expl :: NoteExplanation, parents :: Parents SliceId }
+  | SelNote { note :: Note, expl :: NoteExplanation, parents :: Parents SliceId, slice :: SliceId }
 
 type AppState
   = { selected :: Selection

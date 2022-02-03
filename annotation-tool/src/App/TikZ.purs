@@ -1,15 +1,17 @@
 module App.TikZ
-  ( tikzReduction
+  ( tikzOpDecor
+  , tikzReduction
   ) where
 
 import Prelude
+import App.Common (Selection(..))
 import Data.Array as A
 import Data.Foldable as F
 import Data.Map as M
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.String as S
 import ProtoVoices.Folding (Graph, GraphTransition, GraphSlice)
-import ProtoVoices.Model (Edge, Note, SliceId, StartStop(..))
+import ProtoVoices.Model (DoubleOrnament(..), Edge, LeftOrnament(..), Note, NoteExplanation(..), RightOrnament(..), SliceId, StartStop(..))
 
 tikzReduction :: Boolean -> Graph -> String
 tikzReduction standalone { slices, transitions, horis } =
@@ -132,3 +134,38 @@ tikzPost =
 
 \end{document}
 """
+
+tikzOpDecor :: Selection -> Maybe String
+tikzOpDecor = case _ of
+  SelNote { expl, slice, note } -> case tikzOpType expl of
+    Just typ ->
+      Just $ "\\opdecor{" <> typ <> "}{"
+        <> idToName note.id
+        <> "}{"
+        <> show slice
+        <> "} % "
+        <> show note.pitch
+    Nothing -> Nothing
+  _ -> Nothing
+
+tikzOpType :: NoteExplanation -> Maybe String
+tikzOpType = case _ of
+  RootExpl -> Just "root note"
+  DoubleExpl { orn } -> case orn of
+    Just FullNeighbor -> Just "full neighbor"
+    Just FullRepeat -> Just "full repeat"
+    Just LeftRepeatOfRight -> Just "left repeat of right"
+    Just RightRepeatOfLeft -> Just "right repeat of left"
+    Just PassingMid -> Just "passing mid"
+    Just PassingLeft -> Just "passing left"
+    Just PassingRight -> Just "passing right"
+    Nothing -> Nothing
+  RightExpl { orn } -> case orn of
+    Just RightRepeat -> Just "right repeat"
+    Just RightNeighbor -> Just "right neighbor"
+    Nothing -> Nothing
+  LeftExpl { orn } -> case orn of
+    Just LeftRepeat -> Just "left repeat"
+    Just LeftNeighbor -> Just "left neighbor"
+    Nothing -> Nothing
+  _ -> Nothing

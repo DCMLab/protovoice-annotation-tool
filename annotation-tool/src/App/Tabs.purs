@@ -1,9 +1,9 @@
 module App.Tabs where
 
 import Prelude
-import App.Common (AppSettings, AppSlots, AppState, GraphAction(..), ImportThing(..), Tab(..), ImportOutput, defaultSettings)
+import App.Common (AppSettings, AppSlots, AppState, GraphAction(..), ImportOutput, ImportThing(..), Selection, Tab(..), defaultSettings)
 import App.Render (class_)
-import App.TikZ (tikzReduction)
+import App.TikZ (tikzOpDecor, tikzReduction)
 import App.Utils (convertMusicXML, copyToClipboard, examplePiece, examplePieceLong, showJSONErrors)
 import DOM.HTML.Indexed.InputAcceptType (InputAcceptTypeAtom(..))
 import Data.Either (Either(..), either)
@@ -65,7 +65,7 @@ renderTabs st =
         Nothing -> HH.text ""
         Just HelpTab -> helpText
         Just ImportTab -> HH.slot (Proxy :: Proxy "importTab") 1 importComponent unit HandleImport
-        Just ExportTab -> HH.slot_ (Proxy :: Proxy "exportTab") 0 exportComponent { model: st.model, name: st.name }
+        Just ExportTab -> HH.slot_ (Proxy :: Proxy "exportTab") 0 exportComponent { model: st.model, name: st.name, selection: st.selected }
         Just SettingsTab -> HH.slot (Proxy :: Proxy "settingsTab") 2 settingsComponent st.settings HandleSettings
         Just DebugTab -> debugComponent st
     ]
@@ -396,7 +396,7 @@ importComponent = H.mkComponent { initialState, render, eval: H.mkEval H.default
 -- export component
 -- ----------------
 type ExportInput
-  = { model :: (Maybe Model), name :: String }
+  = { model :: (Maybe Model), name :: String, selection :: Selection }
 
 data ExportAction
   = CopyToClipboard String
@@ -418,9 +418,9 @@ exportComponent =
             }
     }
   where
-  initialState { model, name } = { model, name, pretty: false, tikzStandalone: false }
+  initialState { model, name, selection } = { model, name, selection, pretty: false, tikzStandalone: false }
 
-  render { model: modelMaybe, pretty, name, tikzStandalone } = case modelMaybe of
+  render { model: modelMaybe, name, selection, pretty, tikzStandalone } = case modelMaybe of
     Nothing -> HH.text ""
     Just model ->
       let
@@ -519,6 +519,18 @@ exportComponent =
                   , HH.pre_ [ HH.text $ tikzStr ]
                   ]
               Left err -> HH.p [ class_ "alert" ] [ HH.text $ "Cannot create TikZ code:" <> err ]
+          , HH.h4_ [ HH.text "Operation Decorator for Current Note" ]
+          , case tikzOpDecor selection of
+              Just str ->
+                HH.div_
+                  [ HH.pre [ class_ "pure-u-4-5" ] [ HH.text str ]
+                  , HH.button
+                      [ class_ "pure-button pure-u-1-5"
+                      , HE.onClick \_ -> CopyToClipboard str
+                      ]
+                      [ HH.text "Copy to Clipboard" ]
+                  ]
+              Nothing -> HH.text ""
           ]
 
   handleExportAction = case _ of
@@ -528,7 +540,13 @@ exportComponent =
       pure unit
     TogglePretty -> H.modify_ \st -> st { pretty = not st.pretty }
     ToggleTikzStandalone -> H.modify_ \st -> st { tikzStandalone = not st.tikzStandalone }
-    Receive { model, name } -> H.modify_ \st -> st { model = model, name = name }
+    Receive { model, name, selection } ->
+      H.modify_ \st ->
+        st
+          { model = model
+          , name = name
+          , selection = selection
+          }
 
 -- debug component
 -- ---------------
