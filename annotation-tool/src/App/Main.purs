@@ -293,13 +293,13 @@ appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultE
                               , HE.onClick $ \_ -> CombineAny
                               , HP.enabled (outerSelected st.selected)
                               ]
-                              [ HH.text "Combine (Enter)" ]
+                              [ HH.text "Reduce (Enter)" ]
                           , HH.button
                               [ class_ "pure-button pure-u-1-4"
                               , HE.onClick $ \_ -> RemoveAny
                               , HP.enabled (outerSelected st.selected)
                               ]
-                              [ HH.text "Remove (Backspace)" ]
+                              [ HH.text "Unreduce (Backspace)" ]
                           ]
                 , HH.div
                     [ class_ "wide"
