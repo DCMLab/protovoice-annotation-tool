@@ -10,6 +10,7 @@ import Data.Generic.Rep (class Generic)
 import Data.Int (toNumber)
 import Data.List (List(..), (:))
 import Data.List as L
+import Data.FunctorWithIndex (mapWithIndex)
 import Data.Map as M
 import Data.Maybe (Maybe(..), maybe)
 import Data.Monoid (power)
@@ -568,7 +569,7 @@ surfaceToModel model = { piece, reduction: model.reduction { segments = segs } }
 
   piece = A.fromFoldable $ toSlice <$> L.dropEnd 1 model.reduction.segments
 
-  segs = L.mapWithIndex convertSegment model.reduction.segments
+  segs = mapWithIndex convertSegment model.reduction.segments
 
 -- outer structure operations
 -- ==========================

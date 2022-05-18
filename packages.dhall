@@ -105,23 +105,76 @@ in  upstream
 -------------------------------
 -}
 let upstream =
-      https://github.com/purescript/package-sets/releases/download/psc-0.14.5-20220110/packages.dhall sha256:8dbf71bfc6c7a11043619eebe90ff85f7d884541048aa8cc48eef1ee781cbc0e
+      https://github.com/purescript/package-sets/releases/download/psc-0.15.0-20220516/packages.dhall
+        sha256:b0bf932de16a10b7d69c6bbbb31ec9ca575237c43a999fa32e59e35eb8c024a1
 
 in  upstream
-  with halogen-svg-elems.version = "v5.0.1"
+  with simple-json =
+    { dependencies =
+      [ "typelevel-prelude"
+      , "record"
+      , "variant"
+      , "nullable"
+      , "foreign-object"
+      , "foreign"
+      , "exceptions"
+      , "arrays"
+      ]
+    , repo = "https://github.com/justinwoo/purescript-simple-json.git"
+    , version ="v9.0.0"
+    }
+    
+  with dom-filereader =
+    { dependencies = ["web-html", "aff", "arraybuffer-types", "web-file"]
+    , repo = "https://github.com/nwolverson/purescript-dom-filereader.git"
+    , version = "v7.0.0"
+    }
+    
+  with halogen-svg-elems =
+    { dependencies =
+      [ "aff"
+      , "arrays"
+      , "effect"
+      , "foldable-traversable"
+      , "halogen"
+      , "halogen-hooks"
+      , "maybe"
+      , "newtype"
+      , "prelude"
+      , "safe-coerce"
+      , "strings"
+      , "tuples"
+      , "typelevel-prelude"
+      , "web-dom"
+      , "web-uievents"
+      ]
+    , repo = "https://github.com/JordanMartinez/purescript-halogen-svg-elems.git"
+    , version = "v5.0.3"
+    }
+    
   with pitches =
     { dependencies =
-      [ "console"
+      [ "aff"
+      , "console"
+      , "control"
       , "effect"
+      , "either"
+      , "foldable-traversable"
+      , "foreign"
       , "group"
+      , "lists"
+      , "maybe"
       , "partial"
+      , "prelude"
       , "quickcheck"
+      , "simple-json"
       , "spec"
       , "spec-quickcheck"
-      , "string-parsers"
+      , "string-parsers" -- ^v9.0.0
       , "strings"
       ]
     , repo = "https://github.com/DCMLab/purescript-pitches.git"
-    , version = "b1dd0528d2838ad9afb9ef8a6c8f9a52c0482c20"
+    , version = "a05168209f1f0fb3b57db91021458a6b525f8510"
     }
+    
   with protovoice-model = ./model/spago.dhall as Location

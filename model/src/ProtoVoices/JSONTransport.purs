@@ -22,19 +22,31 @@ import Type.Proxy (Proxy(..))
 -- JSON --
 ----------
 type PieceJSON n
-  = Array { time :: String, notes :: Array { pitch :: String, hold :: Boolean | n } }
+  = Array
+      { time :: String
+      , notes :: Array { pitch :: String, hold :: Boolean | n }
+      }
 
 type ModelJSON
   = { derivation :: Array LeftmostJSON
     , start :: SliceJSON
-    , topSegments :: Array { trans :: TransitionJSON, rslice :: SliceJSON }
+    , topSegments ::
+        Array
+          { trans :: TransitionJSON
+          , rslice :: SliceJSON
+          }
     }
 
 type TransitionJSON
-  = { id :: TransId, edges :: EdgesJSON, is2nd :: Boolean }
+  = { id :: TransId
+    , edges :: EdgesJSON
+    , is2nd :: Boolean
+    }
 
 type SliceJSON
-  = { id :: SliceId, notes :: StartStop (Array Note) }
+  = { id :: SliceId
+    , notes :: StartStop (Array Note)
+    }
 
 type EdgesJSON
   = { regular :: Array Edge, passing :: Array Edge }
@@ -76,12 +88,21 @@ type HoriJSON
                 ( leftChild :: Note
                 , rightChild :: Note
                 , bothChildren :: { left :: Note, right :: Note }
-                , tooManyChildren :: { left :: Array Note, right :: Array Note }
+                , tooManyChildren ::
+                    { left :: Array Note
+                    , right :: Array Note
+                    }
                 )
           }
     , unexplained :: { left :: Array Note, right :: Array Note }
     , midEdges :: EdgesJSON
-    , ids :: { left :: TransId, lslice :: SliceId, mid :: TransId, rslice :: SliceId, right :: TransId }
+    , ids ::
+        { left :: TransId
+        , lslice :: SliceId
+        , mid :: TransId
+        , rslice :: SliceId
+        , right :: TransId
+        }
     }
 
 -- encoding JSON

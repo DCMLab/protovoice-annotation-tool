@@ -4,7 +4,7 @@ import Prelude
 import App.Common (AppSettings, AppSlots, AppState, GraphAction(..), ImportOutput, ImportThing(..), Selection, Tab(..), defaultSettings)
 import App.Render (class_)
 import App.TikZ (tikzOpDecor, tikzReduction)
-import App.Utils (convertMusicXML, copyToClipboard, examplePiece, examplePieceLong, showJSONErrors)
+import App.Utils (convertMusicXML, copyToClipboard, download, examplePiece, examplePieceLong, showJSONErrors)
 import DOM.HTML.Indexed.InputAcceptType (InputAcceptTypeAtom(..))
 import Data.Either (Either(..), either)
 import Data.List as L
@@ -28,7 +28,6 @@ import ProtoVoices.Validation (validateReduction, validationIsOk)
 import Simple.JSON (readJSON)
 import Simple.JSON as JSON
 import Type.Proxy (Proxy(..))
-import Web.DownloadJs (download)
 import Web.File.File (File, name, toBlob) as File
 import Web.File.FileReader.Aff (readAsText) as File
 import Web.HTML (window)

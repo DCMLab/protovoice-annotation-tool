@@ -1,10 +1,21 @@
 "use strict";
 
-const Vex = require("vexflow");
+import * as Vex from "vexflow";
 const VF = Vex.default.Flow;
 
-exports.copyToClipboard = str => () =>
-    navigator.clipboard.writeText(str);
+export const copyToClipboard = str => () => navigator.clipboard.writeText(str);
+
+export function download_ (data) {
+    return function (fileName) {
+        return function (mimeType) {
+            return function () {
+                // the function returns true on success,
+                // so we explicitly cast null to false, just in case
+                return Boolean(download(data, fileName, mimeType));
+            };
+        };
+    };
+};
 
 function addAcc(i,chord,n) {
     if (n > 0) {
@@ -74,7 +85,7 @@ function drawStaff(width) {
     return div.children[0];
 };
 
-exports.drawScore = slices => totalWidth => scale => {
+export const drawScore = slices => totalWidth => scale => {
     var container = document.createElementNS("http://www.w3.org/2000/svg", "g");
 
     // draw staff
@@ -100,9 +111,9 @@ exports.drawScore = slices => totalWidth => scale => {
     return container;
 };
 
-exports.insertScore = el => (score => (() => el.replaceChildren(score)));
+export const insertScore = el => score => () => el.replaceChildren(score);
 
-exports.examplePieceJSON = [
+export const examplePieceJSON = [
     {time: "0.4.3/4", notes: [{ pitch: "D5", hold: false }]},
     {time: "1.1.0", notes: [
         { pitch: "D5", hold: false },
@@ -114,7 +125,7 @@ exports.examplePieceJSON = [
   ]},
 ];
 
-exports.examplePieceJSONLong = [
+export const examplePieceJSONLong = [
     {time: "0.4.3/4", notes: [{ pitch: "D5", hold: false }]},
     {time: "1.1.0", notes: [
         { pitch: "D5", hold: false },

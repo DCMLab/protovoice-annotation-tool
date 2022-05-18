@@ -17,7 +17,7 @@ import Halogen.HTML.Properties as HP
 import Halogen.Query.Input (Input(..))
 import Halogen.Svg.Attributes as SA
 import Halogen.Svg.Elements as SE
-import Math (exp)
+import Data.Number (exp)
 import ProtoVoices.Common (MBS(..))
 import ProtoVoices.Folding (Graph, GraphSlice, GraphTransition)
 import ProtoVoices.Model (DoubleOrnament(..), Edge, LeftOrnament(..), Note, NoteExplanation(..), Notes, Parents, Piece, RightOrnament(..), SliceId, StartStop(..), explHasParent, getInnerNotes, getParents, setHoriExplParent, setLeftExplParent, setRightExplParent)

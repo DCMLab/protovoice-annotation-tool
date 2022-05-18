@@ -8,9 +8,9 @@ import Data.Maybe (Maybe(..), maybe)
 import Data.Ratio (denominator, numerator)
 import Data.Rational (Rational, (%))
 import Data.String as S
-import Text.Parsing.StringParser (Parser, runParser) as P
-import Text.Parsing.StringParser.CodePoints (anyDigit, char) as P
-import Text.Parsing.StringParser.Combinators (many1, option) as P
+import StringParser (Parser, runParser) as P
+import StringParser.CodePoints (anyDigit, char) as P
+import StringParser.Combinators (many1, option) as P
 
 newtype MBS
   = MBS { m :: Int, b :: Int, s :: Rational }

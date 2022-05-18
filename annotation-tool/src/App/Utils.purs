@@ -1,7 +1,7 @@
 module App.Utils where
 
 import Prelude
-import Affjax (printError, post) as AX
+import Affjax.Web (printError, post) as AX
 import Affjax.RequestBody (string) as Req
 import Affjax.ResponseFormat (string) as Resp
 import Data.Array (sort)
@@ -11,7 +11,7 @@ import Data.Maybe (Maybe(..), fromJust)
 import Data.Pitches (alteration, letter, octaves)
 import Effect (Effect)
 import Effect.Aff (Aff)
-import Foreign (ForeignError, renderForeignError)
+import Foreign (Foreign, ForeignError, renderForeignError, unsafeToForeign)
 import Partial.Unsafe (unsafePartial)
 import ProtoVoices.Common (MBS)
 import ProtoVoices.JSONTransport (PieceJSON, addJSONIds, pieceFromJSON)
@@ -38,6 +38,11 @@ showJSONErrors :: forall a f. Foldable f => Functor f => f ForeignError -> Eithe
 showJSONErrors errs = Left $ "Errors parsing JSON:\n  " <> intercalate "\n  " (renderForeignError <$> errs)
 
 foreign import copyToClipboard :: String -> Effect Unit
+
+foreign import download_ :: Foreign -> String -> String -> Effect Boolean
+
+download :: String -> String -> String -> Effect Boolean
+download str filename mimetype = download_ (unsafeToForeign str) filename mimetype
 
 foreign import data DOMScore :: Type
 
