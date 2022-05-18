@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "downloadjs": "^1.4.7",
+    "esbuild": "^0.14.39",
     "vexflow": "^3.0.9",
     "xhr2": "^0.2.1"
   },

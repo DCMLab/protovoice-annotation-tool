@@ -1,6 +1,6 @@
 "use strict";
 
-const Vex = require("vexflow");
+import * as Vex from "vexflow";
 const VF = Vex.default.Flow;
 
 function addAcc(i,chord,n) {
@@ -71,7 +71,7 @@ function drawStaff(width) {
     return div.children[0];
 };
 
-exports.drawScore = slices => totalWidth => scale => {
+export const drawScore = slices => totalWidth => scale => {
     var container = document.createElementNS("http://www.w3.org/2000/svg", "g");
 
     // draw staff
@@ -97,4 +97,4 @@ exports.drawScore = slices => totalWidth => scale => {
     return container;
 };
 
-exports.insertScore = el => (score => (() => el.replaceChildren(score)));
+export const insertScore = el => (score => (() => el.replaceChildren(score)));

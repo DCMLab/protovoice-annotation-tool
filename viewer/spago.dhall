@@ -23,7 +23,6 @@ to generate this file without the comments in this block.
   , "halogen-svg-elems"
   , "integers"
   , "lists"
-  , "math"
   , "maybe"
   , "numbers"
   , "ordered-collections"

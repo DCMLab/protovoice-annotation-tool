@@ -9,6 +9,7 @@ import Data.Int (toNumber)
 import Data.List as L
 import Data.Map as M
 import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Number (exp)
 import Data.Pitches (diasteps)
 import Data.Rational ((%))
 import Data.Set as S
@@ -21,7 +22,6 @@ import Halogen.HTML.Properties as HP
 import Halogen.Query.Input (Input(..))
 import Halogen.Svg.Attributes as SA
 import Halogen.Svg.Elements as SE
-import Math (exp)
 import ProtoVoices.Common (MBS(..))
 import ProtoVoices.Folding (GraphSlice, GraphTransition, Graph)
 import ProtoVoices.Model (Edge, Note, NoteExplanation(..), Notes, Piece, SliceId, StartStop(..), explHasParent, getInnerNotes)

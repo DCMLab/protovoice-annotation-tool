@@ -13,7 +13,8 @@
         },
         "module": {
             "outputFormat": "esmodule",
-            "source": "prod/module.js"
+            "source": "prod/module.js",
+            "optimize": true
         },
         "css": {
             "source": "prod/css/pv-style.css"
@@ -30,12 +31,13 @@
         "build-prod": "rm -rf dist prod && mkdir -p prod && cp -r dev/pv-viewer.js dev/css/ dev/demo-main.js prod/ && cp dev/demo.html prod/index.html  && spago bundle-module --to prod/module.js && parcel build --no-cache"
     },
     "dependencies": {
+        "esbuild": "^0.14.39",
         "vexflow": "^3.0.9"
     },
     "devDependencies": {
         "express": "^4.17.1",
         "parcel": "^2.0.0",
-        "purescript": "^0.14.4",
-        "spago": "^0.20.3"
+        "purescript": "^0.15.0",
+        "spago": "^0.20.9"
     }
 }
