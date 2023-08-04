@@ -37,7 +37,7 @@
     "devDependencies": {
         "express": "^4.17.1",
         "parcel": "^2.0.0",
-        "purescript": "^0.15.0",
+        "purescript": "^0.15.10",
         "spago": "^0.20.9"
     }
 }
