@@ -105,8 +105,8 @@ in  upstream
 -------------------------------
 -}
 let upstream =
-      https://github.com/purescript/package-sets/releases/download/psc-0.15.0-20220516/packages.dhall
-        sha256:b0bf932de16a10b7d69c6bbbb31ec9ca575237c43a999fa32e59e35eb8c024a1
+      https://github.com/purescript/package-sets/releases/download/psc-0.15.15-20240829/packages.dhall
+        sha256:5bab5469c75bd8c7bac517385e6dd66cca0b2651676b4a99b357753c80bbe673
 
 in  upstream
   with simple-json =
@@ -121,15 +121,13 @@ in  upstream
       , "arrays"
       ]
     , repo = "https://github.com/justinwoo/purescript-simple-json.git"
-    , version ="v9.0.0"
+    , version = "v9.0.0"
     }
-    
   with dom-filereader =
-    { dependencies = ["web-html", "aff", "arraybuffer-types", "web-file"]
+    { dependencies = [ "web-html", "aff", "arraybuffer-types", "web-file" ]
     , repo = "https://github.com/nwolverson/purescript-dom-filereader.git"
     , version = "v7.0.0"
     }
-    
   with halogen-svg-elems =
     { dependencies =
       [ "aff"
@@ -148,10 +146,10 @@ in  upstream
       , "web-dom"
       , "web-uievents"
       ]
-    , repo = "https://github.com/JordanMartinez/purescript-halogen-svg-elems.git"
+    , repo =
+        "https://github.com/JordanMartinez/purescript-halogen-svg-elems.git"
     , version = "v5.0.3"
     }
-    
   with pitches =
     { dependencies =
       [ "aff"
@@ -170,11 +168,10 @@ in  upstream
       , "simple-json"
       , "spec"
       , "spec-quickcheck"
-      , "string-parsers" -- ^v9.0.0
+      , "string-parsers"
       , "strings"
       ]
     , repo = "https://github.com/DCMLab/purescript-pitches.git"
-    , version = "eb84662668102c6b1f84f9a4419d315e4bf25538" -- "a05168209f1f0fb3b57db91021458a6b525f8510"
+    , version = "eb84662668102c6b1f84f9a4419d315e4bf25538"
     }
-    
   with protovoice-model = ./model/spago.dhall as Location

@@ -1,0 +1,55 @@
+name: build
+
+on:
+  push:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+
+#      - uses: purescript-contrib/setup-purescript@main
+
+      # - name: Cache PureScript dependencies
+      #   uses: actions/cache@v4
+      #   with:
+      #     key: ${{ runner.os }}-spago-${{ hashFiles('**/*.dhall') }}
+      #     path: |
+      #       model/.spago
+      #       model/output
+      #       model/node_modules
+      #       annotation-tool/.spago
+      #       annotation-tool/output
+      #       annotation-tool/node_modules
+      #       viewer/.spago
+      #       viewer/output
+      #       viewer/node_modules
+
+      - name: Install build dependencies (annotation tool)
+        run: cd annotation-tool; npm install
+            
+      - name: Build (annotation tool)
+        run: cd annotation-tool; npm run build-prod
+
+      - name: Install build dependencies (viewer)
+        run: cd viewer; npm install
+            
+      - name: Build (viewer)
+        run: cd viewer; npm run build-prod
+
+      # - name: Collect outputs
+      #   run: |
+      #     cp -r annotation-tool/dist/ ./
+      #     cp -r viewer/dist/viewer dist/
+      #     cp -r viewer/dist/global dist/viewer/
+      #     cp -r viewer/dist/module dist/viewer/
+      #     cp -r viewer/dist/css dist/viewer/
+      
+      # - name: Deploy build
+      #   uses: peaceiris/actions-gh-pages@v3
+      #   with:
+      #     github_token: ${{ secrets.GITHUB_TOKEN }}
+      #     publish_dir: ./dist

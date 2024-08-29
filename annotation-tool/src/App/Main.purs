@@ -1,10 +1,10 @@
 module App.Main (main) where
 
 import Prelude
+
 import App.Common (AppSlots, AppState, GraphAction(..), ImportThing(..), Selection(..), Tab(..), defaultSettings, getSelSlice, getSelTrans, outerSelected)
 import App.Render (class_, noteSize, renderNoteExplanation, renderReduction, scalex, scoreScale)
 import App.Tabs (renderTabs)
-import App.Utils (insertScore, renderScore)
 import Data.Array (length)
 import Data.Array as A
 import Data.Either (Either(..))
@@ -26,6 +26,7 @@ import Halogen.VDom.Driver (runUI)
 import ProtoVoices.Folding (evalGraph)
 import ProtoVoices.JSONTransport (modelToJSON)
 import ProtoVoices.Model (Model, getInnerNotes, getParents, loadPiece, mergeAtSlice, noteSetExplanation, undoMergeAtTrans, undoVertAtSlice, vertAtMid)
+import ProtoVoices.RenderSVG (insertScore, renderScore)
 import ProtoVoices.Validation (validateReduction)
 import Simple.JSON as JSON
 import Web.DOM.ParentNode (QuerySelector(..))
@@ -50,14 +51,14 @@ main =
 --------------------
 -- main component --
 --------------------
-tryModelAction ::
-  forall o a m.
-  (MonadEffect m) =>
-  (Selection -> Maybe a) ->
-  (a -> Model -> Either String Model) ->
-  String ->
-  Boolean ->
-  H.HalogenM AppState GraphAction AppSlots o m Unit
+tryModelAction
+  :: forall o a m
+   . (MonadEffect m)
+  => (Selection -> Maybe a)
+  -> (a -> Model -> Either String Model)
+  -> String
+  -> Boolean
+  -> H.HalogenM AppState GraphAction AppSlots o m Unit
 tryModelAction selector action actionName clearSel = do
   st <- H.get
   let
@@ -107,14 +108,15 @@ redrawScore = do
         let
           graph = evalGraph false false model.reduction
 
-          mkSlice { slice } = { x: scalex st.settings slice.x - (noteSize / 2.0), notes: _.note <$> getInnerNotes slice }
+          -- mkSlice { slice } = { x: , notes: _.note <$> getInnerNotes slice }
+          toX x = scalex st.settings x - (noteSize / 2.0)
 
           slices = case st.selected of
             SelNote { note, parents } -> A.filter (\s -> s.slice.id `A.elem` getParents parents || note `A.elem` (_.note <$> getInnerNotes s.slice)) $ A.fromFoldable graph.slices
             _ -> A.filter (\s -> s.depth == 0.0) $ A.fromFoldable graph.slices
 
           totalWidth = (1.0 / scoreScale) * scalex st.settings (toNumber $ length model.piece + 1)
-        pure $ liftEffect $ insertScore scoreElt $ renderScore (mkSlice <$> slices) totalWidth scoreScale
+        pure $ liftEffect $ insertScore scoreElt $ renderScore (_.slice <$> slices) toX totalWidth scoreScale true
     fromMaybe (pure unit) update
 
 autoSaveModel :: forall o m. (MonadEffect m) => H.HalogenM AppState GraphAction AppSlots o m Unit
@@ -259,7 +261,8 @@ appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultE
             in
               HH.div_
                 [ HH.div [ class_ "content pure-g pure-form" ]
-                    $ [ HH.button
+                    $
+                      [ HH.button
                           [ class_ "pure-button pure-u-1-12"
                           , HE.onClick $ \_ -> Undo
                           , HP.disabled $ L.null st.undoStack
@@ -275,32 +278,32 @@ appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultE
                           ]
                           [ HH.text "Redo" ]
                       ]
-                    <> case st.selected of
-                        SelNote { note, expl, parents } ->
-                          [ HH.div [ class_ "pure-u-1-12", HP.style "height:30px;" ] []
-                          , HH.div [ class_ "pure-u-3-4" ]
-                              [ renderNoteExplanation graph note expl parents ]
-                          ]
-                        SelNone ->
-                          [ HH.div [ class_ "pure-u-1-12", HP.style "height:30px;" ] []
-                          , HH.label [ class_ "pure-u-3-4" ] [ HH.text "Nothing selected." ]
-                          ]
-                        _ ->
-                          [ HH.div [ class_ "pure-u-1-12 pure-g", HP.style "height:30px;" ] []
-                          , HH.label [ class_ "pure-u-1-4" ] [ HH.text $ "Slice or transition selected." ]
-                          , HH.button
-                              [ class_ "pure-button pure-u-1-4"
-                              , HE.onClick $ \_ -> CombineAny
-                              , HP.enabled (outerSelected st.selected)
-                              ]
-                              [ HH.text "Reduce (Enter)" ]
-                          , HH.button
-                              [ class_ "pure-button pure-u-1-4"
-                              , HE.onClick $ \_ -> RemoveAny
-                              , HP.enabled (outerSelected st.selected)
-                              ]
-                              [ HH.text "Unreduce (Backspace)" ]
-                          ]
+                        <> case st.selected of
+                          SelNote { note, expl, parents } ->
+                            [ HH.div [ class_ "pure-u-1-12", HP.style "height:30px;" ] []
+                            , HH.div [ class_ "pure-u-3-4" ]
+                                [ renderNoteExplanation graph note expl parents ]
+                            ]
+                          SelNone ->
+                            [ HH.div [ class_ "pure-u-1-12", HP.style "height:30px;" ] []
+                            , HH.label [ class_ "pure-u-3-4" ] [ HH.text "Nothing selected." ]
+                            ]
+                          _ ->
+                            [ HH.div [ class_ "pure-u-1-12 pure-g", HP.style "height:30px;" ] []
+                            , HH.label [ class_ "pure-u-1-4" ] [ HH.text $ "Slice or transition selected." ]
+                            , HH.button
+                                [ class_ "pure-button pure-u-1-4"
+                                , HE.onClick $ \_ -> CombineAny
+                                , HP.enabled (outerSelected st.selected)
+                                ]
+                                [ HH.text "Reduce (Enter)" ]
+                            , HH.button
+                                [ class_ "pure-button pure-u-1-4"
+                                , HE.onClick $ \_ -> RemoveAny
+                                , HP.enabled (outerSelected st.selected)
+                                ]
+                                [ HH.text "Unreduce (Backspace)" ]
+                            ]
                 , HH.div
                     [ class_ "wide"
                     , HE.onWheel HandleScroll

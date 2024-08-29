@@ -1,19 +1,18 @@
 module ProtoVoices.Common where
 
 import Prelude
+
 import Data.Char as C
 import Data.Either (Either(..), hush)
 import Data.Foldable (foldl)
 import Data.Maybe (Maybe(..), maybe)
-import Data.Ratio (denominator, numerator)
-import Data.Rational (Rational, (%))
+import Data.Ratio (Ratio, denominator, numerator, (%))
 import Data.String as S
 import StringParser (Parser, runParser) as P
 import StringParser.CodePoints (anyDigit, char) as P
 import StringParser.Combinators (many1, option) as P
 
-newtype MBS
-  = MBS { m :: Int, b :: Int, s :: Rational }
+newtype MBS = MBS { m :: Int, b :: Int, s :: Ratio Int }
 
 derive newtype instance eqMBS :: Eq MBS
 
@@ -41,7 +40,7 @@ parseInt = do
   dgts <- P.many1 P.anyDigit
   pure $ sign * foldl (\acc d -> 10 * acc + digit d) 0 dgts
 
-parseFrac :: P.Parser Rational
+parseFrac :: P.Parser (Ratio Int)
 parseFrac = do
   num <- parseInt
   denom <-
@@ -54,10 +53,10 @@ parseFrac = do
 parseMBS :: String -> Maybe MBS
 parseMBS str
   | [ ms, bs, ss ] <- S.split (S.Pattern ".") str = do
-    m <- hush $ P.runParser parseInt ms
-    b <- hush $ P.runParser parseInt bs
-    s <- hush $ P.runParser parseFrac ss
-    pure $ MBS { m, b, s }
+      m <- hush $ P.runParser parseInt ms
+      b <- hush $ P.runParser parseInt bs
+      s <- hush $ P.runParser parseFrac ss
+      pure $ MBS { m, b, s }
   | otherwise = Nothing
 
 parseTime :: String -> Either String MBS

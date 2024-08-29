@@ -1,6 +1,7 @@
 module Render where
 
 import Prelude
+
 import Common (AppSettings, Selection, ViewerAction(..), noteIsSelected, showExplanation)
 import Data.Array as A
 import Data.Either (Either(..))
@@ -11,7 +12,7 @@ import Data.Map as M
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Number (exp)
 import Data.Pitches (diasteps)
-import Data.Rational ((%))
+import Data.Ratio ((%))
 import Data.Set as S
 import Data.Tuple (Tuple(..))
 import Halogen as H
@@ -27,8 +28,11 @@ import ProtoVoices.Folding (GraphSlice, GraphTransition, Graph)
 import ProtoVoices.Model (Edge, Note, NoteExplanation(..), Notes, Piece, SliceId, StartStop(..), explHasParent, getInnerNotes)
 import Pruning (Surface)
 
+sliceWidth :: Number
+sliceWidth = 70.0
+
 scalex :: AppSettings -> Number -> Number
-scalex { xscale } x = x * 70.0 * exp xscale
+scalex { xscale } x = x * sliceWidth * exp xscale
 
 scaley :: AppSettings -> Number -> Number
 scaley { yscale } y = y * 100.0 * exp yscale
@@ -42,8 +46,11 @@ noteSize = 29.0
 innerFactor :: Number
 innerFactor = 1.6
 
-scoreHeight :: Number
-scoreHeight = 150.0
+scoreHeightGrand :: Number
+scoreHeightGrand = 150.0
+
+scoreHeightSingle :: Number
+scoreHeightSingle = 80.0
 
 scoreScale :: Number
 scoreScale = 0.9
@@ -123,8 +130,10 @@ renderSlice :: forall p. AppSettings -> Selection -> GraphSlice -> HH.HTML p Vie
 renderSlice sett selection { slice: slice@{ id, notes, x, parents }, depth: d } = case notes of
   Inner inotes ->
     SE.g []
-      $ [ SE.g []
-            $ [ SE.rect
+      $
+        [ SE.g []
+            $
+              [ SE.rect
                   [ SA.x svgx
                   , SA.y $ scaley sett d - (noteSize / 2.0)
                   , SA.width noteSize
@@ -132,7 +141,7 @@ renderSlice sett selection { slice: slice@{ id, notes, x, parents }, depth: d } 
                   , SA.fill white
                   ]
               ]
-            <> A.mapWithIndex mknote inotes
+                <> A.mapWithIndex mknote inotes
         ]
   startstop -> mknode (show startstop) (show startstop) (scalex sett x) (scaley sett d) (if selIsRoot then Related else NotSelected) []
   where
@@ -209,7 +218,8 @@ renderTrans sett selection slices { id, left, right, edges } =
 
           bar =
             [ SE.line
-                $ [ SA.x1 $ scalex sett xl
+                $
+                  [ SA.x1 $ scalex sett xl
                   , SA.y1 $ scaley sett yl
                   , SA.x2 $ scalex sett xr
                   , SA.y2 $ scaley sett yr
@@ -243,13 +253,13 @@ renderTrans sett selection slices { id, left, right, edges } =
           edgeLines = map (mkedge false) (A.fromFoldable edges.regular) <> map (mkedge true) (A.fromFoldable edges.passing)
         pure $ SE.g [] (bar <> edgeLines)
 
-renderHori ::
-  forall p.
-  AppSettings ->
-  Selection ->
-  M.Map SliceId GraphSlice ->
-  { child :: SliceId, parent :: SliceId } ->
-  HH.HTML p ViewerAction
+renderHori
+  :: forall p
+   . AppSettings
+  -> Selection
+  -> M.Map SliceId GraphSlice
+  -> { child :: SliceId, parent :: SliceId }
+  -> HH.HTML p ViewerAction
 renderHori sett selection slices { child, parent } =
   fromMaybe (HH.text "")
     $ do
@@ -258,7 +268,8 @@ renderHori sett selection slices { child, parent } =
         let
           bar =
             [ SE.line
-                $ [ SA.x1 $ scalex sett xp
+                $
+                  [ SA.x1 $ scalex sett xp
                   , SA.y1 $ scaley sett yp
                   , SA.x2 $ scalex sett xc
                   , SA.y2 $ scaley sett yc
@@ -334,7 +345,8 @@ renderInner sett sel { slices, transs } graph = svg
   mkNode { x, y } label title selected selAttr =
     SE.g []
       [ SE.circle
-          $ [ SA.cx x
+          $
+            [ SA.cx x
             , SA.cy y
             , SA.r 15.0
             , SA.stroke black
@@ -344,7 +356,7 @@ renderInner sett sel { slices, transs } graph = svg
                 Related -> selColorInner'
             , cursor "pointer"
             ]
-          <> selAttr
+              <> selAttr
       , SE.element (H.ElemName "text")
           [ SA.x x
           , SA.y y
@@ -370,23 +382,25 @@ renderInner sett sel { slices, transs } graph = svg
 
   mkEdge isRegular { left, right }
     | surfaceNote left && surfaceNote right =
-      SE.line
-        $ [ SA.x1 x1
-          , SA.x2 x2
-          , SA.y1 y1
-          , SA.y2 y2
-          , SA.stroke
-              if edgeSelected then
-                selColorInner
-              else if S.member { left, right } surfaceEdges then black else lightgray
-          ]
-        <> if isRegular then [] else [ HP.attr (HH.AttrName "stroke-dasharray") "6,3" ]
-      where
-      { x: x1, y: y1 } = notePosition left
+        SE.line
+          $
+            [ SA.x1 x1
+            , SA.x2 x2
+            , SA.y1 y1
+            , SA.y2 y2
+            , SA.stroke
+                if edgeSelected then
+                  selColorInner
+                else if S.member { left, right } surfaceEdges then black
+                else lightgray
+            ]
+              <> if isRegular then [] else [ HP.attr (HH.AttrName "stroke-dasharray") "6,3" ]
+        where
+        { x: x1, y: y1 } = notePosition left
 
-      { x: x2, y: y2 } = notePosition right
+        { x: x2, y: y2 } = notePosition right
 
-      edgeSelected = noteIsSelected sel left || noteIsSelected sel right
+        edgeSelected = noteIsSelected sel left || noteIsSelected sel right
     | otherwise = HH.text ""
 
   svgNotes = A.fromFoldable $ mkNote <$> M.values notes
@@ -419,27 +433,39 @@ renderTime sett yoff i { time } =
     Right (MBS { m, b, s }) -> if s == 0 % 1 then show m <> "." <> show b else ""
     Left str -> str
 
-renderScoreSVG :: forall p. AppSettings -> Piece -> Number -> HH.HTML p ViewerAction
-renderScoreSVG sett piece maxx =
+renderScoreSVG
+  :: forall p
+   . AppSettings
+  -> Piece
+  -> Graph
+  -> Boolean
+  -> HH.HTML p ViewerAction
+renderScoreSVG sett piece graph isComplete =
   HH.div_
     [ SE.svg
         [ SA.width width
         , SA.height height
         , SA.viewBox (negate $ scalex sett 1.0) 0.0 width height
+        , HP.style "overflow: visible;"
         ]
-        $ [ SE.element (H.ElemName "svg")
+        $
+          [ SE.element (H.ElemName "svg")
               [ HP.style "overflow: visible;"
               , HP.ref $ H.RefLabel $ "scoreStaff"
               , HP.IProp $ HC.ref $ map (Action <<< RegisterScoreElt)
               ]
               []
           ]
-        <> (A.mapWithIndex (renderTime sett scoreHeight) piece)
+            <> (A.mapWithIndex (renderTime sett ((graph.maxd + 1.0 + extraRows) * systemHeight)) piece)
     ]
   where
-  width = scalex sett (maxx + 2.0)
+  width = scalex sett (graph.maxx) + sliceWidth / 2.0
 
-  height = scoreHeight + axisHeight
+  systemHeight = if sett.grandStaff then scoreHeightGrand else scoreHeightSingle
+
+  extraRows = if isComplete then 0.0 else 1.0
+
+  height = systemHeight * (graph.maxd + 1.0 + extraRows) + axisHeight
 
 renderReduction :: forall p. AppSettings -> Piece -> Graph -> Surface -> Selection -> HH.HTML p ViewerAction
 renderReduction sett piece graph surface selection =
