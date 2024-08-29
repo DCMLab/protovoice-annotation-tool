@@ -9,8 +9,10 @@
   , "foldable-traversable"
   , "foreign"
   , "integers"
+  , "js-maps"
   , "lists"
   , "maybe"
+  , "nullable"
   , "ordered-collections"
   , "pitches"
   , "prelude"
@@ -22,7 +24,8 @@
   , "transformers"
   , "tuples"
   , "variant"
+  , "web-dom"
   ]
 , packages = ../packages.dhall
-, sources = [ "src/**/*.purs", "test/**/*.purs" ]
+, sources = [ "src/**/*.purs" ]
 }

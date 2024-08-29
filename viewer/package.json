@@ -1,20 +1,20 @@
 {
-    "name": "protovoice-viewer",
+    "name": "protovoice-fancy-viz",
     "version": "1.0.0",
     "description": "",
     "directories": {
         "test": "test"
     },
     "targets": {
-        "global": {
-            "context": "browser",
-            "outputFormat": "global",
-            "source": "prod/pv-viewer.js"
-        },
         "module": {
             "outputFormat": "esmodule",
             "source": "prod/module.js",
             "optimize": true
+        },
+        "global": {
+            "context": "browser",
+            "outputFormat": "global",
+            "source": "prod/pv-viewer.js"
         },
         "css": {
             "source": "prod/css/pv-style.css"
@@ -27,17 +27,17 @@
     "scripts": {
         "build": "spago build",
         "test": "spago test",
-        "serve": "parcel dev/index.html dev/demo.html --open",
-        "build-prod": "rm -rf dist prod && mkdir -p prod && cp -r dev/pv-viewer.js dev/css/ dev/demo-main.js prod/ && cp dev/demo.html prod/index.html  && spago bundle-module --to prod/module.js && parcel build --no-cache"
+        "serve": "parcel dev/index.html dev/demo.html --no-cache --open",
+        "build-prod": "rm -rf dist prod && mkdir -p prod && cp -r dev/pv-viewer.js dev/css/ dev/demo-main.js prod/ && cp dev/demo.html prod/index.html  && spago bundle-module --to prod/module.js && parcel build --no-cache --target module && parcel build --no-cache --target global && parcel build --no-cache --target viewer && parcel build --no-cache --target css"
     },
     "dependencies": {
-        "esbuild": "^0.14.39",
-        "vexflow": "^3.0.9"
+        "esbuild": "^0.14.54",
+        "vexflow": "^4.0.0"
     },
     "devDependencies": {
-        "express": "^4.17.1",
-        "parcel": "^2.0.0",
-        "purescript": "^0.15.0",
-        "spago": "^0.20.9"
+        "express": "^4.19.2",
+        "parcel": "^2.12.0",
+        "purescript": "^0.15.15",
+        "spago": "^0.21.0"
     }
 }

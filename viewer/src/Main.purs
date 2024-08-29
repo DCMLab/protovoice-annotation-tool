@@ -1,11 +1,13 @@
 module Main where
 
 import Prelude
-import Common (AppSettings, Selection, ViewerAction(..), ViewerCache, cacheGetGraph, cacheGetPruned, cacheGetSurface, class_, defaultSettings, emptyCache, fillCache, readOptions, showExplanation)
+
+import Common (AppSettings, Selection, ViewerAction(..), ViewerCache, cacheGetGraph, cacheGetPruned, cacheGetSurface, class_, emptyCache, fillCache, readOptions, showExplanation)
 import Data.Array as A
 import Data.Either (hush)
 import Data.Foldable (for_)
 import Data.Int (toNumber)
+import Data.List as L
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Number (fromString)
 import Effect (Effect)
@@ -23,11 +25,11 @@ import Halogen.HTML.Properties as HP
 import Halogen.VDom.Driver (runUI)
 import ProtoVoices.Folding (Graph)
 import ProtoVoices.JSONTransport (ModelJSON, modelFromJSON)
-import ProtoVoices.Model (Model, getInnerNotes)
+import ProtoVoices.Model (Model)
 import Pruning (Surface, countSteps)
-import Render (noteSize, renderInner, renderReduction, renderScoreSVG, scalex, scoreScale)
+import Render (noteSize, renderInner, renderReduction, renderScoreSVG, scalex, scoreScale, sliceWidth)
 import Simple.JSON (readJSON)
-import Utils (insertScore, renderScore)
+import ProtoVoices.RenderSVG (insertScore, renderGraph)
 import Web.DOM.Element (Element)
 import Web.DOM.ParentNode (QuerySelector(..))
 
@@ -45,22 +47,22 @@ createViewer' eltSelector json opts = do
         elt <- HA.selectElement (QuerySelector eltSelector)
         for_ elt (runUI (viewerComponent pfx) { json, settings })
 
-type ViewerModel
-  = { model :: Model
-    , step :: Int
-    , max :: Int
-    , modelPruned :: Model
-    , graph :: Graph
-    , surface :: Surface
-    }
+type ViewerModel =
+  { model :: Model
+  , step :: Int
+  , max :: Int
+  , modelPruned :: Model
+  , graph :: Graph
+  , surface :: Surface
+  }
 
-type ViewerState
-  = { model :: Maybe ViewerModel
-    , cache :: ViewerCache
-    , settings :: AppSettings
-    , selected :: Selection
-    , scoreElt :: Maybe Element
-    }
+type ViewerState =
+  { model :: Maybe ViewerModel
+  , cache :: ViewerCache
+  , settings :: AppSettings
+  , selected :: Selection
+  , scoreElt :: Maybe Element
+  }
 
 updateStepModel :: Int -> Int -> Model -> ViewerCache -> Maybe ViewerModel
 updateStepModel step max model cache = do
@@ -196,6 +198,15 @@ viewerComponent prefix = H.mkComponent { initialState, render, eval: H.mkEval $ 
                   , HH.div [ class_ "pv-control-box" ]
                       [ HH.input
                           [ HP.type_ $ HP.InputCheckbox
+                          , HP.checked st.settings.grandStaff
+                          , HE.onChange \_ -> ToggleGrandStaff
+                          , HP.id $ prefix <> "useGrandStaff"
+                          ]
+                      , HH.label [ HP.for $ prefix <> "useGrandStaff" ] [ HH.text "use grand staff" ]
+                      ]
+                  , HH.div [ class_ "pv-control-box" ]
+                      [ HH.input
+                          [ HP.type_ $ HP.InputCheckbox
                           , HP.checked st.settings.showOuter
                           , HE.onChange \_ -> ToggleOuter
                           , HP.id $ prefix <> "showOuterGraph"
@@ -214,7 +225,7 @@ viewerComponent prefix = H.mkComponent { initialState, render, eval: H.mkEval $ 
                   else
                     HH.text ""
                 , if st.settings.showScore then
-                    renderScoreSVG st.settings modelPruned.piece graph.maxx
+                    renderScoreSVG st.settings modelPruned.piece graph (L.length model.reduction.segments == 1)
                   else
                     HH.text ""
                 , if st.settings.showOuter then
@@ -258,6 +269,9 @@ viewerComponent prefix = H.mkComponent { initialState, render, eval: H.mkEval $ 
     ToggleInner -> H.modify_ \st -> st { settings { showInner = not st.settings.showInner } }
     ToggleOuter -> H.modify_ \st -> st { settings { showOuter = not st.settings.showOuter } }
     ToggleScore -> H.modify_ \st -> st { settings { showScore = not st.settings.showScore } }
+    ToggleGrandStaff -> do
+      H.modify_ \st -> st { settings { grandStaff = not st.settings.grandStaff } }
+      redrawScore
     SetXScale s -> case fromString s of
       Nothing -> pure unit
       Just n -> do
@@ -274,11 +288,11 @@ redrawScore = do
   st <- H.get
   let
     update = do -- Maybe
-      { model, surface: { slices } } <- st.model
+      { model, surface: { slices }, graph } <- st.model
       scoreElt <- st.scoreElt
       let
-        mkSlice slice = { x: scalex st.settings slice.x - (noteSize / 2.0), notes: _.note <$> getInnerNotes slice }
-
-        totalWidth = (1.0 / scoreScale) * scalex st.settings (toNumber $ A.length model.piece + 1)
-      pure $ H.liftEffect $ insertScore scoreElt $ renderScore (mkSlice <$> slices) totalWidth scoreScale
+        totalWidth = (1.0 / scoreScale) * (scalex st.settings (toNumber $ A.length model.piece) + sliceWidth / 2.0)
+        toX x = scalex st.settings x - (noteSize / 2.0)
+      pure $ H.liftEffect $ do
+        insertScore scoreElt $ renderGraph graph slices toX totalWidth scoreScale st.settings.grandStaff
   fromMaybe (pure unit) update
