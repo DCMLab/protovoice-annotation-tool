@@ -17,7 +17,7 @@
             "source": "prod/pv-viewer.js"
         },
         "css": {
-            "source": "prod/css/pv-style.css"
+            "source": ["prod/css/pv-style.css", "prod/css/pure/pure-min.css", "prod/css/pure/grids-responsive-min.css"]
         },
         "viewer": {
             "source": "prod/index.html",
