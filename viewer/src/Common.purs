@@ -11,7 +11,6 @@ import Foreign as F
 import Foreign.Index as FI
 import Halogen.HTML as HH
 import Halogen.HTML.Properties as HP
-import Halogen.Subscription as HS
 import ProtoVoices.Folding (Graph, evalGraph)
 import ProtoVoices.Model (DoubleOrnament(..), LeftOrnament(..), Model, Note, NoteExplanation(..), RightOrnament(..), StartStop(..))
 import Pruning (Surface, findSurface, pruneModel)
@@ -54,8 +53,8 @@ defaultSettings =
   , xscale: 0.0
   , yscale: 0.0
   , showSettings: false
-  , showInner: true
-  , showOuter: true
+  , showInner: false
+  , showOuter: false
   , showScore: true
   , grandStaff: true
   }
