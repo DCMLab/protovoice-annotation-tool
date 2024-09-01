@@ -20,6 +20,7 @@ to generate this file without the comments in this block.
   , "foldable-traversable"
   , "foreign"
   , "halogen"
+  , "halogen-subscriptions"
   , "halogen-svg-elems"
   , "integers"
   , "lists"

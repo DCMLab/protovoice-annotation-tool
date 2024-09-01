@@ -143,7 +143,7 @@ function getNoteBBox(noteid, container) {
   };
 }
 
-function drawEdge(container, edge, passing, looseness = 1) {
+function drawEdge(container, edge, selection, passing, looseness = 1) {
   const bbleft = getNoteBBox(edge.left.id, container);
   const bbright = getNoteBBox(edge.right.id, container);
   var x1 = bbleft.x + bbleft.width + markerWidth + 2;
@@ -165,9 +165,16 @@ function drawEdge(container, edge, passing, looseness = 1) {
   if (passing) {
     line.setAttribute("stroke-dasharray", "6,3");
   }
-  line.setAttribute("stroke", "black");
+  if (
+    selection &&
+    (selection.note.id == edge.left.id || selection.note.id == edge.right.id)
+  ) {
+    line.setAttribute("class", "pv-edge pv-selected");
+  } else {
+    line.setAttribute("class", "pv-edge");
+  }
   line.setAttribute("fill", "transparent");
-  container.appendChild(line);
+  return line;
 }
 
 function drawHori(hori, container) {
@@ -191,7 +198,7 @@ function drawHori(hori, container) {
   line.setAttribute("stroke", "lightgray");
   // line.setAttribute("stroke-dasharray", "10,5");
   line.setAttribute("stroke-width", "5");
-  container.appendChild(line);
+  return line;
 }
 
 function drawMarker(noteid, expl, container) {
@@ -265,6 +272,8 @@ export const drawGraph = (graph) => (totalWidth) => (scale) => (grandStaff) => {
   );
   // add marker defs
   graphContainer.innerHTML = markers;
+  var fg_sep = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  graphContainer.appendChild(fg_sep);
 
   // draw levels with slices
   // if top-level is only ⋊-⋉: start at level 1
@@ -278,6 +287,36 @@ export const drawGraph = (graph) => (totalWidth) => (scale) => (grandStaff) => {
       `translate(0 ${(level - minLevel) * levelOffset})`,
     );
     graphContainer.appendChild(levelG);
+  }
+
+  // mark seleted notes
+  if (graph.selection) {
+    graphContainer
+      .querySelector("#vf-" + CSS.escape(graph.selection.note.id))
+      .setAttribute("class", "pv-note pv-selected");
+    graph.selection.parents.forEach((parent) => {
+      graphContainer
+        .querySelector("#vf-" + CSS.escape(parent.id))
+        .setAttribute("class", "pv-note pv-parent");
+    });
+  }
+
+  // add callbacks
+  if (graph.select) {
+    graph.slices.forEach((slice) => {
+      slice.notes.forEach((note) => {
+        var elt = graphContainer.querySelector("#vf-" + CSS.escape(note.id));
+        elt.setAttribute("class", elt.getAttribute("class") + " pv-selectable");
+        // this note already selected?
+        if (graph.selection && graph.selection.note.id == note.id) {
+          // yes -> deselect
+          elt.addEventListener("click", graph.select(null));
+        } else {
+          // no -> select
+          elt.addEventListener("click", graph.select(note.sel));
+        }
+      });
+    });
   }
 
   // draw score
@@ -297,16 +336,22 @@ export const drawGraph = (graph) => (totalWidth) => (scale) => (grandStaff) => {
 
   // render horis
   graph.horis.forEach((hori) => {
-    drawHori(hori, graphContainer);
+    graphContainer.insertBefore(drawHori(hori, graphContainer), fg_sep);
   });
 
   // render edges
   graph.transitions.forEach((transition) => {
     transition.regular.forEach((edge) => {
-      drawEdge(graphContainer, edge, false);
+      graphContainer.insertBefore(
+        drawEdge(graphContainer, edge, graph.selection, false),
+        fg_sep,
+      );
     });
     transition.passing.forEach((edge) => {
-      drawEdge(graphContainer, edge, true);
+      graphContainer.insertBefore(
+        drawEdge(graphContainer, edge, graph.selection, true),
+        fg_sep,
+      );
     });
   });
 
@@ -350,6 +395,21 @@ const markers = `<defs>
 .pv-op-marker line {
     stroke: black;
     stroke-width: 1.5;
+}
+.pv-edge {
+    stroke: black;
+}
+.pv-edge.pv-selected {
+    stroke: rgb(30, 144, 255);
+}
+.pv-note.pv-selected {
+    fill: rgb(30, 144, 255);
+}
+.pv-note.pv-parent {
+    fill: rgb(135, 206, 250)
+}
+.pv-selectable {
+    cursor: pointer;
 }
 </style>
 <rect width="100%" height="100%" fill="white"/>`;

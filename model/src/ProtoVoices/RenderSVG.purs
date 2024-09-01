@@ -13,12 +13,26 @@ import Effect (Effect)
 import JS.Map.Primitive as JSMap
 import JS.Map.Primitive.ST as STMap
 import ProtoVoices.Folding (Graph)
-import ProtoVoices.Model (Note, NoteExplanation(..), Slice, SliceId, StartStop(..), getInnerNotes)
+import ProtoVoices.Model (Note, NoteExplanation(..), Slice, SliceId, StartStop(..), explParents, getInnerNotes)
 import Web.DOM.Element (Element)
 
 foreign import data DOMScore :: Type
 
-type RenderSlice = (x :: Number, id :: SliceId, notes :: Array { id :: String, name :: String, oct :: Int, accs :: Int, expl :: { typ :: String, parent :: Nullable String } })
+type Selection = { note :: Note, expl :: NoteExplanation }
+
+type RenderSlice =
+  ( x :: Number
+  , id :: SliceId
+  , notes ::
+      Array
+        { id :: String
+        , name :: String
+        , oct :: Int
+        , accs :: Int
+        , sel :: Selection
+        , expl :: { typ :: String, parent :: Nullable String }
+        }
+  )
 
 foreign import drawScore :: Array (Record RenderSlice) -> Number -> Number -> Boolean -> DOMScore
 
@@ -51,20 +65,26 @@ foreign import drawGraph
      , horis :: Array { parent :: SliceId, child :: SliceId }
      , notePositions :: JSMap.Map String Number
      , maxd :: Number
+     , selection :: Nullable { note :: Note, parents :: Array Note }
+     , select :: Nullable Selection -> Effect Unit
      }
   -> Number
   -> Number
   -> Boolean
   -> DOMScore
 
-renderGraph :: Graph -> Array Slice -> (Number -> Number) -> Number -> Number -> Boolean -> DOMScore
-renderGraph graph surface toX = drawGraph
+renderGraph :: Graph -> Array Slice -> Maybe Selection -> (Maybe Selection -> Effect Unit) -> (Number -> Number) -> Number -> Number -> Boolean -> DOMScore
+renderGraph graph surface selection selectCallback toX = drawGraph
   { slices: A.fromFoldable $ mkGraphSlice <$> M.values graph.slices
   , surface: mkRenderSlice toX <$> surface
   , transitions: A.fromFoldable $ mkTrans <$> M.values graph.transitions
   , horis: A.fromFoldable graph.horis
   , notePositions: collectNotes graph.slices
   , maxd: graph.maxd
+  , selection: case selection of
+      Nothing -> N.null
+      Just { note, expl } -> N.notNull { note, parents: explParents expl }
+  , select: selectCallback <<< N.toMaybe
   }
   where
   -- toX x = scalex sett x - (noteSize / 2.0)
@@ -104,6 +124,7 @@ mkRenderSlice toX slice =
     , name: letter n.note.pitch
     , oct: octaves n.note.pitch
     , accs: alteration n.note.pitch
+    , sel: n
     , expl: encodeExplanation n.expl
     }
 

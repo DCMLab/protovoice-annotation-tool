@@ -22,14 +22,15 @@ import Halogen.Aff as HA
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
+import Halogen.Subscription as HS
 import Halogen.VDom.Driver (runUI)
 import ProtoVoices.Folding (Graph)
 import ProtoVoices.JSONTransport (ModelJSON, modelFromJSON)
 import ProtoVoices.Model (Model)
+import ProtoVoices.RenderSVG (insertScore, renderGraph)
 import Pruning (Surface, countSteps)
 import Render (noteSize, renderInner, renderReduction, renderScoreSVG, scalex, scoreScale, sliceWidth)
 import Simple.JSON (readJSON)
-import ProtoVoices.RenderSVG (insertScore, renderGraph)
 import Web.DOM.Element (Element)
 import Web.DOM.ParentNode (QuerySelector(..))
 
@@ -41,11 +42,12 @@ createViewer' eltSelector json opts = do
   pfx <- show <$> random
   let
     settings = readOptions opts
+  subscription <- HS.create
   HA.runHalogenAff
     $ do
         HA.awaitLoad
         elt <- HA.selectElement (QuerySelector eltSelector)
-        for_ elt (runUI (viewerComponent pfx) { json, settings })
+        for_ elt (runUI (viewerComponent pfx subscription) { json, settings })
 
 type ViewerModel =
   { model :: Model
@@ -62,6 +64,7 @@ type ViewerState =
   , settings :: AppSettings
   , selected :: Selection
   , scoreElt :: Maybe Element
+  , eventListener :: HS.Listener ViewerAction
   }
 
 updateStepModel :: Int -> Int -> Model -> ViewerCache -> Maybe ViewerModel
@@ -73,8 +76,19 @@ updateStepModel step max model cache = do
     surface = cacheGetSurface modelPruned step cache
   pure { model, step, max, modelPruned, graph, surface }
 
-viewerComponent :: forall query output m. MonadEffect m => MonadAff m => String -> H.Component query { json :: String, settings :: AppSettings } output m
-viewerComponent prefix = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultEval { handleAction = handleAction, initialize = Just Init } }
+viewerComponent
+  :: forall query output m
+   . MonadEffect m
+  => MonadAff m
+  => String
+  -> HS.SubscribeIO ViewerAction
+  -> H.Component query { json :: String, settings :: AppSettings } output m
+viewerComponent prefix { listener, emitter } =
+  H.mkComponent
+    { initialState
+    , render
+    , eval: H.mkEval $ H.defaultEval { handleAction = handleAction, initialize = Just Init }
+    }
   where
   initialState :: { json :: String, settings :: AppSettings } -> ViewerState
   initialState { json, settings } =
@@ -86,6 +100,7 @@ viewerComponent prefix = H.mkComponent { initialState, render, eval: H.mkEval $ 
     , settings
     , selected: Nothing
     , scoreElt: Nothing
+    , eventListener: listener
     }
     where
     model = do -- Maybe
@@ -246,8 +261,13 @@ viewerComponent prefix = H.mkComponent { initialState, render, eval: H.mkEval $ 
 
   handleAction = case _ of
     NoOp -> pure unit
-    Init -> log "initializing."
-    Select sel -> H.modify_ \st -> st { selected = sel }
+    Init -> do
+      log "initializing."
+      void $ H.subscribe emitter
+    Select sel -> do
+      log $ "selecting " <> show sel
+      H.modify_ \st -> st { selected = sel }
+      redrawScore
     Forward -> do
       H.modify_ $ setStep (_ + 1)
       redrawScore
@@ -292,7 +312,10 @@ redrawScore = do
       scoreElt <- st.scoreElt
       let
         totalWidth = (1.0 / scoreScale) * (scalex st.settings (toNumber $ A.length model.piece) + sliceWidth / 2.0)
+        select sel = do
+          log (show sel)
+          HS.notify st.eventListener $ Select sel
         toX x = scalex st.settings x - (noteSize / 2.0)
       pure $ H.liftEffect $ do
-        insertScore scoreElt $ renderGraph graph slices toX totalWidth scoreScale st.settings.grandStaff
+        insertScore scoreElt $ renderGraph graph slices st.selected select toX totalWidth scoreScale st.settings.grandStaff
   fromMaybe (pure unit) update

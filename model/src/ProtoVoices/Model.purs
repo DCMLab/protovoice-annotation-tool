@@ -30,14 +30,11 @@ import Simple.JSON as JSON
 -- types
 -- -----
 --
-type Time
-  = Either String MBS
+type Time = Either String MBS
 
-type Note
-  = { pitch :: SPitch, id :: String }
+type Note = { pitch :: SPitch, id :: String }
 
-type Piece
-  = Array { time :: Time, notes :: Array { hold :: Boolean, note :: Note } }
+type Piece = Array { time :: Time, notes :: Array { hold :: Boolean, note :: Note } }
 
 data RightOrnament
   = RightRepeat
@@ -182,9 +179,10 @@ findDoubleOrn child { pitch: left } { pitch: right }
   , direction i1 /= compare i2 unison = Just LeftRepeatOfRight
   | degree (pc left) == degree (pc right), isStep (ic (child `pto` left)) = Just FullNeighbor
   | otherwise =
-    if isStep (ic (child `pto` left)) then
-      if isStep (ic (child `pto` right)) then Just PassingMid else Just PassingLeft
-    else if isStep (ic (child `pto` right)) then Just PassingRight else Nothing
+      if isStep (ic (child `pto` left)) then
+        if isStep (ic (child `pto` right)) then Just PassingMid else Just PassingLeft
+      else if isStep (ic (child `pto` right)) then Just PassingRight
+      else Nothing
 
 setLeftExplParent :: SPitch -> Maybe Note -> NoteExplanation -> Maybe NoteExplanation
 setLeftExplParent child leftParentMaybe expl = case leftParentMaybe of
@@ -258,6 +256,15 @@ explHasParent id = case _ of
   LeftExpl { rightParent } -> rightParent.id == id
   DoubleExpl { leftParent, rightParent } -> leftParent.id == id || rightParent.id == id
 
+explParents :: NoteExplanation -> Array Note
+explParents = case _ of
+  NoExpl -> []
+  RootExpl -> []
+  HoriExpl parent -> [ parent ]
+  RightExpl { leftParent } -> [ leftParent ]
+  LeftExpl { rightParent } -> [ rightParent ]
+  DoubleExpl { leftParent, rightParent } -> [ leftParent, rightParent ]
+
 data StartStop a
   = Start
   | Inner a
@@ -296,24 +303,22 @@ instance readForeignStartStop :: (JSON.ReadForeign a) => JSON.ReadForeign (Start
           _ -> F.fail $ F.ForeignError "StartStop is neither Start nor Stop!"
     tryOuter <|> (Inner <$> readImpl frgn)
 
-type Edge
-  = { left :: StartStop Note, right :: StartStop Note }
+type Edge = { left :: StartStop Note, right :: StartStop Note }
 
 isRepeatingEdge :: Edge -> Boolean
 isRepeatingEdge = case _ of
   { left: Inner left, right: Inner right } -> pc left.pitch == pc right.pitch
   _ -> false
 
-type Notes
-  = Array { note :: Note, expl :: NoteExplanation }
+type Notes = Array { note :: Note, expl :: NoteExplanation }
 
 sortNotes :: forall r. Array { note :: Note | r } -> Array { note :: Note | r }
 sortNotes = sortBy (\a b -> invert $ compare a.note.pitch b.note.pitch)
 
-type Edges
-  = { regular :: S.Set Edge
-    , passing :: Array Edge
-    }
+type Edges =
+  { regular :: S.Set Edge
+  , passing :: Array Edge
+  }
 
 emptyEdges :: Edges
 emptyEdges = mempty
@@ -324,8 +329,7 @@ regularEdge edge = emptyEdges { regular = S.singleton edge }
 passingEdge :: Edge -> Edges
 passingEdge edge = emptyEdges { passing = [ edge ] }
 
-newtype SliceId
-  = SliceId Int
+newtype SliceId = SliceId Int
 
 instance showSliceId :: Show SliceId where
   show (SliceId i) = "s" <> show i
@@ -341,8 +345,7 @@ derive newtype instance writeForeignSliceId :: JSON.WriteForeign SliceId
 incS :: SliceId -> SliceId
 incS (SliceId i) = SliceId $ i + 1
 
-newtype TransId
-  = TransId Int
+newtype TransId = TransId Int
 
 instance showTransId :: Show TransId where
   show (TransId i) = "t" <> show i
@@ -376,12 +379,12 @@ getParents = case _ of
   VertParent p -> [ p ]
   MergeParents { left, right } -> [ left, right ]
 
-type Slice
-  = { id :: SliceId
-    , notes :: StartStop Notes
-    , x :: Number
-    , parents :: Parents SliceId
-    }
+type Slice =
+  { id :: SliceId
+  , notes :: StartStop Notes
+  , x :: Number
+  , parents :: Parents SliceId
+  }
 
 getInnerNotes :: Slice -> Notes
 getInnerNotes slice = case slice.notes of
@@ -389,11 +392,11 @@ getInnerNotes slice = case slice.notes of
   Stop -> []
   Inner notes -> notes
 
-type Transition
-  = { id :: TransId
-    , edges :: Edges
-    , is2nd :: Boolean
-    }
+type Transition =
+  { id :: TransId
+  , edges :: Edges
+  , is2nd :: Boolean
+  }
 
 emptyTrans :: TransId -> Boolean -> Transition
 emptyTrans id is2nd = { id, is2nd, edges: emptyEdges }
@@ -413,19 +416,19 @@ derive instance genericOp :: Generic Op _
 instance showOp :: Show Op where
   show x = genericShow x
 
-type Segment
-  = { trans :: Transition
-    , rslice :: Slice
-    , op :: Op
-    }
+type Segment =
+  { trans :: Transition
+  , rslice :: Slice
+  , op :: Op
+  }
 
 resetExpls :: Segment -> Segment
 resetExpls seg = seg { rslice { notes = map (\note -> note { expl = NoExpl }) <$> seg.rslice.notes } }
 
-type EndSegment
-  = { trans :: Transition
-    , op :: Op
-    }
+type EndSegment =
+  { trans :: Transition
+  , op :: Op
+  }
 
 attachSegment :: EndSegment -> Slice -> Segment
 attachSegment { trans, op } rslice = { trans, op, rslice }
@@ -433,17 +436,17 @@ attachSegment { trans, op } rslice = { trans, op, rslice }
 detachSegment :: Segment -> EndSegment
 detachSegment { trans, op } = { trans, op }
 
-type Reduction
-  = { start :: Slice
-    , segments :: List Segment
-    , nextTransId :: TransId
-    , nextSliceId :: SliceId
-    }
+type Reduction =
+  { start :: Slice
+  , segments :: List Segment
+  , nextTransId :: TransId
+  , nextSliceId :: SliceId
+  }
 
-type Model
-  = { piece :: Piece
-    , reduction :: Reduction
-    }
+type Model =
+  { piece :: Piece
+  , reduction :: Reduction
+  }
 
 printSurface :: Model -> Effect Unit
 printSurface model = do
@@ -593,16 +596,16 @@ setParents p seg = case p of
   VertParent slice ->
     seg
       { rslice
-        { parents = VertParent slice.id
-        , notes = map (findUniqueVertExpl slice) <$> seg.rslice.notes
-        }
+          { parents = VertParent slice.id
+          , notes = map (findUniqueVertExpl slice) <$> seg.rslice.notes
+          }
       }
   MergeParents { left, right } ->
     seg
       { rslice
-        { parents = MergeParents { left: left.id, right: right.id }
-        , notes = map (findUniqueMergeExpl left right) <$> seg.rslice.notes
-        }
+          { parents = MergeParents { left: left.id, right: right.id }
+          , notes = map (findUniqueMergeExpl left right) <$> seg.rslice.notes
+          }
       }
   where
   findUniqueVertExpl parentSlice child = case filter (\pnote -> pnote.note.pitch == child.note.pitch) $ getInnerNotes parentSlice of
@@ -615,34 +618,34 @@ setParents p seg = case p of
     , rightSlice.notes == Stop = child { expl = RootExpl }
     | Inner lnotes <- leftSlice.notes
     , Inner rnotes <- rightSlice.notes =
-      let
-        rightExpls =
-          A.catMaybes do
-            { note: ln } <- lnotes
-            pure do
-              orn <- findRightOrn child.note.pitch ln
-              pure $ RightExpl { orn: Just orn, leftParent: ln }
+        let
+          rightExpls =
+            A.catMaybes do
+              { note: ln } <- lnotes
+              pure do
+                orn <- findRightOrn child.note.pitch ln
+                pure $ RightExpl { orn: Just orn, leftParent: ln }
 
-        leftExpls =
-          A.catMaybes do
-            { note: rn } <- rnotes
-            pure do
-              orn <- findLeftOrn child.note.pitch rn
-              pure $ LeftExpl { orn: Just orn, rightParent: rn }
+          leftExpls =
+            A.catMaybes do
+              { note: rn } <- rnotes
+              pure do
+                orn <- findLeftOrn child.note.pitch rn
+                pure $ LeftExpl { orn: Just orn, rightParent: rn }
 
-        doubleExpls =
-          A.catMaybes do
-            { note: ln } <- lnotes
-            { note: rn } <- rnotes
-            pure do
-              orn <- findDoubleOrn child.note.pitch ln rn
-              pure $ DoubleExpl { orn: Just orn, leftParent: ln, rightParent: rn }
-      in
-        case doubleExpls of
-          [ uniqueDoubleExpl ] -> child { expl = uniqueDoubleExpl }
-          _ -> case leftExpls <> rightExpls of
-            [ uniqueSingleExpl ] -> child { expl = uniqueSingleExpl }
-            _ -> child
+          doubleExpls =
+            A.catMaybes do
+              { note: ln } <- lnotes
+              { note: rn } <- rnotes
+              pure do
+                orn <- findDoubleOrn child.note.pitch ln rn
+                pure $ DoubleExpl { orn: Just orn, leftParent: ln, rightParent: rn }
+        in
+          case doubleExpls of
+            [ uniqueDoubleExpl ] -> child { expl = uniqueDoubleExpl }
+            _ -> case leftExpls <> rightExpls of
+              [ uniqueSingleExpl ] -> child { expl = uniqueSingleExpl }
+              _ -> child
     | otherwise = child
 
 -- | Replace the edges in the left child of a hori with the corresponding left parent edges.
@@ -650,16 +653,17 @@ setParents p seg = case p of
 vertEdgesLeft :: Edges -> Slice -> Either String Edges
 vertEdgesLeft edges slice
   | Inner notes <- slice.notes =
-    Right
-      $ { regular: S.catMaybes $ S.map replaceRight edges.regular
-        , passing: A.catMaybes $ map replaceRight edges.passing
-        }
-    where
-    replaceRight { left, right }
-      | Inner rightNote <- right
-      , Just sliceNote <- A.find (\n -> n.note.id == rightNote.id) notes
-      , HoriExpl parent <- sliceNote.expl = Just { left, right: Inner parent }
-      | otherwise = Nothing
+      Right
+        $
+          { regular: S.catMaybes $ S.map replaceRight edges.regular
+          , passing: A.catMaybes $ map replaceRight edges.passing
+          }
+      where
+      replaceRight { left, right }
+        | Inner rightNote <- right
+        , Just sliceNote <- A.find (\n -> n.note.id == rightNote.id) notes
+        , HoriExpl parent <- sliceNote.expl = Just { left, right: Inner parent }
+        | otherwise = Nothing
   | otherwise = Left "The current reduction is invalid: Trying to vert a Start or Stop slice."
 
 -- | Replace the edges in the right child of a hori with the corresponding right parent edges.
@@ -667,16 +671,17 @@ vertEdgesLeft edges slice
 vertEdgesRight :: Edges -> Slice -> Either String Edges
 vertEdgesRight edges slice
   | Inner notes <- slice.notes =
-    Right
-      $ { regular: S.catMaybes $ S.map replaceLeft edges.regular
-        , passing: A.catMaybes $ map replaceLeft edges.passing
-        }
-    where
-    replaceLeft { left, right }
-      | Inner leftNote <- left
-      , Just sliceNote <- A.find (\n -> n.note.id == leftNote.id) notes
-      , HoriExpl parent <- sliceNote.expl = Just { left: Inner parent, right }
-      | otherwise = Nothing
+      Right
+        $
+          { regular: S.catMaybes $ S.map replaceLeft edges.regular
+          , passing: A.catMaybes $ map replaceLeft edges.passing
+          }
+      where
+      replaceLeft { left, right }
+        | Inner leftNote <- left
+        , Just sliceNote <- A.find (\n -> n.note.id == leftNote.id) notes
+        , HoriExpl parent <- sliceNote.expl = Just { left: Inner parent, right }
+        | otherwise = Nothing
   | otherwise = Left "The current reduction is invalid: Trying to vert a Start or Stop slice."
 
 -- | Replace the edges in the left parent of a hori with the corresponding left child edges.
@@ -684,20 +689,20 @@ vertEdgesRight edges slice
 horiEdgesLeft :: Edges -> Slice -> Edges
 horiEdgesLeft edgesl slicel
   | Inner notes <- slicel.notes =
-    { regular: S.catMaybes $ S.map replaceRight edgesl.regular
-    , passing: A.catMaybes $ map replaceRight edgesl.passing
-    }
-    where
-    replaceRight { left, right }
-      | Inner rightNote <- right
-      , Just sliceNote <-
-          A.find
-            ( \n -> case n.expl of
-                HoriExpl parent -> parent.id == rightNote.id
-                _ -> false
-            )
-            notes = Just { left, right: Inner sliceNote.note }
-      | otherwise = Nothing
+      { regular: S.catMaybes $ S.map replaceRight edgesl.regular
+      , passing: A.catMaybes $ map replaceRight edgesl.passing
+      }
+      where
+      replaceRight { left, right }
+        | Inner rightNote <- right
+        , Just sliceNote <-
+            A.find
+              ( \n -> case n.expl of
+                  HoriExpl parent -> parent.id == rightNote.id
+                  _ -> false
+              )
+              notes = Just { left, right: Inner sliceNote.note }
+        | otherwise = Nothing
   | otherwise = edgesl
 
 -- | Replace the edges in the right parent of a hori with the corresponding right child edges.
@@ -705,20 +710,20 @@ horiEdgesLeft edgesl slicel
 horiEdgesRight :: Slice -> Edges -> Edges
 horiEdgesRight slicer edgesr
   | Inner notes <- slicer.notes =
-    { regular: S.catMaybes $ S.map replaceLeft edgesr.regular
-    , passing: A.catMaybes $ map replaceLeft edgesr.passing
-    }
-    where
-    replaceLeft { left, right }
-      | Inner leftNote <- left
-      , Just sliceNote <-
-          A.find
-            ( \n -> case n.expl of
-                HoriExpl parent -> parent.id == leftNote.id
-                _ -> false
-            )
-            notes = Just { left: Inner sliceNote.note, right }
-      | otherwise = Nothing
+      { regular: S.catMaybes $ S.map replaceLeft edgesr.regular
+      , passing: A.catMaybes $ map replaceLeft edgesr.passing
+      }
+      where
+      replaceLeft { left, right }
+        | Inner leftNote <- left
+        , Just sliceNote <-
+            A.find
+              ( \n -> case n.expl of
+                  HoriExpl parent -> parent.id == leftNote.id
+                  _ -> false
+              )
+              notes = Just { left: Inner sliceNote.note, right }
+        | otherwise = Nothing
   | otherwise = edgesr
 
 -- | Add all middle edges at a horizontalization between notes that are distributed to both sides
@@ -780,37 +785,38 @@ mergeAtSlice sliceId model = case doAt matchSlice tryMerge model.reduction of
 mkVert :: TransId -> SliceId -> Segment -> Segment -> Segment -> Either String { mkLeftParent :: EndSegment -> Either String EndSegment, rightParent :: Segment, topSlice :: Slice }
 mkVert tid sid l@{ rslice: { notes: Inner notesl } } m@{ rslice: { notes: Inner notesr } } r
   | not $ all isRepeatingEdge m.trans.edges.regular = Left "Middle transition of a vert must only contain repetition and passing edges!"
-  | otherwise = do
-    rightEdges <- vertEdgesRight r.trans.edges childm.rslice
-    let
-      rightParent = { trans: { id: incT tid, is2nd: true, edges: rightEdges }, rslice: r.rslice, op: Freeze }
-    pure { mkLeftParent, rightParent, topSlice }
-    where
-    countPitches notes = foldl (\counts n -> M.insertWith (+) n.note.pitch 1 counts) M.empty notes
-
-    newNotes counts = A.mapWithIndex mkNote pitches
+  | otherwise =
+      do
+        rightEdges <- vertEdgesRight r.trans.edges childm.rslice
+        let
+          rightParent = { trans: { id: incT tid, is2nd: true, edges: rightEdges }, rslice: r.rslice, op: Freeze }
+        pure { mkLeftParent, rightParent, topSlice }
       where
-      mkNote i p = { note: { pitch: p, id: "note" <> show sid <> "." <> show i }, expl: NoExpl }
+      countPitches notes = foldl (\counts n -> M.insertWith (+) n.note.pitch 1 counts) M.empty notes
 
-      pitches = A.reverse $ A.concatMap (\(Tuple p c) -> A.replicate c p) $ M.toUnfoldable counts
+      newNotes counts = A.mapWithIndex mkNote pitches
+        where
+        mkNote i p = { note: { pitch: p, id: "note" <> show sid <> "." <> show i }, expl: NoExpl }
 
-    topSlice =
-      { notes: Inner $ newNotes $ M.unionWith max (countPitches notesl) (countPitches notesr)
-      , id: sid
-      , x: (l.rslice.x + m.rslice.x) / 2.0
-      , parents: NoParents
-      }
+        pitches = A.reverse $ A.concatMap (\(Tuple p c) -> A.replicate c p) $ M.toUnfoldable counts
 
-    childm = setParents (VertParent topSlice) m
-
-    mkLeftParent lfound = do
-      let
-        childl = setParents (VertParent topSlice) (attachSegment lfound l.rslice)
-      leftEdges <- vertEdgesLeft lfound.trans.edges childl.rslice
-      pure
-        { trans: { id: tid, is2nd: false, edges: leftEdges }
-        , op: Hori { childl, childm, childr: detachSegment r }
+      topSlice =
+        { notes: Inner $ newNotes $ M.unionWith max (countPitches notesl) (countPitches notesr)
+        , id: sid
+        , x: (l.rslice.x + m.rslice.x) / 2.0
+        , parents: NoParents
         }
+
+      childm = setParents (VertParent topSlice) m
+
+      mkLeftParent lfound = do
+        let
+          childl = setParents (VertParent topSlice) (attachSegment lfound l.rslice)
+        leftEdges <- vertEdgesLeft lfound.trans.edges childl.rslice
+        pure
+          { trans: { id: tid, is2nd: false, edges: leftEdges }
+          , op: Hori { childl, childm, childr: detachSegment r }
+          }
 
 mkVert _ _ _ _ _ = Left "Cannot vert an outer slice!"
 
@@ -822,10 +828,10 @@ vertAtMid transId model = case doVert model.reduction.start model.reduction.segm
       Right
         model
           { reduction
-            { segments = Cons seg' tail'
-            , nextTransId = incT $ incT nextTId
-            , nextSliceId = incS nextSId
-            }
+              { segments = Cons seg' tail'
+              , nextTransId = incT $ incT nextTId
+              , nextSliceId = incS nextSId
+              }
           }
     Just _dangling -> Left "Failed to insert hori!"
   Left err -> Left err
@@ -837,33 +843,33 @@ vertAtMid transId model = case doVert model.reduction.start model.reduction.segm
   -- Walk through the top-level segments and try to find the matching ID.
   -- Create the hori and try to insert is,
   -- alternatively passing it to the front if it can't be inserted directly
-  doVert ::
-    Slice ->
-    List Segment ->
-    Either String { seg' :: Segment, tail' :: List Segment, dangling :: Maybe { dist :: Int, mkLeftParent :: EndSegment -> Either String EndSegment, topSlice :: Slice } }
+  doVert
+    :: Slice
+    -> List Segment
+    -> Either String { seg' :: Segment, tail' :: List Segment, dangling :: Maybe { dist :: Int, mkLeftParent :: EndSegment -> Either String EndSegment, topSlice :: Slice } }
   doVert leftSlice (Cons l tail@(Cons m (Cons r rest)))
     | m.trans.id == transId = do
-      { mkLeftParent, rightParent, topSlice } <- mkVert nextTId nextSId l m r
-      tryInsert 0 topSlice mkLeftParent leftSlice (l { rslice = topSlice }) rightParent rest
+        { mkLeftParent, rightParent, topSlice } <- mkVert nextTId nextSId l m r
+        tryInsert 0 topSlice mkLeftParent leftSlice (l { rslice = topSlice }) rightParent rest
     | otherwise = do
-      { seg': m', tail': tailm', dangling } <- doVert l.rslice tail
-      case dangling of
-        Nothing -> Right { seg': l, tail': Cons m' tailm', dangling: Nothing }
-        Just { dist, mkLeftParent, topSlice } -> tryInsert dist topSlice mkLeftParent leftSlice l m' tailm'
+        { seg': m', tail': tailm', dangling } <- doVert l.rslice tail
+        case dangling of
+          Nothing -> Right { seg': l, tail': Cons m' tailm', dangling: Nothing }
+          Just { dist, mkLeftParent, topSlice } -> tryInsert dist topSlice mkLeftParent leftSlice l m' tailm'
 
   doVert _ _ = Left $ "Cannot hori at " <> show transId
 
   -- Try to insert the operation starting from a given top-level segment.
   -- If the insertion is not completed (leftover == Just n), increase distance by n+1.
-  tryInsert ::
-    Int ->
-    Slice ->
-    (EndSegment -> Either String EndSegment) ->
-    Slice ->
-    Segment ->
-    Segment ->
-    List Segment ->
-    Either String { seg' :: Segment, tail' :: List Segment, dangling :: Maybe { dist :: Int, mkLeftParent :: EndSegment -> Either String EndSegment, topSlice :: Slice } }
+  tryInsert
+    :: Int
+    -> Slice
+    -> (EndSegment -> Either String EndSegment)
+    -> Slice
+    -> Segment
+    -> Segment
+    -> List Segment
+    -> Either String { seg' :: Segment, tail' :: List Segment, dangling :: Maybe { dist :: Int, mkLeftParent :: EndSegment -> Either String EndSegment, topSlice :: Slice } }
   tryInsert dist topSlice mkLeftParent leftSlice segl segr tail = do
     { segl', segr', tail', leftover } <-
       insertDangling dist topSlice mkLeftParent leftSlice segl segr tail
@@ -875,114 +881,117 @@ vertAtMid transId model = case doVert model.reduction.start model.reduction.segm
   -- If the place is not found, return the leftovers,
   -- i.e. the number of additional segments that need to be traversed
   -- to reach the point of failure from a previous top-level segment.
-  insertDangling ::
-    Int ->
-    Slice ->
-    (EndSegment -> Either String EndSegment) ->
-    Slice ->
-    Segment ->
-    Segment ->
-    List Segment ->
-    Either String { segl' :: Segment, segr' :: Segment, tail' :: List Segment, leftover :: Maybe Int }
+  insertDangling
+    :: Int
+    -> Slice
+    -> (EndSegment -> Either String EndSegment)
+    -> Slice
+    -> Segment
+    -> Segment
+    -> List Segment
+    -> Either String { segl' :: Segment, segr' :: Segment, tail' :: List Segment, leftover :: Maybe Int }
   insertDangling dist topSlice mkLeftParent leftSlice segl segr tail
     -- can be inserted here: return update segment (no leftovers)
     | dist == 0, not segl.trans.is2nd = do
-      segl' <- mkLeftParent (detachSegment segl)
-      pure { segl': attachSegment segl' segl.rslice, segr': segr, tail': tail, leftover: Nothing }
+        segl' <- mkLeftParent (detachSegment segl)
+        pure { segl': attachSegment segl' segl.rslice, segr': segr, tail': tail, leftover: Nothing }
     -- cannot be inserted here: descend and return updated segment + leftovers
-    | otherwise = case segl.op of
-      -- freeze: cannot descend -> introduce leftovers
-      Freeze -> Right { segl': segl, segr': segr, tail': tail, leftover: Just 0 }
-      -- split: first try to descend on childr, then on childl; pass on remaining leftovers
-      Split { childl, childr } -> do
-        -- try inserting under right child
-        { segl': childr', segr', tail', leftover: lor } <-
-          insertDangling dist topSlice mkLeftParent childl.rslice (attachSegment childr segl.rslice) segr tail
-        -- fix the parent of childl after inserting under childr
-        childlFixed <-
-          if dist == 0 then case childl.rslice.parents of
-            MergeParents _ -> Right $ setParents (MergeParents { left: leftSlice, right: topSlice }) $ resetExpls childl
-            _ -> Left "invalid derivation structure: non-merge parents on merge slice"
-          else
-            pure childl
-        case lor of -- check if inserting under right child was complete
-          Nothing ->  -- yes? return updated segments
-            pure
-              $ { segl':
-                    segl
-                      { op = Split { childl: childlFixed, childr: detachSegment childr' }
-                      , trans { edges = parentEdges childlFixed.rslice }
-                      }
-                , segr'
-                , tail'
-                , leftover: Nothing
-                }
-          Just nlor -> do -- no? try inserting under left child
-            { segl': childl', segr': childr'', tail': ltail, leftover: lol } <-
-              insertDangling (dist + nlor + 1) topSlice mkLeftParent leftSlice childlFixed childr' (Cons segr' tail')
-            case ltail of
-              Cons segr'' tail'' -> do
-                let
-                  segl' =
-                    segl
-                      { op = Split { childl: childl', childr: detachSegment childr'' }
-                      , trans { edges = parentEdges childl'.rslice }
-                      }
-                pure $ { segl', segr': segr'', tail': tail'', leftover: (_ + 1) <$> lol }
-              _ -> Left "Returned tail too short (splitLeft). This is a bug!"
-      -- hori: first try to descend on childr, then childm, then childl; pass on remaining leftovers
-      Hori { childl, childm, childr } -> case segr.op of -- right split before hori?
-        Hori _ -> Left "Not a leftmost derivation (Hori right of Hori)!"
-        -- right split: recur using left child, then update it
-        Split s -> do
-          { segl', segr': splitChildl', tail': remTail, leftover } <-
-            insertDangling dist topSlice mkLeftParent leftSlice segl s.childl (Cons (attachSegment s.childr segr.rslice) tail)
-          case remTail of
-            Cons splitChildr' tail' -> do
-              let
-                splitOp' = Split { childl: splitChildl', childr: detachSegment splitChildr' }
-              pure { segl', segr': segr { op = splitOp', trans { edges = parentEdges splitChildl'.rslice } }, tail', leftover }
-            _ -> Left "Returned tail too short (splitRight). This is a bug!"
-        -- no right split: process hori itself
-        Freeze -> case tail of
-          Nil -> Left "Tail too short (hori). This is a bug!"
-          Cons nextsegr rtail -> do
+    | otherwise =
+        case segl.op of
+          -- freeze: cannot descend -> introduce leftovers
+          Freeze -> Right { segl': segl, segr': segr, tail': tail, leftover: Just 0 }
+          -- split: first try to descend on childr, then on childl; pass on remaining leftovers
+          Split { childl, childr } -> do
             -- try inserting under right child
-            { segl': childr'r, segr': nextsegr', tail': rtail', leftover: lor } <-
-              insertDangling (dist - 1) topSlice mkLeftParent childm.rslice (attachSegment childr segl.rslice) nextsegr rtail
-            let
-              tail'r = Cons nextsegr' rtail'
-            case lor of -- insertion under right child complete?
-              Nothing -> do
+            { segl': childr', segr', tail', leftover: lor } <-
+              insertDangling dist topSlice mkLeftParent childl.rslice (attachSegment childr segl.rslice) segr tail
+            -- fix the parent of childl after inserting under childr
+            childlFixed <-
+              if dist == 0 then case childl.rslice.parents of
+                MergeParents _ -> Right $ setParents (MergeParents { left: leftSlice, right: topSlice }) $ resetExpls childl
+                _ -> Left "invalid derivation structure: non-merge parents on merge slice"
+              else
+                pure childl
+            case lor of -- check if inserting under right child was complete
+              Nothing -> -- yes? return updated segments
+
+                pure
+                  $
+                    { segl':
+                        segl
+                          { op = Split { childl: childlFixed, childr: detachSegment childr' }
+                          , trans { edges = parentEdges childlFixed.rslice }
+                          }
+                    , segr'
+                    , tail'
+                    , leftover: Nothing
+                    }
+              Just nlor -> do -- no? try inserting under left child
+                { segl': childl', segr': childr'', tail': ltail, leftover: lol } <-
+                  insertDangling (dist + nlor + 1) topSlice mkLeftParent leftSlice childlFixed childr' (Cons segr' tail')
+                case ltail of
+                  Cons segr'' tail'' -> do
+                    let
+                      segl' =
+                        segl
+                          { op = Split { childl: childl', childr: detachSegment childr'' }
+                          , trans { edges = parentEdges childl'.rslice }
+                          }
+                    pure $ { segl', segr': segr'', tail': tail'', leftover: (_ + 1) <$> lol }
+                  _ -> Left "Returned tail too short (splitLeft). This is a bug!"
+          -- hori: first try to descend on childr, then childm, then childl; pass on remaining leftovers
+          Hori { childl, childm, childr } -> case segr.op of -- right split before hori?
+            Hori _ -> Left "Not a leftmost derivation (Hori right of Hori)!"
+            -- right split: recur using left child, then update it
+            Split s -> do
+              { segl', segr': splitChildl', tail': remTail, leftover } <-
+                insertDangling dist topSlice mkLeftParent leftSlice segl s.childl (Cons (attachSegment s.childr segr.rslice) tail)
+              case remTail of
+                Cons splitChildr' tail' -> do
+                  let
+                    splitOp' = Split { childl: splitChildl', childr: detachSegment splitChildr' }
+                  pure { segl', segr': segr { op = splitOp', trans { edges = parentEdges splitChildl'.rslice } }, tail', leftover }
+                _ -> Left "Returned tail too short (splitRight). This is a bug!"
+            -- no right split: process hori itself
+            Freeze -> case tail of
+              Nil -> Left "Tail too short (hori). This is a bug!"
+              Cons nextsegr rtail -> do
+                -- try inserting under right child
+                { segl': childr'r, segr': nextsegr', tail': rtail', leftover: lor } <-
+                  insertDangling (dist - 1) topSlice mkLeftParent childm.rslice (attachSegment childr segl.rslice) nextsegr rtail
                 let
-                  op' = Hori { childl, childm, childr: detachSegment childr'r }
-                segr'r <- fixRight childm childr'r
-                pure { segl': segl { op = op' }, segr': segr'r, tail': tail'r, leftover: Nothing }
-              Just nlor -> do
-                -- try inserting under middle child
-                { segl': childm'm, segr': childr'm, tail': tail'm, leftover: lom } <-
-                  insertDangling (dist + nlor) topSlice mkLeftParent childl.rslice childm childr'r tail'r
-                case lom of -- insertion under middle child complete?
+                  tail'r = Cons nextsegr' rtail'
+                case lor of -- insertion under right child complete?
                   Nothing -> do
                     let
-                      op' = Hori { childl, childm: childm'm, childr: detachSegment childr'm }
-                    segr'm <- fixRight childm'm childr'm
-                    pure { segl': segl { op = op' }, segr': segr'm, tail': tail'm, leftover: Nothing }
-                  Just nlom -> do
-                    -- try inserting under left child
-                    { segl': childl'l, segr': childm'l, tail': tailAndChildr'l, leftover: lol } <-
-                      insertDangling (dist + 1 + nlom) topSlice mkLeftParent leftSlice childl childm'm (Cons childr'm tail'm)
-                    case tailAndChildr'l of
-                      Nil -> Left "Returned tail too short (hori). This is a bug!"
-                      Cons childr'l tail'l -> do
+                      op' = Hori { childl, childm, childr: detachSegment childr'r }
+                    segr'r <- fixRight childm childr'r
+                    pure { segl': segl { op = op' }, segr': segr'r, tail': tail'r, leftover: Nothing }
+                  Just nlor -> do
+                    -- try inserting under middle child
+                    { segl': childm'm, segr': childr'm, tail': tail'm, leftover: lom } <-
+                      insertDangling (dist + nlor) topSlice mkLeftParent childl.rslice childm childr'r tail'r
+                    case lom of -- insertion under middle child complete?
+                      Nothing -> do
                         let
-                          op' = Hori { childl: childl'l, childm: childm'l, childr: detachSegment childr'l }
-                        segr'l <- fixRight childm'l childr'l
-                        pure { segl': segl { op = op' }, segr': segr'l, tail': tail'l, leftover: (_ + 2) <$> lol }
-      where
-      fixRight childm childr = do
-        edges' <- vertEdgesRight childr.trans.edges childm.rslice
-        pure segr { trans { edges = edges' } }
+                          op' = Hori { childl, childm: childm'm, childr: detachSegment childr'm }
+                        segr'm <- fixRight childm'm childr'm
+                        pure { segl': segl { op = op' }, segr': segr'm, tail': tail'm, leftover: Nothing }
+                      Just nlom -> do
+                        -- try inserting under left child
+                        { segl': childl'l, segr': childm'l, tail': tailAndChildr'l, leftover: lol } <-
+                          insertDangling (dist + 1 + nlom) topSlice mkLeftParent leftSlice childl childm'm (Cons childr'm tail'm)
+                        case tailAndChildr'l of
+                          Nil -> Left "Returned tail too short (hori). This is a bug!"
+                          Cons childr'l tail'l -> do
+                            let
+                              op' = Hori { childl: childl'l, childm: childm'l, childr: detachSegment childr'l }
+                            segr'l <- fixRight childm'l childr'l
+                            pure { segl': segl { op = op' }, segr': segr'l, tail': tail'l, leftover: (_ + 2) <$> lol }
+        where
+        fixRight childm childr = do
+          edges' <- vertEdgesRight childr.trans.edges childm.rslice
+          pure segr { trans { edges = edges' } }
 
 -- | Undoes a merge at transition 'transId', if it exists, restoring its children.
 undoMergeAtTrans :: TransId -> Model -> Either String Model
@@ -998,8 +1007,8 @@ undoMergeAtTrans transId model = case doAt matchTrans tryUnmerge model.reduction
     Split { childl, childr } ->
       Right
         $ resetExpls (setParents NoParents childl)
-        : attachSegment childr seg.rslice
-        : Nil
+            : attachSegment childr seg.rslice
+            : Nil
     _ -> Left "Operation is not a split!"
 
 -- | Undoes a verticalization at slice 'sliceId', if it exists, restoring its children.
@@ -1052,101 +1061,102 @@ undoVertAtSlice sliceId model = do
                 fixedTail <- fixPl next.surfaceCount result.pl' $ attachSegment seg' pl.rslice : next.tail
                 pure { tail: fixedTail, result: Right result, surfaceCount: 0 }
 
-  tryExtract ::
-    Int ->
-    EndSegment ->
-    Either String (Either Int { seg' :: EndSegment, result :: { slicel :: Slice, childm :: Segment, childr :: EndSegment, pl' :: Edges } })
+  tryExtract
+    :: Int
+    -> EndSegment
+    -> Either String (Either Int { seg' :: EndSegment, result :: { slicel :: Slice, childm :: Segment, childr :: EndSegment, pl' :: Edges } })
   tryExtract count seg
     | count <= 0 = case seg.op of
-      Hori { childl, childm, childr } ->
-        pure $ Right
-          $ { seg': detachSegment childl
-            , result: { slicel: childl.rslice, childm, childr, pl': childl.trans.edges }
-            }
-      Freeze -> pure $ Left count
-      _ -> Left "Could not find left parent edge. This is a bug!"
+        Hori { childl, childm, childr } ->
+          pure $ Right
+            $
+              { seg': detachSegment childl
+              , result: { slicel: childl.rslice, childm, childr, pl': childl.trans.edges }
+              }
+        Freeze -> pure $ Left count
+        _ -> Left "Could not find left parent edge. This is a bug!"
     | otherwise = case seg.op of
-      Freeze -> pure $ Left count
-      Split { childl, childr } -> do
-        -- check right child
-        resR <- tryExtract count childr
-        case resR of
-          Right { seg', result } -> pure $ Right { seg': seg { op = Split { childl, childr: seg' } }, result }
-          Left countR -> do
-            -- check left child
-            resL <- tryExtract (countR + 1) $ detachSegment childl
-            case resL of
-              Right { seg', result } -> pure $ Right { seg': seg { op = Split { childl: attachSegment seg' childl.rslice, childr } }, result }
-              Left countL -> pure $ Left countL
-      Hori { childl, childm, childr } -> do
-        -- check right child
-        resR <- tryExtract (count - 1) childr
-        case resR of
-          -- TODO: fix changed segments, if necessary!
-          Right { seg', result } -> do
-            pure $ Right { seg': seg { op = Hori { childl, childm, childr: seg' } }, result }
-          Left countR -> do
-            resM <- tryExtract (countR + 1) $ detachSegment childm
-            case resM of
-              Right { seg', result } -> pure $ Right { seg': seg { op = Hori { childl, childm: attachSegment seg' childm.rslice, childr } }, result }
-              Left countM -> do
-                resL <- tryExtract (countM + 1) $ detachSegment childl
-                case resL of
-                  Right { seg', result } -> pure $ Right { seg': seg { op = Hori { childl: attachSegment seg' childl.rslice, childm, childr } }, result }
-                  Left countL -> pure $ Left countL
+        Freeze -> pure $ Left count
+        Split { childl, childr } -> do
+          -- check right child
+          resR <- tryExtract count childr
+          case resR of
+            Right { seg', result } -> pure $ Right { seg': seg { op = Split { childl, childr: seg' } }, result }
+            Left countR -> do
+              -- check left child
+              resL <- tryExtract (countR + 1) $ detachSegment childl
+              case resL of
+                Right { seg', result } -> pure $ Right { seg': seg { op = Split { childl: attachSegment seg' childl.rslice, childr } }, result }
+                Left countL -> pure $ Left countL
+        Hori { childl, childm, childr } -> do
+          -- check right child
+          resR <- tryExtract (count - 1) childr
+          case resR of
+            -- TODO: fix changed segments, if necessary!
+            Right { seg', result } -> do
+              pure $ Right { seg': seg { op = Hori { childl, childm, childr: seg' } }, result }
+            Left countR -> do
+              resM <- tryExtract (countR + 1) $ detachSegment childm
+              case resM of
+                Right { seg', result } -> pure $ Right { seg': seg { op = Hori { childl, childm: attachSegment seg' childm.rslice, childr } }, result }
+                Left countM -> do
+                  resL <- tryExtract (countM + 1) $ detachSegment childl
+                  case resL of
+                    Right { seg', result } -> pure $ Right { seg': seg { op = Hori { childl: attachSegment seg' childl.rslice, childm, childr } }, result }
+                    Left countL -> pure $ Left countL
 
   fixPl :: Int -> Edges -> List Segment -> Either String (List Segment)
   fixPl count pl
     | count >= 0 = case _ of
-      Nil -> pure Nil
-      Cons seg tail -> do
-        { seg', pl' } <- insertPl count pl $ detachSegment seg
-        tail' <- fixPl (count - 1) pl' tail
-        pure $ attachSegment seg' seg.rslice : tail'
+        Nil -> pure Nil
+        Cons seg tail -> do
+          { seg', pl' } <- insertPl count pl $ detachSegment seg
+          tail' <- fixPl (count - 1) pl' tail
+          pure $ attachSegment seg' seg.rslice : tail'
     | otherwise = pure
 
   insertPl :: Int -> Edges -> EndSegment -> Either String { seg' :: EndSegment, pl' :: Edges }
   insertPl count pl seg
     | count <= 0 = case seg.op of
-      Freeze -> Right { seg': seg { trans { edges = pl } }, pl': pl }
-      _ -> Left "Invalid structure. This is a bug!"
+        Freeze -> Right { seg': seg { trans { edges = pl } }, pl': pl }
+        _ -> Left "Invalid structure. This is a bug!"
     | otherwise = case seg.op of
-      Freeze -> Right { seg': seg, pl': pl }
-      Split { childl, childr } -> do
-        resL <- insertPl (count + 1) pl $ detachSegment childl
-        resR <- insertPl count resL.pl' childr
-        pure { seg': seg { op = Split { childl: attachSegment resL.seg' childl.rslice, childr: resR.seg' } }, pl': resR.pl' }
-      Hori { childl, childm, childr } -> do
-        resL <- insertPl (count + 1) pl $ detachSegment childl
-        resM <- insertPl count resL.pl' $ detachSegment childm
-        if count == 1 then do
-          pl' <- vertEdgesRight resM.pl' childm.rslice
-          Right
-            { seg':
-                seg
-                  { op =
-                    Hori
-                      { childl: attachSegment resL.seg' childl.rslice
-                      , childm: attachSegment resM.seg' childm.rslice
-                      , childr: childr { trans { edges = resM.pl' } }
-                      }
-                  }
-            , pl'
-            }
-        else do
-          resR <- insertPl (count - 1) resM.pl' childr
-          Right
-            { seg':
-                seg
-                  { op =
-                    Hori
-                      { childl: attachSegment resL.seg' childl.rslice
-                      , childm: attachSegment resM.seg' childm.rslice
-                      , childr: resR.seg'
-                      }
-                  }
-            , pl': resR.pl'
-            }
+        Freeze -> Right { seg': seg, pl': pl }
+        Split { childl, childr } -> do
+          resL <- insertPl (count + 1) pl $ detachSegment childl
+          resR <- insertPl count resL.pl' childr
+          pure { seg': seg { op = Split { childl: attachSegment resL.seg' childl.rslice, childr: resR.seg' } }, pl': resR.pl' }
+        Hori { childl, childm, childr } -> do
+          resL <- insertPl (count + 1) pl $ detachSegment childl
+          resM <- insertPl count resL.pl' $ detachSegment childm
+          if count == 1 then do
+            pl' <- vertEdgesRight resM.pl' childm.rslice
+            Right
+              { seg':
+                  seg
+                    { op =
+                        Hori
+                          { childl: attachSegment resL.seg' childl.rslice
+                          , childm: attachSegment resM.seg' childm.rslice
+                          , childr: childr { trans { edges = resM.pl' } }
+                          }
+                    }
+              , pl'
+              }
+          else do
+            resR <- insertPl (count - 1) resM.pl' childr
+            Right
+              { seg':
+                  seg
+                    { op =
+                        Hori
+                          { childl: attachSegment resL.seg' childl.rslice
+                          , childm: attachSegment resM.seg' childm.rslice
+                          , childr: resR.seg'
+                          }
+                    }
+              , pl': resR.pl'
+              }
 
   matchSlice = case _ of
     Cons pl (Cons pr rest) -> if pl.rslice.id == sliceId then Just (Tuple { pl, pr } rest) else Nothing
@@ -1155,9 +1165,9 @@ undoVertAtSlice sliceId model = do
   tryReInsert { slicel, childm, childr } _ { pl, pr } =
     Right
       $ resetExpls (setParents NoParents $ pl { rslice = slicel })
-      : resetExpls (setParents NoParents childm)
-      : attachSegment childr pr.rslice
-      : Nil
+          : resetExpls (setParents NoParents childm)
+          : attachSegment childr pr.rslice
+          : Nil
 
 noteSetExplanation :: String -> NoteExplanation -> Model -> Either String Model
 noteSetExplanation noteId expl model = case traverseTop Nil model.reduction.segments of
@@ -1211,15 +1221,16 @@ noteSetExplanation noteId expl model = case traverseTop Nil model.reduction.segm
       if (noteInSlice childl.rslice || noteInSlice childm.rslice) && not (explIsHori expl) then
         Left
           $ "Cannot explain a hori note with a split. noteId = "
-          <> show noteId
-          <> ", childl.rslice = "
-          <> show childl.rslice
-          <> ", childm.rslice = "
-          <> show childm.rslice
+              <> show noteId
+              <> ", childl.rslice = "
+              <> show childl.rslice
+              <> ", childm.rslice = "
+              <> show childm.rslice
       else
         pure unit
       pure
-        $ { seg':
+        $
+          { seg':
               seg
                 { op = Hori { childl: childl', childm: childm', childr: childr' }
                 , trans { edges = leftParentEdges }
