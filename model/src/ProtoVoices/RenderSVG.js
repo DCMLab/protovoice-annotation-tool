@@ -18,7 +18,7 @@ function noteToVex(n) {
 }
 
 function drawSlice(slice, grand, useIDs) {
-  let div = document.createElement("div");
+  let div = document.createElementNS("http://www.w3.org/2000/svg", "g");
   let renderer = new VF.Renderer(div, VF.Renderer.Backends.SVG);
   //renderer.resize(500, 500);
   let ctx = renderer.getContext();
@@ -73,9 +73,10 @@ function drawSlice(slice, grand, useIDs) {
     voices.forEach((voice) => voice.v.draw(ctx, staff));
   }
 
-  let elt = div.children[0];
-  elt.setAttribute("transform", `translate(${-width / 2} 0)`);
-  return elt;
+  // let elt = div.children[0];
+  div.setAttribute("transform", `translate(${(-width / 2).toFixed(3)} 0)`);
+  div.setAttribute("id", "slice-" + slice.id);
+  return div;
 }
 
 function drawStaff(width, grand) {
@@ -111,7 +112,7 @@ function drawSystem(slices, totalWidth, scale, grandStaff, useIDs = true) {
   // draw staff
   let staff = document.createElementNS("http://www.w3.org/2000/svg", "g");
   staff.setAttribute("transform", "scale(" + scale + " " + scale + ")");
-  staff.appendChild(drawStaff(totalWidth, grandStaff));
+  staff.appendChild(drawStaff(totalWidth / scale, grandStaff));
   // container.appendChild(staffG);
 
   // draw slices
@@ -179,7 +180,7 @@ function drawEdge(container, edge, selection, passing, looseness = 1) {
   } else {
     line.setAttribute("class", "pv-edge");
   }
-  line.setAttribute("fill", "transparent");
+  line.setAttribute("fill", "none");
   return line;
 }
 
@@ -449,7 +450,7 @@ const markers = `<defs>
     fill: rgb(30, 144, 255);
 }
 .vf-notehead.pv-parent {
-    fill: rgb(135, 206, 250)
+    fill: rgb(135, 206, 250);
 }
 .pv-selectable {
     cursor: pointer;
