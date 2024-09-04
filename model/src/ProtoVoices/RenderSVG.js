@@ -18,24 +18,24 @@ function noteToVex(n) {
 }
 
 function drawSlice(slice, grand, useIDs) {
-  var div = document.createElement("div");
-  var renderer = new VF.Renderer(div, VF.Renderer.Backends.SVG);
+  let div = document.createElement("div");
+  let renderer = new VF.Renderer(div, VF.Renderer.Backends.SVG);
   //renderer.resize(500, 500);
-  var ctx = renderer.getContext();
+  let ctx = renderer.getContext();
 
-  var voices = [];
-  var formatter = new VF.Formatter();
+  let voices = [];
+  let formatter = new VF.Formatter();
 
   function renderNotes(notes, clef) {
-    var voice = new VF.Voice({ num_beats: 1, beat_value: 4 });
+    let voice = new VF.Voice({ num_beats: 1, beat_value: 4 });
     if (notes.length > 0) {
-      var chord = new VF.StaveNote({
+      let chord = new VF.StaveNote({
         clef: clef,
         keys: notes.map(noteToVex),
         duration: "q",
       });
       if (useIDs) {
-        for (var i = 0; i < notes.length; i++) {
+        for (let i = 0; i < notes.length; i++) {
           chord._noteHeads[i].attrs.id = notes[i].id;
         }
         chord.attrs.id = `slice${slice.id}-${clef}`;
@@ -50,10 +50,10 @@ function drawSlice(slice, grand, useIDs) {
   }
 
   if (grand) {
-    var notesT = slice.notes.filter((n) => n.oct >= 4);
+    let notesT = slice.notes.filter((n) => n.oct >= 4);
     renderNotes(notesT, "treble");
 
-    var notesB = slice.notes.filter((n) => n.oct < 4);
+    let notesB = slice.notes.filter((n) => n.oct < 4);
     renderNotes(notesB, "bass");
   } else {
     renderNotes(slice.notes, "treble");
@@ -61,37 +61,37 @@ function drawSlice(slice, grand, useIDs) {
 
   formatter.format(voices.map((v) => v.v));
 
-  var width = formatter.getMinTotalWidth();
+  let width = formatter.getMinTotalWidth();
   if (grand) {
-    var staveT = new VF.Stave(0, 0, width);
-    var staveB = new VF.Stave(0, 70, width);
+    let staveT = new VF.Stave(0, 0, width);
+    let staveB = new VF.Stave(0, 70, width);
     voices.forEach((voice) =>
       voice.v.draw(ctx, voice.c == "treble" ? staveT : staveB),
     );
   } else {
-    var staff = new VF.Stave(0, 0, width);
+    let staff = new VF.Stave(0, 0, width);
     voices.forEach((voice) => voice.v.draw(ctx, staff));
   }
 
-  var elt = div.children[0];
+  let elt = div.children[0];
   elt.setAttribute("transform", `translate(${-width / 2} 0)`);
   return elt;
 }
 
 function drawStaff(width, grand) {
-  var div = document.createElement("div");
-  var renderer = new VF.Renderer(div, VF.Renderer.Backends.SVG);
-  var ctx = renderer.getContext();
+  let div = document.createElement("div");
+  let renderer = new VF.Renderer(div, VF.Renderer.Backends.SVG);
+  let ctx = renderer.getContext();
 
-  var staveT = new VF.Stave(0, 0, width).addClef("treble");
+  let staveT = new VF.Stave(0, 0, width).addClef("treble");
   staveT.setContext(ctx).draw();
 
   if (grand) {
-    var staveB = new VF.Stave(0, 70, width).addClef("bass");
+    let staveB = new VF.Stave(0, 70, width).addClef("bass");
     staveB.setContext(ctx).draw();
   }
 
-  var elt = div.children[0];
+  let elt = div.children[0];
   elt.setAttribute("style", "overflow: visible;");
   return elt;
 }
@@ -138,9 +138,9 @@ const markerWidth = 5;
 
 // gets the bounding box of a note relative to container
 function getNoteBBox(noteid, container) {
-  var note = container.querySelector("#vf-" + CSS.escape(noteid));
-  var notebb = getBBox(note.children[0], false, container);
-  var slicebb = getBBox(note.parentElement, false, container);
+  let note = container.querySelector("#vf-" + CSS.escape(noteid));
+  let notebb = getBBox(note.children[0], false, container);
+  let slicebb = getBBox(note.parentElement, false, container);
   return {
     x: slicebb.x,
     y: notebb.y,
@@ -152,18 +152,18 @@ function getNoteBBox(noteid, container) {
 function drawEdge(container, edge, selection, passing, looseness = 1) {
   const bbleft = getNoteBBox(edge.left.id, container);
   const bbright = getNoteBBox(edge.right.id, container);
-  var x1 = bbleft.x + bbleft.width + markerWidth + 2;
-  var y1 = bbleft.y + bbleft.height / 2;
-  var x2 = bbright.x - markerWidth - 2;
-  var y2 = bbright.y + bbright.height / 2;
-  var dist = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
-  var d = dist * looseness * 0.3915; // from TikZ source
-  // var line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+  let x1 = bbleft.x + bbleft.width + markerWidth + 2;
+  let y1 = bbleft.y + bbleft.height / 2;
+  let x2 = bbright.x - markerWidth - 2;
+  let y2 = bbright.y + bbright.height / 2;
+  let dist = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+  let d = dist * looseness * 0.3915; // from TikZ source
+  // let line = document.createElementNS("http://www.w3.org/2000/svg", "line");
   // line.setAttribute("x1", x1);
   // line.setAttribute("y1", y1);
   // line.setAttribute("x2", x2);
   // line.setAttribute("y2", y2);
-  var line = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  let line = document.createElementNS("http://www.w3.org/2000/svg", "path");
   line.setAttribute(
     "d",
     `M ${x1} ${y1} C ${x1 + d} ${y1}, ${x2 - d} ${y2}, ${x2} ${y2}`,
@@ -184,19 +184,19 @@ function drawEdge(container, edge, selection, passing, looseness = 1) {
 }
 
 function drawHori(hori, container) {
-  var bbparent = getBBox(
+  let bbparent = getBBox(
     container.querySelector("#vf-slice" + hori.parent + "-bass") ||
       container.querySelector("#vf-slice" + hori.parent + "-treble"),
     false,
     container,
   );
-  var bbchild = getBBox(
+  let bbchild = getBBox(
     container.querySelector("#vf-slice" + hori.child + "-treble") ||
       container.querySelector("#vf-slice" + hori.child + "-bass"),
     false,
     container,
   );
-  var line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+  let line = document.createElementNS("http://www.w3.org/2000/svg", "line");
   line.setAttribute("x1", bbparent.x + bbparent.width / 2);
   line.setAttribute("y1", bbparent.y + bbparent.height + 5);
   line.setAttribute("x2", bbchild.x + bbparent.width / 2);
@@ -210,14 +210,14 @@ function drawHori(hori, container) {
 function drawMarker(noteid, expl, container, notemap) {
   const bbox = getNoteBBox(noteid, container);
   const y = bbox.y + bbox.height / 2;
-  var marker = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  let marker = document.createElementNS("http://www.w3.org/2000/svg", "g");
   marker.setAttribute("id", "marker-" + noteid);
   marker.setAttribute("class", "pv-op-marker");
   container.appendChild(marker);
 
   // select markers based on ornament type (TODO)
-  var left = "none";
-  var right = "none";
+  let left = "none";
+  let right = "none";
   switch (expl.typ) {
     case "Root":
       left = "root-left";
@@ -225,7 +225,6 @@ function drawMarker(noteid, expl, container, notemap) {
       break;
     case "Hori":
       if (expl.parent) {
-        console.log(expl.parent, notemap[noteid]);
         if (notemap[expl.parent] > notemap[noteid]) {
           right = "spread-right";
         } else {
@@ -281,20 +280,20 @@ function drawMarker(noteid, expl, container, notemap) {
 
 export const drawGraph = (graph) => (totalWidth) => (scale) => (grandStaff) => {
   // initialize container
-  var graphContainer = document.createElementNS(
+  let graphContainer = document.createElementNS(
     "http://www.w3.org/2000/svg",
     "g",
   );
   // add marker defs
   graphContainer.innerHTML = markers;
-  var fg_sep = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  let fg_sep = document.createElementNS("http://www.w3.org/2000/svg", "g");
   graphContainer.appendChild(fg_sep);
 
   // draw levels with slices
   // if top-level is only ⋊-⋉: start at level 1
   let minLevel = graph.slices.filter((s) => s.depth == 0).length == 2 ? 1 : 0;
   let levelOffset = grandStaff ? 150 : 80;
-  for (var level = minLevel; level <= graph.maxd; level++) {
+  for (let level = minLevel; level <= graph.maxd; level++) {
     let levelSlices = graph.slices.filter((s) => s.depth == level);
     let levelG = drawSystem(levelSlices, totalWidth, scale, grandStaff);
     let transform = `translate(0 ${(level - minLevel) * levelOffset})`;
@@ -311,7 +310,7 @@ export const drawGraph = (graph) => (totalWidth) => (scale) => (grandStaff) => {
   if (graph.select) {
     graph.slices.forEach((slice) => {
       slice.notes.forEach((note) => {
-        var elt = graphContainer.querySelector("#vf-" + CSS.escape(note.id));
+        let elt = graphContainer.querySelector("#vf-" + CSS.escape(note.id));
         elt.setAttribute("class", elt.getAttribute("class") + " pv-selectable");
         // this note already selected?
         if (graph.selection && graph.selection.note.id == note.id) {
@@ -336,7 +335,7 @@ export const drawGraph = (graph) => (totalWidth) => (scale) => (grandStaff) => {
   // draw connections
 
   // make sure that the container is attached to the DOM (required for computing bboxes)
-  var fakesvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  let fakesvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   fakesvg.appendChild(graphContainer);
   document.body.appendChild(fakesvg);
 
@@ -378,16 +377,21 @@ export const drawGraph = (graph) => (totalWidth) => (scale) => (grandStaff) => {
 
   // mark seleted notes
   if (graph.selection) {
-    graphContainer
-      .querySelector("#vf-" + CSS.escape(graph.selection.note.id))
-      .setAttribute("class", "pv-note pv-selected");
+    let note = graphContainer.querySelector(
+      "#vf-" + CSS.escape(graph.selection.note.id),
+    );
+    note.setAttribute("class", note.getAttribute("class") + " pv-selected");
     graphContainer
       .querySelector("#marker-" + CSS.escape(graph.selection.note.id))
       .setAttribute("class", "pv-op-marker pv-selected");
     graph.selection.parents.forEach((parent) => {
-      graphContainer
-        .querySelector("#vf-" + CSS.escape(parent.id))
-        .setAttribute("class", "pv-note pv-parent");
+      let parentNode = graphContainer.querySelector(
+        "#vf-" + CSS.escape(parent.id),
+      );
+      parentNode.setAttribute(
+        "class",
+        parentNode.getAttribute("class") + " pv-parent",
+      );
     });
   }
 
@@ -441,10 +445,10 @@ const markers = `<defs>
 .pv-edge.pv-selected, .pv-op-marker.pv-selected {
     stroke: rgb(30, 144, 255);
 }
-.pv-note.pv-selected {
+.vf-notehead.pv-selected {
     fill: rgb(30, 144, 255);
 }
-.pv-note.pv-parent {
+.vf-notehead.pv-parent {
     fill: rgb(135, 206, 250)
 }
 .pv-selectable {
@@ -462,13 +466,13 @@ const markers = `<defs>
  * @returns {SVGRect} Coordinates and dimensions of the real bounding box
  */
 function getBBox(element, withoutTransforms, toElement) {
-  var svg = element.ownerSVGElement;
+  let svg = element.ownerSVGElement;
 
   if (!svg) {
     return { x: 0, y: 0, cx: 0, cy: 0, width: 0, height: 0 };
   }
 
-  var r = element.getBBox();
+  let r = element.getBBox();
 
   if (withoutTransforms) {
     return {
@@ -481,36 +485,36 @@ function getBBox(element, withoutTransforms, toElement) {
     };
   }
 
-  var p = svg.createSVGPoint();
+  let p = svg.createSVGPoint();
 
-  var matrix = (toElement || svg)
+  let matrix = (toElement || svg)
     .getScreenCTM()
     .inverse()
     .multiply(element.getScreenCTM());
 
   p.x = r.x;
   p.y = r.y;
-  var a = p.matrixTransform(matrix);
+  let a = p.matrixTransform(matrix);
 
   p.x = r.x + r.width;
   p.y = r.y;
-  var b = p.matrixTransform(matrix);
+  let b = p.matrixTransform(matrix);
 
   p.x = r.x + r.width;
   p.y = r.y + r.height;
-  var c = p.matrixTransform(matrix);
+  let c = p.matrixTransform(matrix);
 
   p.x = r.x;
   p.y = r.y + r.height;
-  var d = p.matrixTransform(matrix);
+  let d = p.matrixTransform(matrix);
 
-  var minX = Math.min(a.x, b.x, c.x, d.x);
-  var maxX = Math.max(a.x, b.x, c.x, d.x);
-  var minY = Math.min(a.y, b.y, c.y, d.y);
-  var maxY = Math.max(a.y, b.y, c.y, d.y);
+  let minX = Math.min(a.x, b.x, c.x, d.x);
+  let maxX = Math.max(a.x, b.x, c.x, d.x);
+  let minY = Math.min(a.y, b.y, c.y, d.y);
+  let maxY = Math.max(a.y, b.y, c.y, d.y);
 
-  var width = maxX - minX;
-  var height = maxY - minY;
+  let width = maxX - minX;
+  let height = maxY - minY;
 
   return {
     x: minX,
