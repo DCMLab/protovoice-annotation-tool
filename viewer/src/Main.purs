@@ -265,7 +265,6 @@ viewerComponent prefix { listener, emitter } =
       log "initializing."
       void $ H.subscribe emitter
     Select sel -> do
-      log $ "selecting " <> show sel
       H.modify_ \st -> st { selected = sel }
       redrawScore
     Forward -> do
@@ -313,7 +312,6 @@ redrawScore = do
       let
         totalWidth = (1.0 / scoreScale) * (scalex st.settings (toNumber $ A.length model.piece) + sliceWidth / 2.0)
         select sel = do
-          log (show sel)
           HS.notify st.eventListener $ Select sel
         toX x = scalex st.settings x - (noteSize / 2.0)
       pure $ H.liftEffect $ do
