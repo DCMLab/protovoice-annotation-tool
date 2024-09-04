@@ -96,24 +96,30 @@ function drawStaff(width, grand) {
   return elt;
 }
 
-export const drawScore = (slices) => (totalWidth) => (scale) => (grandStaff) =>
-  drawSystem(slices, totalWidth, scale, grandStaff);
+export const drawScore =
+  (slices) => (totalWidth) => (scale) => (grandStaff) => {
+    let system = drawSystem(slices, totalWidth, scale, grandStaff, false);
+    let container = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    container.appendChild(system.staff);
+    container.appendChild(system.notes);
+    return container;
+  };
 
 function drawSystem(slices, totalWidth, scale, grandStaff, useIDs = true) {
-  var container = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  let container = document.createElementNS("http://www.w3.org/2000/svg", "g");
 
   // draw staff
-  var staffG = document.createElementNS("http://www.w3.org/2000/svg", "g");
-  staffG.setAttribute("transform", "scale(" + scale + " " + scale + ")");
-  staffG.appendChild(drawStaff(totalWidth, grandStaff));
-  container.appendChild(staffG);
+  let staff = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  staff.setAttribute("transform", "scale(" + scale + " " + scale + ")");
+  staff.appendChild(drawStaff(totalWidth, grandStaff));
+  // container.appendChild(staffG);
 
   // draw slices
   slices.forEach((slice) => {
     if (slice.notes.length === 0) {
       return;
     }
-    var sliceG = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    let sliceG = document.createElementNS("http://www.w3.org/2000/svg", "g");
     sliceG.setAttribute(
       "transform",
       "translate(" + slice.x + " 0) scale(" + scale + " " + scale + ")",
@@ -121,7 +127,7 @@ function drawSystem(slices, totalWidth, scale, grandStaff, useIDs = true) {
     sliceG.appendChild(drawSlice(slice, grandStaff, useIDs));
     container.appendChild(sliceG);
   });
-  return container;
+  return { notes: container, staff };
 }
 
 export const insertScore = (el) => (score) => () => el.replaceChildren(score);
@@ -201,10 +207,12 @@ function drawHori(hori, container) {
   return line;
 }
 
-function drawMarker(noteid, expl, container) {
+function drawMarker(noteid, expl, container, notemap) {
   const bbox = getNoteBBox(noteid, container);
   const y = bbox.y + bbox.height / 2;
   var marker = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  marker.setAttribute("id", "marker-" + noteid);
+  marker.setAttribute("class", "pv-op-marker");
   container.appendChild(marker);
 
   // select markers based on ornament type (TODO)
@@ -212,11 +220,18 @@ function drawMarker(noteid, expl, container) {
   var right = "none";
   switch (expl.typ) {
     case "Root":
-      left = "root";
-      right = "root";
+      left = "root-left";
+      right = "root-right";
       break;
     case "Hori":
-      // TODO
+      if (expl.parent) {
+        console.log(expl.parent, notemap[noteid]);
+        if (notemap[expl.parent] > notemap[noteid]) {
+          right = "spread-right";
+        } else {
+          left = "spread-left";
+        }
+      }
       break;
     case "RightRepeat":
       left = "repeat";
@@ -277,28 +292,19 @@ export const drawGraph = (graph) => (totalWidth) => (scale) => (grandStaff) => {
 
   // draw levels with slices
   // if top-level is only ⋊-⋉: start at level 1
-  var minLevel = graph.slices.filter((s) => s.depth == 0).length == 2 ? 1 : 0;
-  var levelOffset = grandStaff ? 150 : 80;
+  let minLevel = graph.slices.filter((s) => s.depth == 0).length == 2 ? 1 : 0;
+  let levelOffset = grandStaff ? 150 : 80;
   for (var level = minLevel; level <= graph.maxd; level++) {
-    var levelSlices = graph.slices.filter((s) => s.depth == level);
-    var levelG = drawSystem(levelSlices, totalWidth, scale, grandStaff);
-    levelG.setAttribute(
+    let levelSlices = graph.slices.filter((s) => s.depth == level);
+    let levelG = drawSystem(levelSlices, totalWidth, scale, grandStaff);
+    let transform = `translate(0 ${(level - minLevel) * levelOffset})`;
+    levelG.notes.setAttribute("transform", transform);
+    levelG.staff.setAttribute(
       "transform",
-      `translate(0 ${(level - minLevel) * levelOffset})`,
+      transform + " " + levelG.staff.getAttribute("transform"),
     );
-    graphContainer.appendChild(levelG);
-  }
-
-  // mark seleted notes
-  if (graph.selection) {
-    graphContainer
-      .querySelector("#vf-" + CSS.escape(graph.selection.note.id))
-      .setAttribute("class", "pv-note pv-selected");
-    graph.selection.parents.forEach((parent) => {
-      graphContainer
-        .querySelector("#vf-" + CSS.escape(parent.id))
-        .setAttribute("class", "pv-note pv-parent");
-    });
+    graphContainer.appendChild(levelG.notes);
+    graphContainer.insertBefore(levelG.staff, fg_sep);
   }
 
   // add callbacks
@@ -320,7 +326,7 @@ export const drawGraph = (graph) => (totalWidth) => (scale) => (grandStaff) => {
   }
 
   // draw score
-  var score = drawSystem(graph.surface, totalWidth, scale, grandStaff, false);
+  let score = drawScore(graph.surface)(totalWidth)(scale)(grandStaff);
   score.setAttribute(
     "transform",
     `translate(0 ${(graph.maxd - minLevel + 1) * levelOffset})`,
@@ -355,15 +361,35 @@ export const drawGraph = (graph) => (totalWidth) => (scale) => (grandStaff) => {
     });
   });
 
+  // collect all notes (needed for markers)
+  let notemap = {};
+  graph.slices.forEach((slice) => {
+    slice.notes.forEach((note) => {
+      notemap[note.id] = slice.x;
+    });
+  });
+
   // render markers
   graph.slices.forEach((slice) => {
     slice.notes.forEach((note) => {
-      // graphContainer.appendChild(
-      // TODO: select correct note type
-      drawMarker(note.id, note.expl, graphContainer);
-      // );
+      drawMarker(note.id, note.expl, graphContainer, notemap);
     });
   });
+
+  // mark seleted notes
+  if (graph.selection) {
+    graphContainer
+      .querySelector("#vf-" + CSS.escape(graph.selection.note.id))
+      .setAttribute("class", "pv-note pv-selected");
+    graphContainer
+      .querySelector("#marker-" + CSS.escape(graph.selection.note.id))
+      .setAttribute("class", "pv-op-marker pv-selected");
+    graph.selection.parents.forEach((parent) => {
+      graphContainer
+        .querySelector("#vf-" + CSS.escape(parent.id))
+        .setAttribute("class", "pv-note pv-parent");
+    });
+  }
 
   // remove container from DOM
   fakesvg.remove();
@@ -376,30 +402,43 @@ export const drawGraph = (graph) => (totalWidth) => (scale) => (grandStaff) => {
 const markerStroke = "black";
 
 const markers = `<defs>
-  <symbol id="marker-repeat" class="pv-op-marker" width="${markerWidth}" height="3" viewport="0 -2 5 3" overflow="visible">
+  <symbol id="marker-repeat" width="${markerWidth}" height="3" viewport="0 -2 5 3" overflow="visible">
     <line x1="0" y1="1.5" x2="${markerWidth}" y2="1.5"/>
     <line x1="0" y1="-1.5" x2="${markerWidth}" y2="-1.5"/>
   </symbol>
-  <symbol id="marker-neighbor-left" class="pv-op-marker" width="${markerWidth}" height="3" viewport="0 -2 5 3" overflow="visible">
+  <symbol id="marker-neighbor-left" width="${markerWidth}" height="3" viewport="0 -2 5 3" overflow="visible">
     <line x1="0" y1="1.5" x2="${markerWidth}" y2="-1.5"/>
   </symbol>
-  <symbol id="marker-neighbor-right" class="pv-op-marker" width="${markerWidth}" height="3" viewport="0 -2 5 3" overflow="visible">
+  <symbol id="marker-neighbor-right" width="${markerWidth}" height="3" viewport="0 -2 5 3" overflow="visible">
     <line x1="0" y1="-1.5" x2="${markerWidth}" y2="1.5"/>
   </symbol>
-  <symbol id="marker-pass" class="pv-op-marker" width="${markerWidth}" height="3" viewport="0 -2 5 3" overflow="visible">
+  <symbol id="marker-pass" width="${markerWidth}" height="3" viewport="0 -2 5 3" overflow="visible">
     <line x1="0" y1="-1.5" x2="${markerWidth}" y2="0"/>
     <line x1="0" y1="1.5" x2="${markerWidth}" y2="0"/>
   </symbol>
+  <symbol id="marker-spread-left" width="${markerWidth}" height="3" viewport="0 -2 5 3" overflow="visible">
+    <polyline points="1,-1.5 1,1.5 ${markerWidth},1.5"/>
+  </symbol>
+  <symbol id="marker-spread-right" width="${markerWidth}" height="3" viewport="0 -2 5 3" overflow="visible">
+    <polyline points="0,1.5 ${markerWidth - 1},1.5 ${markerWidth - 1},-1.5"/>
+  </symbol>
+  <symbol id="marker-root-left" width="${markerWidth}" height="3" viewport="0 -2 5 3" overflow="visible">
+    <polygon points="1,0 ${markerWidth},-1.5 ${markerWidth},1.5 0,0"/>
+  </symbol>
+  <symbol id="marker-root-right" width="${markerWidth}" height="3" viewport="0 -2 5 3" overflow="visible">
+    <polygon points="0,1.5 0,-1.5 ${markerWidth - 1},0 0,1.5"/>
+  </symbol>
 </defs>
 <style>
-.pv-op-marker line {
+.pv-op-marker {
     stroke: black;
     stroke-width: 1.5;
+    fill: none;
 }
 .pv-edge {
     stroke: black;
 }
-.pv-edge.pv-selected {
+.pv-edge.pv-selected, .pv-op-marker.pv-selected {
     stroke: rgb(30, 144, 255);
 }
 .pv-note.pv-selected {
