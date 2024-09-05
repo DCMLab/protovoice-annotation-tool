@@ -26,9 +26,9 @@ import Halogen.Subscription as HS
 import Halogen.VDom.Driver (runUI)
 import ProtoVoices.Folding (Graph)
 import ProtoVoices.JSONTransport (ModelJSON, modelFromJSON)
-import ProtoVoices.Model (Model)
+import ProtoVoices.Model (Model, BottomSurface)
 import ProtoVoices.RenderSVG (insertScore, renderGraph)
-import Pruning (Surface, countSteps)
+import Pruning (countSteps)
 import Render (noteSize, renderInner, renderReduction, renderScoreSVG, scalex, scoreScale, sliceWidth)
 import Simple.JSON (readJSON)
 import Web.DOM.Element (Element)
@@ -55,7 +55,7 @@ type ViewerModel =
   , max :: Int
   , modelPruned :: Model
   , graph :: Graph
-  , surface :: Surface
+  , surface :: BottomSurface
   }
 
 type ViewerState =
@@ -307,13 +307,13 @@ redrawScore = do
   st <- H.get
   let
     update = do -- Maybe
-      { model, surface: { slices }, graph } <- st.model
+      { model, surface, graph } <- st.model
       scoreElt <- st.scoreElt
       let
-        totalWidth = (1.0 / scoreScale) * (scalex st.settings (toNumber $ A.length model.piece) + sliceWidth / 2.0)
+        totalWidth = scalex st.settings (toNumber $ A.length model.piece) + sliceWidth / 2.0
         select sel = do
           HS.notify st.eventListener $ Select sel
-        toX x = scalex st.settings x - (noteSize / 2.0)
+        toX x = scalex st.settings x -- - (noteSize / 2.0)
       pure $ H.liftEffect $ do
-        insertScore scoreElt $ renderGraph graph slices st.selected select toX totalWidth scoreScale st.settings.grandStaff
+        insertScore scoreElt $ renderGraph graph model.piece surface st.selected select toX totalWidth scoreScale st.settings.grandStaff
   fromMaybe (pure unit) update

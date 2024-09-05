@@ -12,8 +12,8 @@ import Foreign.Index as FI
 import Halogen.HTML as HH
 import Halogen.HTML.Properties as HP
 import ProtoVoices.Folding (Graph, evalGraph)
-import ProtoVoices.Model (DoubleOrnament(..), LeftOrnament(..), Model, Note, NoteExplanation(..), RightOrnament(..), StartStop(..))
-import Pruning (Surface, findSurface, pruneModel)
+import ProtoVoices.Model (DoubleOrnament(..), LeftOrnament(..), Model, Note, NoteExplanation(..), RightOrnament(..), StartStop(..), BottomSurface)
+import Pruning (findSurface, pruneModel)
 import Web.DOM.Element (Element)
 
 class_ :: forall r i. String -> HH.IProp (class :: String | r) i
@@ -81,7 +81,7 @@ noteIsSelected _ _ = false
 type ViewerCache =
   { modelPruned :: M.Map Int Model
   , graph :: M.Map Int Graph
-  , surface :: M.Map Int Surface
+  , surface :: M.Map Int BottomSurface
   }
 
 showExplanation :: NoteExplanation -> String
@@ -157,7 +157,7 @@ cacheGetGraph mpruned step cache = case M.lookup step cache.graph of
   Just g -> g
   Nothing -> evalGraph true true mpruned.reduction
 
-cacheGetSurface :: Model -> Int -> ViewerCache -> Surface
+cacheGetSurface :: Model -> Int -> ViewerCache -> BottomSurface
 cacheGetSurface mpruned step cache = case M.lookup step cache.surface of
   Just surfs -> surfs
   Nothing -> findSurface mpruned.reduction

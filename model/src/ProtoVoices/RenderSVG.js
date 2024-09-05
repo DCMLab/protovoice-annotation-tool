@@ -17,7 +17,7 @@ function noteToVex(n) {
   return n.name + "/" + n.oct;
 }
 
-function drawSlice(slice, grand, useIDs) {
+function drawSlice(slice, grand, scale, useIDs) {
   let div = document.createElementNS("http://www.w3.org/2000/svg", "g");
   let renderer = new VF.Renderer(div, VF.Renderer.Backends.SVG);
   //renderer.resize(500, 500);
@@ -74,7 +74,11 @@ function drawSlice(slice, grand, useIDs) {
   }
 
   // let elt = div.children[0];
-  div.setAttribute("transform", `translate(${(-width / 2).toFixed(3)} 0)`);
+  // 17px is the x offset of a note head
+  div.setAttribute(
+    "transform",
+    `translate(${(-width / 2 - 17 * scale).toFixed(3)} 0)`,
+  );
   div.setAttribute("id", "slice-" + slice.id);
   return div;
 }
@@ -97,15 +101,6 @@ function drawStaff(width, grand) {
   return elt;
 }
 
-export const drawScore =
-  (slices) => (totalWidth) => (scale) => (grandStaff) => {
-    let system = drawSystem(slices, totalWidth, scale, grandStaff, false);
-    let container = document.createElementNS("http://www.w3.org/2000/svg", "g");
-    container.appendChild(system.staff);
-    container.appendChild(system.notes);
-    return container;
-  };
-
 function drawSystem(slices, totalWidth, scale, grandStaff, useIDs = true) {
   let container = document.createElementNS("http://www.w3.org/2000/svg", "g");
 
@@ -125,11 +120,20 @@ function drawSystem(slices, totalWidth, scale, grandStaff, useIDs = true) {
       "transform",
       "translate(" + slice.x + " 0) scale(" + scale + " " + scale + ")",
     );
-    sliceG.appendChild(drawSlice(slice, grandStaff, useIDs));
+    sliceG.appendChild(drawSlice(slice, grandStaff, scale, useIDs));
     container.appendChild(sliceG);
   });
   return { notes: container, staff };
 }
+
+export const drawScore =
+  (slices) => (totalWidth) => (scale) => (grandStaff) => {
+    let system = drawSystem(slices, totalWidth, scale, grandStaff, false);
+    let container = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    container.appendChild(system.staff);
+    container.appendChild(system.notes);
+    return container;
+  };
 
 export const insertScore = (el) => (score) => () => el.replaceChildren(score);
 
@@ -279,6 +283,16 @@ function drawMarker(noteid, expl, container, notemap) {
   `;
 }
 
+function drawTimeLabel(time, y) {
+  let label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+  label.setAttribute("x", time.x);
+  label.setAttribute("y", y);
+  label.setAttribute("text-anchor", "middle");
+  label.setAttribute("dominant-baseline", "middle");
+  label.innerHTML = time.label;
+  return label;
+}
+
 export const drawGraph = (graph) => (totalWidth) => (scale) => (grandStaff) => {
   // initialize container
   let graphContainer = document.createElementNS(
@@ -326,12 +340,16 @@ export const drawGraph = (graph) => (totalWidth) => (scale) => (grandStaff) => {
   }
 
   // draw score
-  let score = drawScore(graph.surface)(totalWidth)(scale)(grandStaff);
+  let score = drawScore(graph.surfaceSlices)(totalWidth)(scale)(grandStaff);
   score.setAttribute(
     "transform",
     `translate(0 ${(graph.maxd - minLevel + 1) * levelOffset})`,
   );
   graphContainer.appendChild(score);
+  let yoff = (graph.maxd - minLevel + 2) * levelOffset + 20;
+  graph.times.forEach((time) => {
+    graphContainer.appendChild(drawTimeLabel(time, yoff));
+  });
 
   // draw connections
 
@@ -435,6 +453,9 @@ const markers = `<defs>
   </symbol>
 </defs>
 <style>
+text {
+    font-size: 16px;
+}
 .pv-op-marker {
     stroke: black;
     stroke-width: 1.5;
@@ -456,7 +477,8 @@ const markers = `<defs>
     cursor: pointer;
 }
 </style>
-<rect width="100%" height="100%" fill="white"/>`;
+<!--rect width="100%" height="100%" fill="white"/-->
+`;
 
 /**
  * From https://gsap.com/community/forums/topic/13681-svg-gotchas/page/2/#comment-72060

@@ -436,6 +436,8 @@ attachSegment { trans, op } rslice = { trans, op, rslice }
 detachSegment :: Segment -> EndSegment
 detachSegment { trans, op } = { trans, op }
 
+type BottomSurface = { slices :: Array Slice, transs :: Array Edges }
+
 type Reduction =
   { start :: Slice
   , segments :: List Segment

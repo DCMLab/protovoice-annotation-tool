@@ -1,6 +1,7 @@
 module Pruning where
 
 import Prelude
+
 import Control.Monad.State as ST
 import Data.Array as A
 import Data.Either (Either(..))
@@ -8,7 +9,7 @@ import Data.List (List(..))
 import Data.Maybe (Maybe(..))
 import Data.Set as S
 import ProtoVoices.Folding (AgendaAlg, addUnusedEdgesLeft, addUnusedEdgesRight, nothingMore, walkGraph)
-import ProtoVoices.Model (Edges, Model, NoteExplanation(..), Op(..), Reduction, Segment, Slice, StartStop(..), attachSegment, detachSegment, horiEdgesMid)
+import ProtoVoices.Model (BottomSurface, NoteExplanation(..), Edges, Model, Op(..), Reduction, Segment, Slice, StartStop(..), BottomSurface, attachSegment, detachSegment, horiEdgesMid)
 
 pruneModel :: Int -> Model -> Either String Model
 pruneModel n model = do
@@ -91,48 +92,45 @@ countSteps red = flip ST.execState 0 $ walkGraph countingAlg red.start agenda
     , hori
     }
 
-type Surface
-  = { slices :: Array Slice, transs :: Array Edges }
-
 horiEdgesLeft :: Edges -> Slice -> Edges
 horiEdgesLeft edgesl slicel
   | Inner notes <- slicel.notes =
-    { regular: S.catMaybes $ S.map replaceRight edgesl.regular
-    , passing: A.catMaybes $ map replaceRight edgesl.passing
-    }
-    where
-    replaceRight { left, right }
-      | Inner rightNote <- right
-      , Just sliceNote <-
-          A.find
-            ( \n -> case n.expl of
-                HoriExpl parent -> parent.id == rightNote.id
-                _ -> false
-            )
-            notes = Just { left, right: Inner sliceNote.note }
-      | otherwise = Nothing
+      { regular: S.catMaybes $ S.map replaceRight edgesl.regular
+      , passing: A.catMaybes $ map replaceRight edgesl.passing
+      }
+      where
+      replaceRight { left, right }
+        | Inner rightNote <- right
+        , Just sliceNote <-
+            A.find
+              ( \n -> case n.expl of
+                  HoriExpl parent -> parent.id == rightNote.id
+                  _ -> false
+              )
+              notes = Just { left, right: Inner sliceNote.note }
+        | otherwise = Nothing
   | otherwise = edgesl
 
 horiEdgesRight :: Slice -> Edges -> Edges
 horiEdgesRight slicer edgesr
   | Inner notes <- slicer.notes =
-    { regular: S.catMaybes $ S.map replaceLeft edgesr.regular
-    , passing: A.catMaybes $ map replaceLeft edgesr.passing
-    }
-    where
-    replaceLeft { left, right }
-      | Inner leftNote <- left
-      , Just sliceNote <-
-          A.find
-            ( \n -> case n.expl of
-                HoriExpl parent -> parent.id == leftNote.id
-                _ -> false
-            )
-            notes = Just { left: Inner sliceNote.note, right }
-      | otherwise = Nothing
+      { regular: S.catMaybes $ S.map replaceLeft edgesr.regular
+      , passing: A.catMaybes $ map replaceLeft edgesr.passing
+      }
+      where
+      replaceLeft { left, right }
+        | Inner leftNote <- left
+        , Just sliceNote <-
+            A.find
+              ( \n -> case n.expl of
+                  HoriExpl parent -> parent.id == leftNote.id
+                  _ -> false
+              )
+              notes = Just { left: Inner sliceNote.note, right }
+        | otherwise = Nothing
   | otherwise = edgesr
 
-findSurface :: Reduction -> Surface
+findSurface :: Reduction -> BottomSurface
 findSurface red = flip ST.execState { slices: [], transs: [] } $ walkGraph surfaceAlg red.start agenda
   where
   agenda = nothingMore <$> red.segments
@@ -155,7 +153,7 @@ findSurface red = flip ST.execState { slices: [], transs: [] } $ walkGraph surfa
       , transs: A.snoc st.transs ag.seg.trans.edges
       }
 
-  surfaceAlg :: AgendaAlg Unit Surface
+  surfaceAlg :: AgendaAlg Unit BottomSurface
   surfaceAlg =
     { init: \s -> ST.modify_ \st -> st { slices = A.snoc st.slices s }
     , freezeLeft: freeze

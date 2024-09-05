@@ -3,17 +3,18 @@ module ProtoVoices.RenderSVG where
 import Prelude
 
 import Data.Array as A
+import Data.Either (Either(..))
+import Data.Int (toNumber)
 import Data.Map as M
 import Data.Maybe (Maybe(..))
 import Data.Nullable (Nullable)
 import Data.Nullable as N
 import Data.Pitches (alteration, letter, octaves)
-import Data.Traversable (for_)
+import Data.Ratio ((%))
 import Effect (Effect)
-import JS.Map.Primitive as JSMap
-import JS.Map.Primitive.ST as STMap
+import ProtoVoices.Common (MBS(..))
 import ProtoVoices.Folding (Graph)
-import ProtoVoices.Model (Note, NoteExplanation(..), Slice, SliceId, StartStop(..), explParents, getInnerNotes)
+import ProtoVoices.Model (Note, NoteExplanation(..), Piece, Slice, SliceId, StartStop(..), Time, BottomSurface, explParents, getInnerNotes)
 import Web.DOM.Element (Element)
 
 foreign import data DOMScore :: Type
@@ -60,10 +61,11 @@ type RenderGraphTransition = { regular :: Array InnerEdge, passing :: Array Inne
 
 foreign import drawGraph
   :: { slices :: Array RenderGraphSlice
-     , surface :: Array (Record RenderSlice)
+     , surfaceSlices :: Array (Record RenderSlice)
      , transitions :: Array RenderGraphTransition
+     , surfaceTransitions :: Array RenderGraphTransition
      , horis :: Array { parent :: SliceId, child :: SliceId }
-     , notePositions :: JSMap.Map String Number
+     , times :: Array { x :: Number, label :: String }
      , maxd :: Number
      , selection :: Nullable { note :: Note, parents :: Array Note }
      , select :: Nullable Selection -> Effect Unit
@@ -73,13 +75,14 @@ foreign import drawGraph
   -> Boolean
   -> DOMScore
 
-renderGraph :: Graph -> Array Slice -> Maybe Selection -> (Maybe Selection -> Effect Unit) -> (Number -> Number) -> Number -> Number -> Boolean -> DOMScore
-renderGraph graph surface selection selectCallback toX = drawGraph
+renderGraph :: Graph -> Piece -> BottomSurface -> Maybe Selection -> (Maybe Selection -> Effect Unit) -> (Number -> Number) -> Number -> Number -> Boolean -> DOMScore
+renderGraph graph piece surface selection selectCallback toX = drawGraph
   { slices: A.fromFoldable $ mkGraphSlice <$> M.values graph.slices
-  , surface: mkRenderSlice toX <$> surface
-  , transitions: A.fromFoldable $ mkTrans <$> M.values graph.transitions
+  , surfaceSlices: mkRenderSlice toX <$> surface.slices
+  , transitions: A.fromFoldable $ (mkTrans <<< _.edges) <$> M.values graph.transitions
+  , surfaceTransitions: mkTrans <$> surface.transs
   , horis: A.fromFoldable graph.horis
-  , notePositions: collectNotes graph.slices
+  , times: A.mapWithIndex mkTime $ _.time <$> piece
   , maxd: graph.maxd
   , selection: case selection of
       Nothing -> N.null
@@ -97,20 +100,20 @@ renderGraph graph surface selection selectCallback toX = drawGraph
     where
     rs = mkRenderSlice toX s.slice
   mkTrans t =
-    { regular: innerEdges $ A.fromFoldable t.edges.regular
-    , passing: innerEdges $ t.edges.passing
+    { regular: innerEdges $ A.fromFoldable t.regular
+    , passing: innerEdges $ t.passing
     }
+  mkTime i time = { x: toX $ toNumber (i + 1), label }
+    where
+    label = case time of
+      Right (MBS { m, b, s }) -> if s == 0 % 1 then show m <> "." <> show b else ""
+      Left str -> str
+
   innerEdges edges = A.catMaybes $
     ( \edge -> case edge of
         { left: Inner l, right: Inner r } -> Just { left: l, right: r }
         _ -> Nothing
     ) <$> edges
-  collectNotes slices = STMap.run do
-    map <- STMap.new
-    for_ slices $ \s ->
-      for_ (getInnerNotes s.slice) $ \n ->
-        STMap.poke n.note.id s.slice.x map
-    pure map
 
 mkRenderSlice :: (Number -> Number) -> Slice -> Record RenderSlice
 mkRenderSlice toX slice =

@@ -25,8 +25,7 @@ import Halogen.Svg.Attributes as SA
 import Halogen.Svg.Elements as SE
 import ProtoVoices.Common (MBS(..))
 import ProtoVoices.Folding (GraphSlice, GraphTransition, Graph)
-import ProtoVoices.Model (Edge, Note, NoteExplanation(..), Notes, Piece, SliceId, StartStop(..), explHasParent, getInnerNotes)
-import Pruning (Surface)
+import ProtoVoices.Model (Edge, Note, BottomSurface, NoteExplanation(..), Notes, Piece, SliceId, StartStop(..), explHasParent, getInnerNotes)
 
 sliceWidth :: Number
 sliceWidth = 70.0
@@ -303,7 +302,7 @@ renderHori sett selection slices { child, parent } =
     HoriExpl parentNote -> Just { childNote: note.note, parentNote }
     _ -> Nothing
 
-renderInner :: forall p. AppSettings -> Selection -> Surface -> Graph -> HH.HTML p ViewerAction
+renderInner :: forall p. AppSettings -> Selection -> BottomSurface -> Graph -> HH.HTML p ViewerAction
 renderInner sett sel { slices, transs } graph = svg
   where
   extractNotes slice = M.fromFoldable $ (\n -> Tuple n.note.id { note: n, x: slice.x }) <$> getInnerNotes slice
@@ -419,19 +418,19 @@ renderInner sett sel { slices, transs } graph = svg
           (svgArrows <> svgNotes <> [ mkStartStop Start, mkStartStop Stop ])
       ]
 
-renderTime :: forall r p. AppSettings -> Number -> Int -> { time :: Either String MBS | r } -> HH.HTML p ViewerAction
-renderTime sett yoff i { time } =
-  SE.text
-    [ SA.x $ scalex sett $ toNumber (i + 1)
-    , SA.y $ (axisHeight - offset 1) + yoff
-    , SA.textAnchor SA.AnchorMiddle
-    , SA.dominantBaseline SA.BaselineMiddle
-    ]
-    [ HH.text label ]
-  where
-  label = case time of
-    Right (MBS { m, b, s }) -> if s == 0 % 1 then show m <> "." <> show b else ""
-    Left str -> str
+-- renderTime :: forall r p. AppSettings -> Number -> Int -> { time :: Either String MBS | r } -> HH.HTML p ViewerAction
+-- renderTime sett yoff i { time } =
+--   SE.text
+--     [ SA.x $ scalex sett $ toNumber (i + 1)
+--     , SA.y $ (axisHeight - offset 1) + yoff
+--     , SA.textAnchor SA.AnchorMiddle
+--     , SA.dominantBaseline SA.BaselineMiddle
+--     ]
+--     [ HH.text label ]
+--   where
+--   label = case time of
+--     Right (MBS { m, b, s }) -> if s == 0 % 1 then show m <> "." <> show b else ""
+--     Left str -> str
 
 renderScoreSVG
   :: forall p
@@ -446,20 +445,21 @@ renderScoreSVG sett piece graph isComplete =
         [ SA.width width
         , SA.height height
         , SA.viewBox (negate $ scalex sett 1.0) 0.0 width height
+        , HP.IProp $ HC.ref $ map (Action <<< RegisterScoreElt)
         , HP.style "overflow: visible;"
         ]
         $
           [ SE.element (H.ElemName "svg")
               [ HP.style "overflow: visible;"
               , HP.ref $ H.RefLabel $ "scoreStaff"
-              , HP.IProp $ HC.ref $ map (Action <<< RegisterScoreElt)
               ]
               []
           ]
-            <> (A.mapWithIndex (renderTime sett ((graph.maxd + 1.0 + extraRows) * systemHeight)) piece)
+    -- <> (A.mapWithIndex (renderTime sett ((graph.maxd + 1.0 + extraRows) * systemHeight)) piece)
     ]
   where
-  width = scalex sett (graph.maxx) + sliceWidth / 2.0
+
+  width = scalex sett (graph.maxx + 1.0) + sliceWidth / 2.0
 
   systemHeight = if sett.grandStaff then scoreHeightGrand else scoreHeightSingle
 
@@ -467,7 +467,7 @@ renderScoreSVG sett piece graph isComplete =
 
   height = systemHeight * (graph.maxd + 1.0 + extraRows) + axisHeight
 
-renderReduction :: forall p. AppSettings -> Piece -> Graph -> Surface -> Selection -> HH.HTML p ViewerAction
+renderReduction :: forall p. AppSettings -> Piece -> Graph -> BottomSurface -> Selection -> HH.HTML p ViewerAction
 renderReduction sett piece graph surface selection =
   HH.div_
     [ SE.svg
