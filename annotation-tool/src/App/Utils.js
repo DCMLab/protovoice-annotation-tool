@@ -3,9 +3,6 @@
 import jsDownload from "downloadjs";
 import { WASI } from "@runno/wasi";
 
-
-const wasm_binary = fetch(new URL("musicxml2pv.wasm", import.meta.url));
-
 export const copyToClipboard = str => () => navigator.clipboard.writeText(str);
 
 export function download_ (data) {
@@ -139,8 +136,8 @@ export const examplePieceJSONLong = [
   ]},
 ];
 
-export const musicxml2pv = (unfold) => (musicxml) => async () => {
-  var output = null;
+export const musicxml2pv = (mkLeft) => (mkRight) => (unfold) => (musicxml) => async () => {
+  var output = "";
   var args = ["musicxml2pv", "/input.musicxml"];
   if (unfold) {
     args.splice(1, 0, "-u");
@@ -148,7 +145,7 @@ export const musicxml2pv = (unfold) => (musicxml) => async () => {
   console.log(args);
   const wasi = new WASI({
     args: args,
-    stdout: (out) => output = out,
+    stdout: (out) => output += out,
     stderr: (err) => console.error("wasm err:", err),
     fs: {
       "/input.musicxml": {
@@ -165,10 +162,17 @@ export const musicxml2pv = (unfold) => (musicxml) => async () => {
   });
   // console.log(wasi);
   
-  const wasm = await WebAssembly.instantiateStreaming(wasm_binary, wasi.getImportObject());
+  const wasm = await WebAssembly.instantiateStreaming(fetch(new URL("musicxml2pv.wasm", import.meta.url)), wasi.getImportObject());
   // console.log(wasm);
   
-  await wasi.start(wasm, {});
-  return output;
+  result = await wasi.start(wasm, {});
+  console.log(result);
+  if (output == "") {
+    return mkLeft("musicxml2pv returned empty string");
+  } else if (result.exitCode != 0) {
+    return mkLeft("musicxml2pv returned exit code" + result.exitCode.toString());
+  } else {
+    return mkRight(output);
+  }
 };
 

@@ -40,9 +40,9 @@ download :: String -> String -> String -> Effect Boolean
 download str filename mimetype = download_ (unsafeToForeign str) filename mimetype
 
 -- TODO: better error handling
-foreign import musicxml2pv :: Boolean -> String -> Effect (Promise String)
+foreign import musicxml2pv :: (forall a b. a -> Either a b) -> (forall a b. b -> Either a b) -> Boolean -> String -> Effect (Promise (Either String String))
 
 convertMusicXML :: Boolean -> String -> Aff (Either String String)
 convertMusicXML unfold input = do
-  result <- toAffE $ musicxml2pv unfold input
-  pure $ Right result
+  result <- toAffE $ musicxml2pv Left Right unfold input
+  pure $ result
