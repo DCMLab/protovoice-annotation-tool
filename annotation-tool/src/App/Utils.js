@@ -165,7 +165,7 @@ export const musicxml2pv = (mkLeft) => (mkRight) => (unfold) => (musicxml) => as
   const wasm = await WebAssembly.instantiateStreaming(fetch(new URL("musicxml2pv.wasm", import.meta.url)), wasi.getImportObject());
   // console.log(wasm);
   
-  result = await wasi.start(wasm, {});
+  const result = await wasi.start(wasm, {});
   console.log(result);
   if (output == "") {
     return mkLeft("musicxml2pv returned empty string");
