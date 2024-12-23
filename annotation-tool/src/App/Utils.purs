@@ -1,12 +1,10 @@
 module App.Utils where
 
 import Prelude
-import Affjax.Web (printError, post) as AX
-import Affjax.RequestBody (string) as Req
-import Affjax.ResponseFormat (string) as Resp
+import Control.Promise (Promise, toAffE)
 import Data.Either (Either(..))
 import Data.Foldable (class Foldable, intercalate)
-import Data.Maybe (Maybe(..), fromJust)
+import Data.Maybe (fromJust)
 import Effect (Effect)
 import Effect.Aff (Aff)
 import Foreign (Foreign, ForeignError, renderForeignError, unsafeToForeign)
@@ -41,14 +39,10 @@ foreign import download_ :: Foreign -> String -> String -> Effect Boolean
 download :: String -> String -> String -> Effect Boolean
 download str filename mimetype = download_ (unsafeToForeign str) filename mimetype
 
+-- TODO: better error handling
+foreign import musicxml2pv :: Boolean -> String -> Effect (Promise String)
+
 convertMusicXML :: Boolean -> String -> Aff (Either String String)
-convertMusicXML unfold xmlstr = do
-  let
-    url = "https://musicology.epfl.ch/musicxml2pv/musicxml2pv?unfold=" <> show unfold
-  --url = "http://localhost:8081/musicxml2pv?unfold=" <> show unfold
-  response <-
-    AX.post Resp.string url (Just $ Req.string xmlstr)
-  pure
-    $ case response of
-        Left err -> Left $ AX.printError err
-        Right res -> Right $ res.body
+convertMusicXML unfold input = do
+  result <- toAffE $ musicxml2pv unfold input
+  pure $ Right result

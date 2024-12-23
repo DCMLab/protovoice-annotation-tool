@@ -6,19 +6,20 @@
     "test": "test"
   },
   "scripts": {
-    "build": "spago build",
+    "build": "spago build && cp dev/musicxml2pv.wasm output/App.Utils/",
     "test": "spago test",
     "serve": "parcel dev/index.html --open --no-cache",
-    "build-prod": "rm -rf dist prod && mkdir -p prod && cp dev/index.html prod/ && cp dev/index-prod.js prod/index.js && cp -r dev/css prod/ && spago bundle-module --to prod/app.js && parcel build prod/index.html --public-url \"./\""
+    "build-prod": "rm -rf dist prod && mkdir -p prod && cp dev/index.html prod/ && cp dev/index-prod.js prod/index.js && cp -r dev/css prod/ && cp dev/musicxml2pv.wasm prod/ && spago bundle-module --to prod/app.js && parcel build prod/index.html --public-url \"./\""
   },
   "dependencies": {
+    "@runno/wasi": "^0.7.0",
     "downloadjs": "^1.4.7",
-    "esbuild": "^0.14.54",
+    "esbuild": "^0.24.2",
     "vexflow": "^4.0.0",
     "xhr2": "^0.2.1"
   },
   "devDependencies": {
-    "parcel": "^2.12.0",
+    "parcel": "latest",
     "purescript": "^0.15.15",
     "purescript-language-server": "^0.16.6",
     "spago": "^0.21.0"

@@ -1,6 +1,10 @@
 "use strict";
 
 import jsDownload from "downloadjs";
+import { WASI } from "@runno/wasi";
+
+
+const wasm_binary = fetch(new URL("musicxml2pv.wasm", import.meta.url));
 
 export const copyToClipboard = str => () => navigator.clipboard.writeText(str);
 
@@ -134,3 +138,37 @@ export const examplePieceJSONLong = [
     { pitch: "D4", hold: false },
   ]},
 ];
+
+export const musicxml2pv = (unfold) => (musicxml) => async () => {
+  var output = null;
+  var args = ["musicxml2pv", "/input.musicxml"];
+  if (unfold) {
+    args.splice(1, 0, "-u");
+  }
+  console.log(args);
+  const wasi = new WASI({
+    args: args,
+    stdout: (out) => output = out,
+    stderr: (err) => console.error("wasm err:", err),
+    fs: {
+      "/input.musicxml": {
+        path: "/input.musicxml",
+        timestamps: {
+          access: new Date(),
+          change: new Date(),
+          modification: new Date(),
+        },
+        mode: "string",
+        content: musicxml,
+      }
+    }
+  });
+  // console.log(wasi);
+  
+  const wasm = await WebAssembly.instantiateStreaming(wasm_binary, wasi.getImportObject());
+  // console.log(wasm);
+  
+  await wasi.start(wasm, {});
+  return output;
+};
+
