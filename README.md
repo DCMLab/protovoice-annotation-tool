@@ -2,9 +2,14 @@
 
 [![build](https://github.com/DCMLab/protovoice-annotation-tool/actions/workflows/pages.yaml/badge.svg)](https://github.com/DCMLab/protovoice-annotation-tool/actions/workflows/pages.yaml)
 
-[Try out here](https://dcmlab.github.io/protovoice-annotation-tool/)
 
 A simple frontend for proto-voice annotations written in Purescript.
+
+## Quick Links
+
+- [Annotation Tool](https://dcmlab.github.io/protovoice-annotation-tool/)
+- [Viewer Demo](https://dcmlab.github.io/protovoice-annotation-tool/viewer/)
+- [Example Analyses](https://dcmlab.github.io/protovoice-annotations/) ([github](https://github.com/DCMLab/protovoice-annotations))
 
 ## Building
 
