@@ -129,37 +129,3 @@ horiEdgesRight slicer edgesr
               notes = Just { left: Inner sliceNote.note, right }
         | otherwise = Nothing
   | otherwise = edgesr
-
-findSurface :: Reduction -> BottomSurface
-findSurface red = flip ST.execState { slices: [], transs: [] } $ walkGraph surfaceAlg red.start agenda
-  where
-  agenda = nothingMore <$> red.segments
-
-  split ag { childl, childr } = pure $ map nothingMore $ Cons (addUnusedEdgesLeft childl) $ Cons (addUnusedEdgesRight childl.rslice childr') Nil
-    where
-    childr' = attachSegment childr ag.seg.rslice
-
-  hori _ ag1 ag2 { childl, childm, childr } = pure $ map nothingMore $ Cons childl' $ Cons childm $ Cons childr' Nil
-    where
-    childl' = childl { trans { edges = horiEdgesLeft ag1.seg.trans.edges childl.rslice } }
-
-    childm' = childm { trans { edges = horiEdgesMid childl.rslice childm.trans.edges childm.rslice } }
-
-    childr' = (attachSegment childr ag2.seg.rslice) { trans { edges = horiEdgesRight childm.rslice ag2.seg.trans.edges } }
-
-  freeze lslice ag = do
-    ST.modify_ \st ->
-      { slices: A.snoc st.slices ag.seg.rslice
-      , transs: A.snoc st.transs ag.seg.trans.edges
-      }
-
-  surfaceAlg :: AgendaAlg Unit BottomSurface
-  surfaceAlg =
-    { init: \s -> ST.modify_ \st -> st { slices = A.snoc st.slices s }
-    , freezeLeft: freeze
-    , freezeOnly: freeze
-    , splitLeft: \_ -> split
-    , splitOnly: \_ -> split
-    , splitRight: \_ _ -> split
-    , hori
-    }

@@ -11,9 +11,9 @@ import Foreign as F
 import Foreign.Index as FI
 import Halogen.HTML as HH
 import Halogen.HTML.Properties as HP
-import ProtoVoices.Folding (Graph, evalGraph)
-import ProtoVoices.Model (DoubleOrnament(..), LeftOrnament(..), Model, Note, NoteExplanation(..), RightOrnament(..), StartStop(..), BottomSurface)
-import Pruning (findSurface, pruneModel)
+import ProtoVoices.Folding (Graph, evalGraph, findSurface)
+import ProtoVoices.Model (BottomSurface, DoubleOrnament(..), LeftOrnament(..), Model, Note, NoteExplanation(..), RightOrnament(..), Staff(..), StartStop(..))
+import Pruning (pruneModel)
 import Web.DOM.Element (Element)
 
 class_ :: forall r i. String -> HH.IProp (class :: String | r) i
@@ -32,7 +32,6 @@ data ViewerAction
   | ToggleInner
   | ToggleOuter
   | ToggleScore
-  | ToggleGrandStaff
   | SetXScale String
   | SetYScale String
 
@@ -44,7 +43,6 @@ type AppSettings =
   , showInner :: Boolean
   , showOuter :: Boolean
   , showScore :: Boolean
-  , grandStaff :: Boolean
   }
 
 defaultSettings :: AppSettings
@@ -56,7 +54,6 @@ defaultSettings =
   , showInner: false
   , showOuter: false
   , showScore: true
-  , grandStaff: true
   }
 
 readOptions :: F.Foreign -> AppSettings
@@ -68,7 +65,6 @@ readOptions obj =
   , showInner: fromRight defaultSettings.showInner $ runExcept $ obj FI.! "showInner" >>= F.readBoolean
   , showOuter: fromRight defaultSettings.showOuter $ runExcept $ obj FI.! "showOuter" >>= F.readBoolean
   , showScore: fromRight defaultSettings.showScore $ runExcept $ obj FI.! "showScore" >>= F.readBoolean
-  , grandStaff: fromRight defaultSettings.grandStaff $ runExcept $ obj FI.! "grandStaff" >>= F.readBoolean
   }
 
 type Selection = Maybe { note :: Note, expl :: NoteExplanation }

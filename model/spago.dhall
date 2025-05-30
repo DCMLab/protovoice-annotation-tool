@@ -1,6 +1,7 @@
 { name = "protovoice-model"
 , dependencies =
   [ "arrays"
+  , "bifunctors"
   , "console"
   , "control"
   , "debug"
@@ -8,8 +9,8 @@
   , "either"
   , "foldable-traversable"
   , "foreign"
+  , "foreign-object"
   , "integers"
-  , "js-maps"
   , "lists"
   , "maybe"
   , "nullable"

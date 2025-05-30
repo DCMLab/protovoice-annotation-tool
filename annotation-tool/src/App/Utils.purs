@@ -1,6 +1,7 @@
 module App.Utils where
 
 import Prelude
+
 import Control.Promise (Promise, toAffE)
 import Data.Either (Either(..))
 import Data.Foldable (class Foldable, intercalate)
@@ -12,6 +13,7 @@ import Partial.Unsafe (unsafePartial)
 import ProtoVoices.Common (MBS)
 import ProtoVoices.JSONTransport (PieceJSON, addJSONIds, pieceFromJSON)
 import ProtoVoices.Model (Note)
+import Web.Event.EventTarget (EventTarget)
 
 foreign import examplePieceJSON :: PieceJSON ()
 
@@ -46,3 +48,5 @@ convertMusicXML :: Boolean -> String -> Aff (Either String String)
 convertMusicXML unfold input = do
   result <- toAffE $ musicxml2pv Left Right unfold input
   pure $ result
+
+foreign import eventTargetIsBody :: EventTarget -> Boolean

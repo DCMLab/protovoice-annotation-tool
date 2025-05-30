@@ -1,13 +1,16 @@
 module App.Common where
 
 import Prelude
+
 import Data.Generic.Rep (class Generic)
 import Data.List as L
 import Data.Maybe (Maybe(..), maybe)
 import Data.Pitches (SPitch)
 import Data.Show.Generic (genericShow)
 import Halogen as H
-import ProtoVoices.Model (Model, Note, NoteExplanation, Parents(..), Piece, SliceId, StartStop(..), TransId, setHoriExplParent, setLeftExplParent, setRightExplParent)
+import ProtoVoices.Folding (Graph)
+import ProtoVoices.Model (Model, Note, NoteExplanation, Parents(..), Piece, SliceId, StartStop(..), Styles, TransId, BottomSurface, setHoriExplParent, setLeftExplParent, setRightExplParent)
+import ProtoVoices.Validation (Validation)
 import Web.DOM.Element (Element)
 import Web.UIEvent.KeyboardEvent (KeyboardEvent)
 import Web.UIEvent.WheelEvent (WheelEvent)
@@ -18,22 +21,31 @@ data Selection
   | SelTrans TransId
   | SelNote { note :: Note, expl :: NoteExplanation, parents :: Parents SliceId, slice :: SliceId }
 
-type AppState
-  = { selected :: Selection
-    , model :: Maybe Model
-    , name :: String
-    , undoStack :: L.List { m :: Model, name :: String }
-    , redoStack :: L.List { m :: Model, name :: String }
-    , tab :: Maybe Tab
-    , settings :: AppSettings
-    , scoreElt :: Maybe Element
-    }
+type AppState =
+  { selected :: Selection
+  , loaded :: Maybe { model :: Model, surface :: BottomSurface }
+  , name :: String
+  , undoStack :: L.List { m :: Model, name :: String }
+  , redoStack :: L.List { m :: Model, name :: String }
+  , tab :: Maybe Tab
+  , settings :: AppSettings
+  , scoreElt :: Maybe Element
+  }
 
-type AppSlots
-  = ( exportTab :: forall query. H.Slot query Void Int
-    , importTab :: forall query. H.Slot query ImportOutput Int
-    , settingsTab :: forall query. H.Slot query AppSettings Int
-    )
+type ModelInfo =
+  { model :: Model
+  , graph :: Graph
+  , validation :: Validation
+  , surface :: BottomSurface
+  }
+
+type AppSlots =
+  ( exportTab :: forall query. H.Slot query Void Int
+  , importTab :: forall query. H.Slot query ImportOutput Int
+  , styleTab :: forall query. H.Slot query Styles Int
+  , settingsTab :: forall query. H.Slot query AppSettings Int
+  , svgTab :: forall query. H.Slot query Void Int
+  )
 
 derive instance eqOuterSelection :: Eq Selection
 
@@ -80,20 +92,21 @@ outerSelected = case _ of
 
 addParentToNote :: Selection -> SliceId -> Note -> GraphAction
 addParentToNote sel sliceId parNote
-  | SelNote { note: selNote, parents, expl } <- sel = case parents of
-    MergeParents { left, right }
-      | sliceId == left
-      , Just expl' <- setLeftExplParent selNote.pitch (Just parNote) expl -> setExpl expl'
-      | sliceId == right
-      , Just expl' <- setRightExplParent selNote.pitch (Just parNote) expl -> setExpl expl'
-      | otherwise -> NoOp
-    VertParent vslice
-      | sliceId == vslice
-      , Just expl' <- setHoriExplParent selNote.pitch (Just parNote) expl -> setExpl expl'
-      | otherwise -> NoOp
-    NoParents -> NoOp
-    where
-    setExpl e = SetNoteExplanation { noteId: selNote.id, expl: e }
+  | SelNote { note: selNote, parents, expl } <- sel =
+      case parents of
+        MergeParents { left, right }
+          | sliceId == left
+          , Just expl' <- setLeftExplParent selNote.pitch (Just parNote) expl -> setExpl expl'
+          | sliceId == right
+          , Just expl' <- setRightExplParent selNote.pitch (Just parNote) expl -> setExpl expl'
+          | otherwise -> NoOp
+        VertParent vslice
+          | sliceId == vslice
+          , Just expl' <- setHoriExplParent selNote.pitch (Just parNote) expl -> setExpl expl'
+          | otherwise -> NoOp
+        NoParents -> NoOp
+      where
+      setExpl e = SetNoteExplanation { noteId: selNote.id, expl: e }
   | otherwise = NoOp
 
 removeParent :: Note -> NoteExplanation -> (SPitch -> Maybe Note -> NoteExplanation -> Maybe NoteExplanation) -> GraphAction
@@ -105,7 +118,9 @@ data Tab
   = HelpTab
   | ImportTab
   | ExportTab
+  | StyleTab
   | SettingsTab
+  | SVGTab
   | DebugTab
 
 derive instance eqTab :: Eq Tab
@@ -115,21 +130,20 @@ data ImportThing
   -- | ImportCurrentSurface
   | ImportModel Model
 
-type ImportOutput
-  = { name :: String, thing :: ImportThing }
+type ImportOutput = { name :: String, thing :: ImportThing }
 
-type AppSettings
-  = { flatHori :: Boolean
-    , showAllEdges :: Boolean
-    , showScore :: Boolean
-    , xscale :: Number
-    , yscale :: Number
-    }
+type AppSettings =
+  { flatHori :: Boolean
+  , showAllEdges :: Boolean
+  , showScore :: Boolean
+  , xscale :: Number
+  , yscale :: Number
+  }
 
 defaultSettings :: AppSettings
 defaultSettings =
   { flatHori: true
-  , showAllEdges: false
+  , showAllEdges: true
   , showScore: true
   , xscale: 0.0
   , yscale: 0.0
@@ -140,6 +154,7 @@ data GraphAction
   | Init
   | HandleImport ImportOutput
   | HandleSettings AppSettings
+  | HandleStyle Styles
   | SwitchTab (Maybe Tab)
   | HandleKey KeyboardEvent
   | HandleScroll WheelEvent

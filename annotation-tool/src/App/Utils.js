@@ -18,14 +18,20 @@ export function download_ (data) {
 };
 
 export const examplePieceJSON = [
-    {time: "0.4.3/4", notes: [{ pitch: "D5", hold: false }]},
-    {time: "1.1.0", notes: [
-        { pitch: "D5", hold: false },
-        { pitch: "D3", hold: true },
-    ]},
-  {time: "1.1.1/4", notes: [
-    { pitch: "A4", hold: false },
-    { pitch: "D3", hold: false },
+  {time: "0.4.0", notes: [
+    { pitch: "E4", hold: false },
+    { pitch: "C4", hold: true },
+  ]},
+  {time: "1.1.0", notes: [
+    { pitch: "D4", hold: true },
+    { pitch: "C4", hold: false },
+  ]},
+  {time: "1.2.0", notes: [
+    { pitch: "D4", hold: false },
+    { pitch: "B3", hold: false },
+  ]},
+  {time: "1.3.0", notes: [
+    { pitch: "C4", hold: false },
   ]},
 ];
 
@@ -176,3 +182,10 @@ export const musicxml2pv = (mkLeft) => (mkRight) => (unfold) => (musicxml) => as
   }
 };
 
+export function eventTargetIsBody(eventTarget) {
+  try {
+    return eventTarget.tagName.toLowerCase() == "body";
+  } catch {
+    return false;
+  }
+}

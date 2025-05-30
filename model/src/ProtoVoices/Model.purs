@@ -1,23 +1,25 @@
 module ProtoVoices.Model where
 
 import Prelude hiding (degree)
+
 import Control.Alt ((<|>))
 import Data.Array (filter, sortBy)
 import Data.Array as A
 import Data.Either (Either(..))
 import Data.Foldable (all, find, foldMap, foldl, for_, intercalate)
+import Data.FunctorWithIndex (mapWithIndex)
 import Data.Generic.Rep (class Generic)
 import Data.Int (toNumber)
 import Data.List (List(..), (:))
 import Data.List as L
-import Data.FunctorWithIndex (mapWithIndex)
 import Data.Map as M
-import Data.Maybe (Maybe(..), maybe)
+import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Monoid (power)
 import Data.Ordering (invert)
 import Data.Pitches (class Interval, Pitch, SPitch, degree, direction, ic, isStep, pc, pto, unison)
 import Data.Set as S
 import Data.Show.Generic (genericShow)
+import Data.String as Str
 import Data.Traversable (scanl)
 import Data.Tuple (Tuple(..))
 import Effect (Effect)
@@ -445,9 +447,133 @@ type Reduction =
   , nextSliceId :: SliceId
   }
 
+type Style =
+  { classes :: String
+  , label :: String
+  }
+
+emptyStyle :: Style
+emptyStyle = { classes: "", label: "" }
+
+styleSetClasses :: String -> Maybe Style -> Maybe Style
+styleSetClasses classes styleMaybe =
+  if Str.null classes && Str.null style.label then Nothing
+  else Just style { classes = classes }
+  where
+  style = fromMaybe emptyStyle styleMaybe
+
+styleSetLabel :: String -> Maybe Style -> Maybe Style
+styleSetLabel label styleMaybe =
+  if Str.null label && Str.null style.classes then Nothing
+  else Just style { label = label }
+  where
+  style = fromMaybe emptyStyle styleMaybe
+
+data Staff = TrebleStaff | BassStaff | GrandStaff
+
+derive instance eqStaff :: Eq Staff
+
+derive instance genericStaff :: Generic Staff _
+
+instance showStaff :: Show Staff where
+  show = genericShow
+
+-- | Translates a Staff value to a string that represents the value in JS code.
+staffType2JS :: Staff -> String
+staffType2JS = case _ of
+  GrandStaff -> "grand"
+  TrebleStaff -> "treble"
+  BassStaff -> "bass"
+
+type Styles =
+  { notes :: M.Map String Style
+  , edges :: M.Map (Tuple String String) Style
+  , slices :: M.Map SliceId Style
+  , transitions :: M.Map TransId Style
+  , css :: String
+  , staff :: Staff
+  }
+
+stylesUpdateNote :: (Maybe Style -> Maybe Style) -> String -> Styles -> Styles
+stylesUpdateNote f id styles = styles { notes = M.alter f id styles.notes }
+
+stylesUpdateEdge :: (Maybe Style -> Maybe Style) -> Tuple String String -> Styles -> Styles
+stylesUpdateEdge f id styles = styles { edges = M.alter f id styles.edges }
+
+stylesUpdateSlice :: (Maybe Style -> Maybe Style) -> SliceId -> Styles -> Styles
+stylesUpdateSlice f id styles = styles { slices = M.alter f id styles.slices }
+
+stylesUpdateTrans :: (Maybe Style -> Maybe Style) -> TransId -> Styles -> Styles
+stylesUpdateTrans f id styles = styles { transitions = M.alter f id styles.transitions }
+
+emptyStyles :: Styles
+emptyStyles =
+  { notes: M.empty
+  , edges: M.empty
+  , transitions: M.empty
+  , slices: M.empty
+  , css: defaultCSS
+  , staff: GrandStaff
+  }
+
+defaultCSS :: String
+defaultCSS =
+  """text {
+    font-size: 16px;
+    fill: black;
+}
+.pv-op-marker {
+    stroke: black;
+    stroke-width: 1.5;
+    fill: none;
+}
+.pv-edge {
+    stroke: black;
+}
+
+.cat1, .cat1 svg { fill: #4C72B0; }
+.cat2, .cat2 svg { fill: #DD8452; }
+.cat3, .cat3 svg { fill: #55A868; }
+.cat4, .cat4 svg { fill: #C44E52; }
+.cat5, .cat5 svg { fill: #8172B3; }
+.cat6, .cat6 svg { fill: #937860; }
+.cat7, .cat7 svg { fill: #DA8BC3; }
+.cat8, .cat8 svg { fill: #8C8C8C; }
+.cat9, .cat9 svg { fill: #CCB974; }
+.cat10, .cat10 svg { fill: #64B5CD; }
+
+.cat1b, .cat1b svg { fill: #A1C9F4; }
+.cat2b, .cat2b svg { fill: #FFB482; }
+.cat3b, .cat3b svg { fill: #8DE5A1; }
+.cat4b, .cat4b svg { fill: #FF9F9B; }
+.cat5b, .cat5b svg { fill: #D0BBFF; }
+.cat6b, .cat6b svg { fill: #DEBB9B; }
+.cat7b, .cat7b svg { fill: #FAB0E4; }
+.cat8b, .cat8b svg { fill: #CFCFCF; }
+.cat9b, .cat9b svg { fill: #FFFEA3; }
+.cat10b, .cat10b svg { fill: #B9F2F0; }
+
+.cat1c, .cat10c svg { fill: #001C7F; }
+.cat2c, .cat10c svg { fill: #B1400D; }
+.cat3c, .cat10c svg { fill: #12711C; }
+.cat4c, .cat10c svg { fill: #8C0800; }
+.cat5c, .cat10c svg { fill: #591E71; }
+.cat6c, .cat10c svg { fill: #592F0D; }
+.cat7c, .cat10c svg { fill: #A23582; }
+.cat8c, .cat10c svg { fill: #3C3C3C; }
+.cat9c, .cat10c svg { fill: #B8850A; }
+.cat10c, .cat10c svg { fill: #006374; }
+
+.visible { display: inline; }
+.hidden { display: none; }
+.strong { font-weight: bold; }
+.emph { font-style: italic; }
+"""
+
 type Model =
   { piece :: Piece
   , reduction :: Reduction
+  , styles :: Styles
   }
 
 printSurface :: Model -> Effect Unit
@@ -560,10 +686,10 @@ thawPiece piece =
   segs = A.catMaybes (map _.seg states) <> [ lastSeg ]
 
 loadPiece :: Piece -> Model
-loadPiece piece = { piece, reduction: thawPiece piece }
+loadPiece piece = { piece, reduction: thawPiece piece, styles: emptyStyles }
 
 surfaceToModel :: Model -> Model
-surfaceToModel model = { piece, reduction: model.reduction { segments = segs } }
+surfaceToModel model = { piece, reduction: model.reduction { segments = segs }, styles: model.styles }
   where
   toSlice seg =
     { time: Left ""
@@ -1239,3 +1365,26 @@ noteSetExplanation noteId expl model = case traverseTop Nil model.reduction.segm
                 }
           , rUp: Cons rightParentEdges rUpr
           }
+
+-- Style Operations
+-- ================
+
+setNoteStyle :: String -> Style -> Model -> Model
+setNoteStyle id style model = model { styles { notes = notes' } }
+  where
+  notes' = M.insert id style model.styles.notes
+
+setEdgeStyle :: Tuple String String -> Style -> Model -> Model
+setEdgeStyle ids style model = model { styles { edges = edges' } }
+  where
+  edges' = M.insert ids style model.styles.edges
+
+setSliceStyle :: SliceId -> Style -> Model -> Model
+setSliceStyle id style model = model { styles { slices = slices' } }
+  where
+  slices' = M.insert id style model.styles.slices
+
+setTransStyle :: TransId -> Style -> Model -> Model
+setTransStyle id style model = model { styles { transitions = transitions' } }
+  where
+  transitions' = M.insert id style model.styles.transitions

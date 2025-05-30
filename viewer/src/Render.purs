@@ -4,7 +4,6 @@ import Prelude
 
 import Common (AppSettings, Selection, ViewerAction(..), noteIsSelected, showExplanation)
 import Data.Array as A
-import Data.Either (Either(..))
 import Data.Foldable (maximum, minimum)
 import Data.Int (toNumber)
 import Data.List as L
@@ -12,7 +11,6 @@ import Data.Map as M
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Number (exp)
 import Data.Pitches (diasteps)
-import Data.Ratio ((%))
 import Data.Set as S
 import Data.Tuple (Tuple(..))
 import Halogen as H
@@ -23,9 +21,8 @@ import Halogen.HTML.Properties as HP
 import Halogen.Query.Input (Input(..))
 import Halogen.Svg.Attributes as SA
 import Halogen.Svg.Elements as SE
-import ProtoVoices.Common (MBS(..))
 import ProtoVoices.Folding (GraphSlice, GraphTransition, Graph)
-import ProtoVoices.Model (Edge, Note, BottomSurface, NoteExplanation(..), Notes, Piece, SliceId, StartStop(..), explHasParent, getInnerNotes)
+import ProtoVoices.Model (BottomSurface, Edge, Note, NoteExplanation(..), Notes, Piece, SliceId, Staff(..), StartStop(..), explHasParent, getInnerNotes)
 
 sliceWidth :: Number
 sliceWidth = 70.0
@@ -438,8 +435,9 @@ renderScoreSVG
   -> Piece
   -> Graph
   -> Boolean
+  -> Staff
   -> HH.HTML p ViewerAction
-renderScoreSVG sett piece graph isComplete =
+renderScoreSVG sett piece graph isComplete staffType =
   HH.div_
     [ SE.svg
         [ SA.width width
@@ -461,7 +459,7 @@ renderScoreSVG sett piece graph isComplete =
 
   width = scalex sett (graph.maxx + 1.0) + sliceWidth / 2.0
 
-  systemHeight = if sett.grandStaff then scoreHeightGrand else scoreHeightSingle
+  systemHeight = if staffType == GrandStaff then scoreHeightGrand else scoreHeightSingle
 
   extraRows = if isComplete then 0.0 else 1.0
 

@@ -23,6 +23,7 @@ You can edit this file as you like.
   , "maybe"
   , "numbers"
   , "ordered-collections"
+  , "unordered-collections"
   , "partial"
   , "pitches"
   , "prelude"

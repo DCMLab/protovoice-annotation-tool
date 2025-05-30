@@ -1,6 +1,7 @@
 module ProtoVoices.Folding where
 
 import Prelude
+
 import Control.Alternative (guard)
 import Control.Bind (bindFlipped)
 import Control.Monad.State as ST
@@ -14,46 +15,42 @@ import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Set as S
 import Data.Tuple (Tuple(..))
 import ProtoVoices.Leftmost (FreezeOp(..), HoriChildren(..), HoriOp(..), Leftmost(..), RootOrnament(..), SplitOp(..), horiLeftChildren, horiRightChildren, splitGetChildNotes)
-import ProtoVoices.Model (DoubleOrnament(..), Edge, Edges, EndSegment, Model, Note, NoteExplanation(..), Notes, Op(..), Parents(..), Piece, Reduction, Segment, Slice, SliceId(..), StartStop(..), Time, TransId(..), Transition, attachSegment, detachSegment, explLeftEdge, explRightEdge, getInnerNotes, horiEdgesLeft, horiEdgesMid, horiEdgesRight, incS, incT, parentEdges, sortNotes, vertEdgesLeft, vertEdgesRight)
+import ProtoVoices.Model (DoubleOrnament(..), Edge, Edges, EndSegment, Model, Note, NoteExplanation(..), Notes, Op(..), Parents(..), Piece, Reduction, Segment, Slice, SliceId(..), StartStop(..), Time, TransId(..), Transition, BottomSurface, attachSegment, detachSegment, explLeftEdge, explRightEdge, getInnerNotes, horiEdgesLeft, horiEdgesMid, horiEdgesRight, incS, incT, parentEdges, sortNotes, vertEdgesLeft, vertEdgesRight)
 
-type AgendaItem a
-  = { seg :: Segment, more :: a }
+type AgendaItem a = { seg :: Segment, more :: a }
 
 nothingMore :: Segment -> { seg :: Segment, more :: Unit }
 nothingMore seg = { seg, more: unit }
 
-type FFreeze a s
-  = Slice -> AgendaItem a -> ST.State s Unit
+type FFreeze a s = Slice -> AgendaItem a -> ST.State s Unit
 
-type FSplit a s
-  = Slice -> AgendaItem a -> { childl :: Segment, childr :: EndSegment } -> ST.State s (List (AgendaItem a))
+type FSplit a s = Slice -> AgendaItem a -> { childl :: Segment, childr :: EndSegment } -> ST.State s (List (AgendaItem a))
 
-type FSplitRight a s
-  = Slice -> AgendaItem a -> AgendaItem a -> { childl :: Segment, childr :: EndSegment } -> ST.State s (List (AgendaItem a))
+type FSplitRight a s = Slice -> AgendaItem a -> AgendaItem a -> { childl :: Segment, childr :: EndSegment } -> ST.State s (List (AgendaItem a))
 
-type FHori a s
-  = Slice ->
-    AgendaItem a ->
-    AgendaItem a ->
-    { childl :: Segment, childm :: Segment, childr :: EndSegment } ->
-    ST.State s (List (AgendaItem a))
+type FHori a s =
+  Slice
+  -> AgendaItem a
+  -> AgendaItem a
+  -> { childl :: Segment, childm :: Segment, childr :: EndSegment }
+  -> ST.State s (List (AgendaItem a))
 
-type AgendaAlg a s
-  = { init :: Slice -> ST.State s Unit
-    , freezeOnly :: FFreeze a s
-    , freezeLeft :: FFreeze a s
-    , splitOnly :: FSplit a s
-    , splitLeft :: FSplit a s
-    , splitRight :: FSplitRight a s
-    , hori :: FHori a s
-    }
+type AgendaAlg a s =
+  { init :: Slice -> ST.State s Unit
+  , freezeOnly :: FFreeze a s
+  , freezeLeft :: FFreeze a s
+  , splitOnly :: FSplit a s
+  , splitLeft :: FSplit a s
+  , splitRight :: FSplitRight a s
+  , hori :: FHori a s
+  }
 
-foldAgenda ::
-  forall a s.
-  AgendaAlg a s ->
-  Slice ->
-  List (AgendaItem a) ->
-  ST.State s Unit
+foldAgenda
+  :: forall a s
+   . AgendaAlg a s
+  -> Slice
+  -> List (AgendaItem a)
+  -> ST.State s Unit
 -- no transition left
 foldAgenda _ _ Nil = pure unit
 
@@ -88,12 +85,12 @@ foldAgenda alg leftSlice (Cons left agenda1@(Cons right agenda2)) = do
         children <- alg.hori leftSlice left right hori
         foldAgenda alg leftSlice $ children <> agenda2
 
-walkGraph ::
-  forall a s.
-  AgendaAlg a s ->
-  Slice ->
-  List (AgendaItem a) ->
-  ST.State s Unit
+walkGraph
+  :: forall a s
+   . AgendaAlg a s
+  -> Slice
+  -> List (AgendaItem a)
+  -> ST.State s Unit
 walkGraph alg start agenda = do
   alg.init start
   foldAgenda alg start agenda
@@ -101,20 +98,18 @@ walkGraph alg start agenda = do
 -- evaluate a reduction to a graph (for rendering)
 -- -----------------------------------------------
 -- 
-type GraphSlice
-  = { depth :: Number, slice :: Slice }
+type GraphSlice = { depth :: Number, slice :: Slice }
 
-type GraphTransition
-  = { id :: TransId, left :: SliceId, right :: SliceId, edges :: Edges } -- TODO: just embed transition
+type GraphTransition = { id :: TransId, left :: SliceId, right :: SliceId, edges :: Edges } -- TODO: just embed transition
 
-type Graph
-  = { slices :: M.Map SliceId GraphSlice
-    , transitions :: M.Map TransId GraphTransition
-    , horis :: List { child :: SliceId, parent :: SliceId }
-    , maxd :: Number
-    , maxx :: Number
-    , currentDepth :: Number
-    }
+type Graph =
+  { slices :: M.Map SliceId GraphSlice
+  , transitions :: M.Map TransId GraphTransition
+  , horis :: List { child :: SliceId, parent :: SliceId }
+  , maxd :: Number
+  , maxx :: Number
+  , currentDepth :: Number
+  }
 
 addGraphSlice :: Slice -> Number -> ST.State Graph Unit
 addGraphSlice slice depth = do
@@ -185,13 +180,15 @@ graphAlg flatHori showAllEdges =
     let
       childr' = attachSegment childr item.seg.rslice
     pure
-      $ { seg: if showAllEdges then addUnusedEdgesLeft childl else childl
+      $
+        { seg: if showAllEdges then addUnusedEdgesLeft childl else childl
         , more: { rdepth: max lDepth item.more.rdepth + 1.0 }
         }
-      : { seg: if showAllEdges then addUnusedEdgesRight childl.rslice childr' else childr'
-        , more: { rdepth: item.more.rdepth }
-        }
-      : Nil
+          :
+            { seg: if showAllEdges then addUnusedEdgesRight childl.rslice childr' else childr'
+            , more: { rdepth: item.more.rdepth }
+            }
+          : Nil
 
   hori lSlice left right { childl, childm, childr } = do
     currentDepth <- ST.gets _.currentDepth
@@ -209,18 +206,21 @@ graphAlg flatHori showAllEdges =
         else
           max currentDepth (max left.more.rdepth right.more.rdepth) + 1.0
     pure
-      $ { seg:
+      $
+        { seg:
             if showAllEdges then childl { trans { edges = horiEdgesLeft left.seg.trans.edges childl.rslice } } else childl
         , more: { rdepth: dsub }
         }
-      : { seg: if showAllEdges then childm { trans { edges = horiEdgesMid childl.rslice childm.trans.edges childm.rslice } } else childm
-        , more: { rdepth: dsub }
-        }
-      : { seg:
-            if showAllEdges then childr' { trans { edges = horiEdgesRight childm.rslice right.seg.trans.edges } } else childr'
-        , more: { rdepth: right.more.rdepth }
-        }
-      : Nil
+          :
+            { seg: if showAllEdges then childm { trans { edges = horiEdgesMid childl.rslice childm.trans.edges childm.rslice } } else childm
+            , more: { rdepth: dsub }
+            }
+          :
+            { seg:
+                if showAllEdges then childr' { trans { edges = horiEdgesRight childm.rslice right.seg.trans.edges } } else childr'
+            , more: { rdepth: right.more.rdepth }
+            }
+          : Nil
 
 evalGraph :: Boolean -> Boolean -> Reduction -> Graph
 evalGraph flatHori showAllEdges reduction =
@@ -265,14 +265,14 @@ reductionToLeftmost { reduction, piece } = do
   agenda :: List (AgendaItem Unit)
   agenda = map nothingMore reduction.segments
 
-  lmAlg ::
-    AgendaAlg Unit
-      ( Either
-          String
-          { lm :: List (Leftmost SplitOp FreezeOp HoriOp)
-          , piece :: List { time :: Time, notes :: Array { hold :: Boolean, note :: Note } }
-          }
-      )
+  lmAlg
+    :: AgendaAlg Unit
+         ( Either
+             String
+             { lm :: List (Leftmost SplitOp FreezeOp HoriOp)
+             , piece :: List { time :: Time, notes :: Array { hold :: Boolean, note :: Note } }
+             }
+         )
   lmAlg =
     { init: \_ -> pure unit
     , freezeOnly
@@ -373,10 +373,10 @@ reductionToLeftmost { reduction, piece } = do
 -- unfold a leftmost derivation to a reduction
 -- -------------------------------------------
 -- 
-leftmostToReduction ::
-  Array { trans :: { id :: TransId, edges :: { regular :: Array Edge, passing :: Array Edge }, is2nd :: Boolean }, rslice :: { id :: SliceId, notes :: StartStop (Array Note) } } ->
-  Array (Leftmost SplitOp FreezeOp HoriOp) ->
-  Either String Model
+leftmostToReduction
+  :: Array { trans :: { id :: TransId, edges :: { regular :: Array Edge, passing :: Array Edge }, is2nd :: Boolean }, rslice :: { id :: SliceId, notes :: StartStop (Array Note) } }
+  -> Array (Leftmost SplitOp FreezeOp HoriOp)
+  -> Either String { piece :: Piece, reduction :: Reduction }
 leftmostToReduction topSegments deriv = do
   (Tuple segments st) <-
     ST.runStateT
@@ -403,18 +403,18 @@ leftmostToReduction topSegments deriv = do
         }
     }
 
-  go ::
-    Slice ->
-    List { transId :: TransId, rslice :: { id :: SliceId, notes :: StartStop Notes, parents :: Parents SliceId } } ->
-    List (Leftmost SplitOp FreezeOp HoriOp) ->
-    ST.StateT
-      { maxS :: SliceId
-      , maxT :: TransId
-      , x :: Number
-      , piece :: Piece
-      }
-      (Either String)
-      (List Segment)
+  go
+    :: Slice
+    -> List { transId :: TransId, rslice :: { id :: SliceId, notes :: StartStop Notes, parents :: Parents SliceId } }
+    -> List (Leftmost SplitOp FreezeOp HoriOp)
+    -> ST.StateT
+         { maxS :: SliceId
+         , maxT :: TransId
+         , x :: Number
+         , piece :: Piece
+         }
+         (Either String)
+         (List Segment)
   go _ Nil Nil = pure Nil
 
   go leftSlice (Cons top tops) (Cons op ops) = case tops of
@@ -474,7 +474,8 @@ leftmostToReduction topSegments deriv = do
           , piece = A.snoc st.piece { notes: pieceNotes, time: fop.prevTime }
           }
     pure
-      $ { trans: { id: tid, edges: { passing: [], regular: S.fromFoldable fop.ties }, is2nd: false }
+      $
+        { trans: { id: tid, edges: { passing: [], regular: S.fromFoldable fop.ties }, is2nd: false }
         , rslice: { id: sid, notes, parents, x: st.x }
         , op: Freeze
         }
@@ -532,3 +533,40 @@ leftmostToReduction topSegments deriv = do
     { id, notes, parents } = topl.rslice
 
     topSlice = { id, notes, parents, x: (childl.rslice.x + childm.rslice.x) / 2.0 }
+
+-- finding the surface of a reduction
+-- ==================================
+
+findSurface :: Reduction -> BottomSurface
+findSurface red = flip ST.execState { slices: [], transs: [] } $ walkGraph surfaceAlg red.start agenda
+  where
+  agenda = nothingMore <$> red.segments
+
+  split ag { childl, childr } = pure $ map nothingMore $ Cons (addUnusedEdgesLeft childl) $ Cons (addUnusedEdgesRight childl.rslice childr') Nil
+    where
+    childr' = attachSegment childr ag.seg.rslice
+
+  hori _ ag1 ag2 { childl, childm, childr } = pure $ map nothingMore $ Cons childl' $ Cons childm $ Cons childr' Nil
+    where
+    childl' = childl { trans { edges = horiEdgesLeft ag1.seg.trans.edges childl.rslice } }
+
+    -- childm' = childm { trans { edges = horiEdgesMid childl.rslice childm.trans.edges childm.rslice } }
+
+    childr' = (attachSegment childr ag2.seg.rslice) { trans { edges = horiEdgesRight childm.rslice ag2.seg.trans.edges } }
+
+  freeze _lslice ag = do
+    ST.modify_ \st ->
+      { slices: A.snoc st.slices ag.seg.rslice
+      , transs: A.snoc st.transs ag.seg.trans.edges
+      }
+
+  surfaceAlg :: AgendaAlg Unit BottomSurface
+  surfaceAlg =
+    { init: \s -> ST.modify_ \st -> st { slices = A.snoc st.slices s }
+    , freezeLeft: freeze
+    , freezeOnly: freeze
+    , splitLeft: \_ -> split
+    , splitOnly: \_ -> split
+    , splitRight: \_ _ -> split
+    , hori
+    }

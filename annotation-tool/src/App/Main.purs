@@ -3,9 +3,9 @@ module App.Main (main) where
 import Prelude
 
 import App.Common (AppSlots, AppState, GraphAction(..), ImportThing(..), Selection(..), Tab(..), defaultSettings, getSelSlice, getSelTrans, outerSelected)
-import App.Render (class_, noteSize, renderNoteExplanation, renderReduction, scalex, scoreScale)
+import App.Render (class_, renderNoteExplanation, renderReduction, scalex, scoreScale, sliceDistance)
 import App.Tabs (renderTabs)
-import Data.Array (length)
+import App.Utils (eventTargetIsBody)
 import Data.Array as A
 import Data.Either (Either(..))
 import Data.Foldable (for_)
@@ -23,7 +23,7 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Halogen.Query.Event (eventListener)
 import Halogen.VDom.Driver (runUI)
-import ProtoVoices.Folding (evalGraph)
+import ProtoVoices.Folding (evalGraph, findSurface)
 import ProtoVoices.JSONTransport (modelToJSON)
 import ProtoVoices.Model (Model, getInnerNotes, getParents, loadPiece, mergeAtSlice, noteSetExplanation, undoMergeAtTrans, undoVertAtSlice, vertAtMid)
 import ProtoVoices.RenderSVG (insertScore, renderScore)
@@ -64,18 +64,18 @@ tryModelAction selector action actionName clearSel = do
   let
     modelAndSel = do
       sel <- selector st.selected
-      model <- st.model
-      pure { sel, model }
+      loaded <- st.loaded
+      pure { sel, loaded }
   case modelAndSel of
     Nothing -> pure unit
-    Just { sel, model } -> case action sel model of
+    Just { sel, loaded } -> case action sel loaded.model of
       Left err -> log err
-      Right model' -> do
+      Right model -> do
         H.put
           st
-            { model = Just model'
+            { loaded = Just $ loaded { model = model }
             , selected = (if clearSel then SelNone else st.selected)
-            , undoStack = { m: model, name: actionName } L.: st.undoStack
+            , undoStack = { m: loaded.model, name: actionName } L.: st.undoStack
             , redoStack = L.Nil
             }
         autoSaveModel
@@ -102,29 +102,30 @@ redrawScore = do
   st <- H.get
   when st.settings.showScore do
     let
-      update = do
-        model <- st.model
+      update = do -- Maybe
+        loaded <- st.loaded
+        let model = loaded.model
         scoreElt <- st.scoreElt
         let
           graph = evalGraph false false model.reduction
 
           -- mkSlice { slice } = { x: , notes: _.note <$> getInnerNotes slice }
-          toX x = scalex st.settings x - (noteSize / 2.0)
+          toX x = scalex st.settings x -- - (noteSize / 2.0)
 
           slices = case st.selected of
             SelNote { note, parents } -> A.filter (\s -> s.slice.id `A.elem` getParents parents || note `A.elem` (_.note <$> getInnerNotes s.slice)) $ A.fromFoldable graph.slices
             _ -> A.filter (\s -> s.depth == 0.0) $ A.fromFoldable graph.slices
 
-          totalWidth = (1.0 / scoreScale) * scalex st.settings (toNumber $ length model.piece + 1)
-        pure $ liftEffect $ insertScore scoreElt $ renderScore (_.slice <$> slices) toX totalWidth scoreScale true
+          totalWidth = scalex st.settings (toNumber $ A.length model.piece) + sliceDistance / 2.0
+        pure $ liftEffect $ insertScore scoreElt $ renderScore (_.slice <$> slices) toX model.styles.staff totalWidth scoreScale
     fromMaybe (pure unit) update
 
 autoSaveModel :: forall o m. (MonadEffect m) => H.HalogenM AppState GraphAction AppSlots o m Unit
 autoSaveModel = do
-  model <- H.gets _.model
+  loaded <- H.gets _.loaded
   name <- H.gets _.name
-  case model of
-    Just m -> case modelToJSON m of
+  case loaded of
+    Just l -> case modelToJSON l.model of
       Right json ->
         liftEffect do
           w <- window
@@ -142,17 +143,15 @@ handleAction act = do
       H.subscribe' \_sid ->
         eventListener KET.keyup (toEventTarget doc) (KE.fromEvent >>> map HandleKey)
     SwitchTab t -> H.modify_ \st -> st { tab = t }
-    HandleKey ev -> case KE.key ev of
-      "m" -> pr ev *> handleAction MergeAtSelected
-      "M" -> pr ev *> handleAction UnMergeAtSelected
-      "v" -> pr ev *> handleAction VertAtSelected
-      "V" -> pr ev *> handleAction UnVertAtSelected
-      "z" -> pr ev *> handleAction Undo
-      "Z" -> pr ev *> handleAction Redo
-      "Enter" -> pr ev *> combineAny
-      " " -> pr ev *> combineAny
-      "Backspace" -> pr ev *> removeAny
-      _ -> pure unit
+    HandleKey ev -> do
+      if maybe false eventTargetIsBody $ E.target (KE.toEvent ev) then
+        case KE.key ev of
+          "z" -> pr ev *> handleAction Undo
+          "Z" -> pr ev *> handleAction Redo
+          "Enter" -> pr ev *> combineAny
+          "Backspace" -> pr ev *> removeAny
+          _ -> pure unit
+      else pure unit
     HandleScroll ev -> do
       when (ME.ctrlKey $ WE.toMouseEvent ev) do
         H.liftEffect $ E.preventDefault $ WE.toEvent ev
@@ -167,8 +166,18 @@ handleAction act = do
       redrawScore
     HandleImport { name, thing } -> do
       case thing of
-        ImportPiece piece -> H.modify_ \st -> st { model = Just $ loadPiece piece, name = name }
-        ImportModel model -> H.modify_ \st -> st { model = Just model, name = name }
+        ImportPiece piece ->
+          let
+            model = loadPiece piece
+          in
+            H.modify_ \st -> st
+              { loaded = Just { model, surface: findSurface model.reduction }
+              , name = name
+              }
+        ImportModel model -> H.modify_ \st -> st
+          { loaded = Just { model, surface: findSurface model.reduction }
+          , name = name
+          }
       -- ImportCurrentSurface ->
       --   H.modify_ \st ->
       --     st
@@ -180,6 +189,11 @@ handleAction act = do
       H.modify_ \st -> st { selected = SelNone, tab = Nothing, undoStack = L.Nil, redoStack = L.Nil }
     HandleSettings s -> do
       H.modify_ \st -> st { settings = s }
+      redrawScore
+    HandleStyle styles -> do
+      H.modify_ \st -> case st.loaded of
+        Nothing -> st
+        Just loaded -> st { loaded = Just $ loaded { model { styles = styles } } }
       redrawScore
     MergeAtSelected -> tryModelAction getSelSlice mergeAtSlice "Merge Transitions" true
     VertAtSelected -> tryModelAction getSelTrans vertAtMid "Vert Slices" true
@@ -197,15 +211,15 @@ handleAction act = do
     Undo -> do
       st <- H.get
       let
-        { model, s1, s2 } = swapTops st.model st.undoStack st.redoStack
-      H.put $ st { undoStack = s1, redoStack = s2, model = model, selected = SelNone }
+        { loaded, s1, s2 } = swapTops st.loaded st.undoStack st.redoStack
+      H.put $ st { undoStack = s1, redoStack = s2, loaded = loaded, selected = SelNone }
       autoSaveModel
       redrawScore
     Redo -> do
       st <- H.get
       let
-        { model, s1, s2 } = swapTops st.model st.redoStack st.undoStack
-      H.put $ st { undoStack = s2, redoStack = s1, model = model, selected = SelNone }
+        { loaded, s1, s2 } = swapTops st.loaded st.redoStack st.undoStack
+      H.put $ st { undoStack = s2, redoStack = s1, loaded = loaded, selected = SelNone }
       autoSaveModel
       redrawScore
     -- RenderScore elt slice -> do
@@ -218,11 +232,11 @@ handleAction act = do
   where
   pr ev = H.liftEffect $ E.preventDefault $ KE.toEvent ev
 
-  swapTops model s1 s2 = case model of
-    Nothing -> { model, s1, s2 }
+  swapTops loaded s1 s2 = case loaded of
+    Nothing -> { loaded, s1, s2 }
     Just current -> case s1 of
-      L.Nil -> { model, s1, s2 }
-      L.Cons { m, name } rest -> { model: Just m, s1: rest, s2: { m: current, name } L.: s2 }
+      L.Nil -> { loaded, s1, s2 }
+      L.Cons { m, name } rest -> { loaded: Just $ current { model = m }, s1: rest, s2: { m: current.model, name } L.: s2 }
 
   updateSelection { noteId, expl } sel
     | SelNote selnote <- sel
@@ -235,7 +249,7 @@ appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultE
   initialState :: input -> AppState
   initialState _ =
     { selected: SelNone
-    , model: Nothing
+    , loaded: Nothing
     , name: "unnamed"
     , undoStack: L.Nil
     , redoStack: L.Nil
@@ -248,66 +262,70 @@ appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultE
     HH.div_
       [ HH.div [ class_ "content" ]
           [ HH.h1_ [ HH.text "Proto-Voice Annotation Tool" ]
-          , renderTabs st
+          , renderTabs st modelInfo
           , HH.h2_ [ HH.text $ "Annotations for " <> st.name ]
           ]
-      , case st.model of
+      , case modelInfo of
           Nothing -> HH.text ""
-          Just model ->
-            let
-              graph = evalGraph st.settings.flatHori st.settings.showAllEdges model.reduction
-
-              validation = validateReduction model.reduction
-            in
-              HH.div_
-                [ HH.div [ class_ "content pure-g pure-form" ]
-                    $
-                      [ HH.button
-                          [ class_ "pure-button pure-u-1-12"
-                          , HE.onClick $ \_ -> Undo
-                          , HP.disabled $ L.null st.undoStack
-                          , HP.title $ "Undo " <> maybe "" _.name (L.head st.undoStack)
-                          ]
-                          [ HH.text "Undo"
-                          ]
-                      , HH.button
-                          [ class_ "pure-button pure-u-1-12"
-                          , HE.onClick $ \_ -> Redo
-                          , HP.disabled $ L.null st.redoStack
-                          , HP.title $ "Redo " <> maybe "" _.name (L.head st.redoStack)
-                          ]
-                          [ HH.text "Redo" ]
-                      ]
-                        <> case st.selected of
-                          SelNote { note, expl, parents } ->
-                            [ HH.div [ class_ "pure-u-1-12", HP.style "height:30px;" ] []
-                            , HH.div [ class_ "pure-u-3-4" ]
-                                [ renderNoteExplanation graph note expl parents ]
-                            ]
-                          SelNone ->
-                            [ HH.div [ class_ "pure-u-1-12", HP.style "height:30px;" ] []
-                            , HH.label [ class_ "pure-u-3-4" ] [ HH.text "Nothing selected." ]
-                            ]
-                          _ ->
-                            [ HH.div [ class_ "pure-u-1-12 pure-g", HP.style "height:30px;" ] []
-                            , HH.label [ class_ "pure-u-1-4" ] [ HH.text $ "Slice or transition selected." ]
-                            , HH.button
-                                [ class_ "pure-button pure-u-1-4"
-                                , HE.onClick $ \_ -> CombineAny
-                                , HP.enabled (outerSelected st.selected)
-                                ]
-                                [ HH.text "Reduce (Enter)" ]
-                            , HH.button
-                                [ class_ "pure-button pure-u-1-4"
-                                , HE.onClick $ \_ -> RemoveAny
-                                , HP.enabled (outerSelected st.selected)
-                                ]
-                                [ HH.text "Unreduce (Backspace)" ]
-                            ]
-                , HH.div
-                    [ class_ "wide"
-                    , HE.onWheel HandleScroll
+          Just { model, graph, validation } ->
+            HH.div_
+              [ HH.div [ class_ "content pure-g pure-form" ]
+                  $
+                    [ HH.button
+                        [ class_ "pure-button pure-u-1-12"
+                        , HE.onClick $ \_ -> Undo
+                        , HP.disabled $ L.null st.undoStack
+                        , HP.title $ "Undo " <> maybe "" _.name (L.head st.undoStack)
+                        ]
+                        [ HH.text "Undo"
+                        ]
+                    , HH.button
+                        [ class_ "pure-button pure-u-1-12"
+                        , HE.onClick $ \_ -> Redo
+                        , HP.disabled $ L.null st.redoStack
+                        , HP.title $ "Redo " <> maybe "" _.name (L.head st.redoStack)
+                        ]
+                        [ HH.text "Redo" ]
                     ]
-                    [ renderReduction st.settings model.piece graph validation st.selected ]
-                ]
+                      <> case st.selected of
+                        SelNote { note, expl, parents } ->
+                          [ HH.div [ class_ "pure-u-1-12", HP.style "height:30px;" ] []
+                          , HH.div [ class_ "pure-u-3-4" ]
+                              [ renderNoteExplanation graph note expl parents ]
+                          ]
+                        SelNone ->
+                          [ HH.div [ class_ "pure-u-1-12", HP.style "height:30px;" ] []
+                          , HH.label [ class_ "pure-u-3-4" ] [ HH.text "Nothing selected." ]
+                          ]
+                        _ ->
+                          [ HH.div [ class_ "pure-u-1-12 pure-g", HP.style "height:30px;" ] []
+                          , HH.label [ class_ "pure-u-1-4" ] [ HH.text $ "Slice or transition selected." ]
+                          , HH.button
+                              [ class_ "pure-button pure-u-1-4"
+                              , HE.onClick $ \_ -> CombineAny
+                              , HP.enabled (outerSelected st.selected)
+                              ]
+                              [ HH.text "Reduce (Enter)" ]
+                          , HH.button
+                              [ class_ "pure-button pure-u-1-4"
+                              , HE.onClick $ \_ -> RemoveAny
+                              , HP.enabled (outerSelected st.selected)
+                              ]
+                              [ HH.text "Unreduce (Backspace)" ]
+                          ]
+              , HH.div
+                  [ class_ "wide"
+                  , HE.onWheel HandleScroll
+                  ]
+                  [ renderReduction st.settings model.piece graph validation model.styles st.selected ]
+              ]
       ]
+    where
+    modelInfo = case st.loaded of
+      Nothing -> Nothing
+      Just loaded -> Just
+        { model: loaded.model
+        , graph: evalGraph st.settings.flatHori st.settings.showAllEdges loaded.model.reduction
+        , validation: validateReduction loaded.model.reduction
+        , surface: loaded.surface
+        }

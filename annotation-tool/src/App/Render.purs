@@ -1,13 +1,15 @@
 module App.Render where
 
 import Prelude
+
 import App.Common (AppSettings, GraphAction(..), Selection(..), addParentToNote, noteIsSelected, removeParent)
-import Data.Array (catMaybes, elem, findIndex, fromFoldable, length, mapWithIndex)
+import Data.Array (catMaybes, elem, findIndex, fromFoldable, mapWithIndex)
 import Data.Array as A
 import Data.Either (Either(..))
 import Data.Int (toNumber)
 import Data.Map as M
-import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Maybe (Maybe(..), fromMaybe, maybe)
+import Data.Number (exp)
 import Data.Ratio ((%))
 import Halogen as H
 import Halogen.HTML as HH
@@ -17,15 +19,17 @@ import Halogen.HTML.Properties as HP
 import Halogen.Query.Input (Input(..))
 import Halogen.Svg.Attributes as SA
 import Halogen.Svg.Elements as SE
-import Data.Number (exp)
 import ProtoVoices.Common (MBS(..))
 import ProtoVoices.Folding (Graph, GraphSlice, GraphTransition)
-import ProtoVoices.Model (DoubleOrnament(..), Edge, LeftOrnament(..), Note, NoteExplanation(..), Notes, Parents, Piece, RightOrnament(..), SliceId, StartStop(..), explHasParent, getInnerNotes, getParents, setHoriExplParent, setLeftExplParent, setRightExplParent)
+import ProtoVoices.Model (DoubleOrnament(..), Edge, LeftOrnament(..), Note, NoteExplanation(..), Notes, Parents, Piece, RightOrnament(..), SliceId, StartStop(..), Styles, explHasParent, getInnerNotes, getParents, setHoriExplParent, setLeftExplParent, setRightExplParent)
 import ProtoVoices.Validation (EdgeError(..), NoteError(..), SliceError(..), Validation)
 import Web.UIEvent.MouseEvent (ctrlKey)
 
+sliceDistance :: Number
+sliceDistance = 70.0
+
 scalex :: AppSettings -> Number -> Number
-scalex { xscale } x = x * 70.0 * exp xscale
+scalex { xscale } x = x * sliceDistance * exp xscale
 
 scaley :: AppSettings -> Number -> Number
 scaley { yscale } y = y * 100.0 * exp yscale
@@ -67,6 +71,44 @@ dy = HP.attr $ HH.AttrName "dy"
 svgFilter :: forall r i. String -> HH.IProp r i
 svgFilter = HP.attr $ HH.AttrName "filter"
 
+defaultCSS :: String
+defaultCSS =
+  """
+@layer defaults, userstyles, ui;
+@layer defaults {
+  .node {
+    fill: white;
+  }
+  .slice {
+    fill: lightgray;
+  }
+  .test {
+    fill: red;
+  }
+}
+@layer ui {
+  .slice {
+    rx: 5px;
+  }
+  .hidden {
+    display: inline !important;
+    stroke: lightgray;
+  }
+  .selected {
+    fill: #1e90ff;
+  }
+  .related {
+    fill: #87cefa;
+  }
+  .warning {
+    fill: #ffa500;
+  }
+  .error {
+    fill: red;
+  }
+}
+"""
+
 selColorOuter :: SA.Color
 selColorOuter = SA.RGB 30 144 255
 
@@ -97,32 +139,38 @@ black = SA.RGB 0 0 0
 lightgray :: SA.Color
 lightgray = SA.RGB 211 211 211
 
-data SelectionStatus
-  = NotSelected
-  | Selected
-  | Related
+data SelectionStatus = NotSelected | Selected | Related
 
 derive instance eqSelectionStatus :: Eq SelectionStatus
 
-renderSlice :: forall p. AppSettings -> Selection -> Validation -> GraphSlice -> HH.HTML p GraphAction
-renderSlice sett selection validation { slice: { id, notes, x, parents }, depth: d } = case notes of
+renderSlice :: forall p. AppSettings -> Selection -> Validation -> Styles -> GraphSlice -> HH.HTML p GraphAction
+renderSlice sett selection validation styles { slice: { id, notes, x, parents }, depth: d } = case notes of
   Inner inotes ->
     SE.g []
-      $ [ SE.g (if isTopLevel then selectionAttr else [])
-            $ [ SE.rect
-                  [ SA.x svgx
-                  , SA.y $ scaley sett d - (noteSize / 2.0)
-                  , SA.width noteSize
-                  , SA.height $ offset (length inotes - 1) + noteSize
-                  , SA.fill white
-                  , SA.stroke $ if selected then selColorOuter else if activeParent then parentColor else if sliceInvalid then errColor else white
-                  ]
-              ]
-            <> mapWithIndex mknote inotes
+      $
+        [ SE.rect $
+            [ SA.x svgx
+            , SA.y svgy
+            , SA.width noteSize
+            , SA.height $ offset 1
+            , SA.class_ $ HH.ClassName $ "slice " <> sliceClasses <> if selected then " selected" else if activeParent then " related" else if sliceInvalid then " error" else ""
+            ] <> selectionAttr
+        , SE.element (HH.ElemName "text")
+            [ SA.x (svgx + noteSize / 2.0)
+            , SA.y svgy
+            , SA.textAnchor SA.AnchorMiddle
+            , SA.dominantBaseline SA.BaselineMiddle
+            , HP.style "pointer-events: none;"
+            , SA.class_ $ HH.ClassName $ "slice-label " <> sliceClasses
+            ]
+            [ HH.text sliceLabel ]
         ]
-  startstop -> mknode (show startstop) (show startstop) (scalex sett x) (scaley sett d) (if activeParent then Related else NotSelected) Nothing []
+          <> mapWithIndex mknote inotes
+  startstop -> mknode (show startstop) (show startstop) (scalex sett x) (scaley sett d) (if activeParent then Related else NotSelected) Nothing [] ""
   where
   svgx = scalex sett x - (noteSize / 2.0)
+
+  svgy = scaley sett d - (offset 1) -- (noteSize / 2.0)
 
   selected = selection == SelSlice id
 
@@ -132,14 +180,18 @@ renderSlice sett selection validation { slice: { id, notes, x, parents }, depth:
 
   sliceInvalid = M.lookup id validation.slices == Just SSInvalidReduction
 
-  isTopLevel = d == 0.0
-
   selectionAttr =
     [ cursor "pointer"
     , HE.onClick $ \ev -> if ctrlKey ev then NoOp else Select (if selected then SelNone else SelSlice id)
     ]
 
-  mknode text title xcoord ycoord selStatus valid attr =
+  sliceStyle = M.lookup id styles.slices
+
+  sliceClasses = maybe "" (_.classes) sliceStyle
+
+  sliceLabel = maybe "" (_.label) sliceStyle
+
+  mknode text title xcoord ycoord selStatus valid attr classes =
     SE.g attr
       $ [ bg, label, SE.title [] [ HH.text title ] ]
     where
@@ -149,11 +201,15 @@ renderSlice sett selection validation { slice: { id, notes, x, parents }, depth:
         , SA.y $ ycoord - (offset 1 / 2.0)
         , SA.width noteSize
         , SA.height $ offset 1
-        , SA.fill
-            $ case selStatus of
-                NotSelected -> white
-                Selected -> selColorInner
-                Related -> selColorInner'
+        -- , SA.fill
+        --     $ case selStatus of
+        --         NotSelected -> white
+        --         Selected -> selColorInner
+        --         Related -> selColorInner'
+        , SA.class_ $ HH.ClassName $ "node " <> classes <> case selStatus of
+            NotSelected -> ""
+            Selected -> " selected"
+            Related -> " related"
         ]
 
     label =
@@ -176,12 +232,13 @@ renderSlice sett selection validation { slice: { id, notes, x, parents }, depth:
   mknote i { note, expl } =
     mknode
       (show note.pitch)
-      note.id
+      (note.id <> label)
       (scalex sett x)
       (scaley sett d + offset i)
       nodeselected
       (M.lookup note.id validation.notes)
       (if clickable then attrsSel else [])
+      classes
     where
     nselected = noteIsSelected selection (Inner note)
 
@@ -191,7 +248,7 @@ renderSlice sett selection validation { slice: { id, notes, x, parents }, depth:
 
     nodeselected = if nselected then Selected else if nselectedParent then Related else NotSelected
 
-    nselectable = d /= 0.0
+    nselectable = true -- d /= 0.0
 
     clickable = nselectable || activeParent
 
@@ -210,6 +267,12 @@ renderSlice sett selection validation { slice: { id, notes, x, parents }, depth:
                 NoOp
       ]
 
+    style = M.lookup note.id styles.notes
+
+    classes = maybe "" (_.classes) style
+
+    label = maybe "" (\s -> " - " <> s.label) style
+
 renderTrans :: forall p. AppSettings -> Selection -> Validation -> M.Map SliceId GraphSlice -> GraphTransition -> HH.HTML p GraphAction
 renderTrans sett selection validation slices { id, left, right, edges } =
   fromMaybe (HH.text "")
@@ -217,18 +280,19 @@ renderTrans sett selection validation slices { id, left, right, edges } =
         { depth: yl, slice: { x: xl, notes: nl } } <- M.lookup left slices
         { depth: yr, slice: { x: xr, notes: nr } } <- M.lookup right slices
         let
-          selectable = yl == 0.0 && yr == 0.0
+          topLevel = yl == 0.0 && yr == 0.0
 
           bar =
             [ SE.line
-                $ [ SA.x1 $ scalex sett xl
+                $
+                  [ SA.x1 $ scalex sett xl
                   , SA.y1 $ scaley sett yl
                   , SA.x2 $ scalex sett xr
                   , SA.y2 $ scaley sett yr
                   , SA.stroke if transSelected then selColorOuter else lightgray
-                  , SA.strokeWidth $ if selectable then (noteSize / 2.0) else 5.0
+                  , SA.strokeWidth $ if topLevel then (noteSize / 2.0) else 5.0
                   ]
-                <> if selectable then selectionAttr else []
+                    <> selectionAttr
             ]
 
           mkedge :: Boolean -> Edge -> HH.HTML p GraphAction
@@ -266,13 +330,13 @@ renderTrans sett selection validation slices { id, left, right, edges } =
     , HE.onClick $ \_ -> Select (if transSelected then SelNone else SelTrans id)
     ]
 
-renderHori ::
-  forall p.
-  AppSettings ->
-  Selection ->
-  M.Map SliceId GraphSlice ->
-  { child :: SliceId, parent :: SliceId } ->
-  HH.HTML p GraphAction
+renderHori
+  :: forall p
+   . AppSettings
+  -> Selection
+  -> M.Map SliceId GraphSlice
+  -> { child :: SliceId, parent :: SliceId }
+  -> HH.HTML p GraphAction
 renderHori sett selection slices { child, parent } =
   fromMaybe (HH.text "")
     $ do
@@ -281,7 +345,8 @@ renderHori sett selection slices { child, parent } =
         let
           bar =
             [ SE.line
-                $ [ SA.x1 $ scalex sett xp
+                $
+                  [ SA.x1 $ scalex sett xp
                   , SA.y1 $ scaley sett yp
                   , SA.x2 $ scalex sett xc
                   , SA.y2 $ scaley sett yc
@@ -340,8 +405,8 @@ renderScore =
     ]
     []
 
-renderReduction :: forall p. AppSettings -> Piece -> Graph -> Validation -> Selection -> HH.HTML p GraphAction
-renderReduction sett piece graph validation selection =
+renderReduction :: forall p. AppSettings -> Piece -> Graph -> Validation -> Styles -> Selection -> HH.HTML p GraphAction
+renderReduction sett piece graph validation styles selection =
   HH.div
     [ HP.style "overflow-x: scroll; max-width: max-content;" ]
     [ SE.svg
@@ -349,7 +414,7 @@ renderReduction sett piece graph validation selection =
         , SA.height height
         , SA.viewBox (negate $ scalex sett 1.0) (negate extraHeight) width height
         ]
-        (svgScore <> svgTranss <> svgHoris <> svgSlices <> svgAxis)
+        ([ css ] <> svgScore <> svgTranss <> svgHoris <> svgSlices <> svgAxis)
     ]
   where
   { slices, transitions, horis, maxx, maxd } = graph
@@ -360,7 +425,7 @@ renderReduction sett piece graph validation selection =
 
   height = scaley sett (maxd + 2.0) + extraHeight
 
-  svgSlices = map (renderSlice sett selection validation) $ fromFoldable $ M.values slices
+  svgSlices = map (renderSlice sett selection validation styles) $ fromFoldable $ M.values slices
 
   svgTranss = map (renderTrans sett selection validation slices) $ fromFoldable $ M.values transitions
 
@@ -370,10 +435,17 @@ renderReduction sett piece graph validation selection =
 
   svgScore = if sett.showScore then [ renderScore ] else []
 
-class_ :: forall r i. String -> HH.IProp ( class :: String | r ) i
+  css = SE.defs []
+    [ HH.style_
+        [ HH.text defaultCSS
+        , HH.text $ "@layer userstyles {" <> styles.css <> "}"
+        ]
+    ]
+
+class_ :: forall r i. String -> HH.IProp (class :: String | r) i
 class_ str = HP.class_ $ HH.ClassName str
 
-mkOption :: forall o p. (Maybe o -> GraphAction) -> { k :: Maybe o, v :: String, s :: Boolean } -> HH.HTML p GraphAction
+mkOption :: forall o p action. (o -> action) -> { k :: o, v :: String, s :: Boolean } -> HH.HTML p action
 mkOption updateAction { k, v, s } =
   HH.option
     [ HP.value v
@@ -382,10 +454,15 @@ mkOption updateAction { k, v, s } =
     ]
     [ HH.text v ]
 
-mkSelect :: forall o p. Show o => Eq o => (Maybe o -> GraphAction) -> Maybe o -> Array o -> HH.HTML p GraphAction
-mkSelect updateAction orn opts = HH.select_ options
+mkSelect :: forall o p action. Eq o => (Maybe o -> action) -> (o -> String) -> Maybe o -> Array o -> HH.HTML p action
+mkSelect updateAction showValue value opts = HH.select_ options
   where
-  options = mkOption updateAction <$> [ { k: Nothing, v: "Nothing", s: false } ] <> map (\o -> { k: Just o, v: show o, s: Just o == orn }) opts
+  options = mkOption updateAction <$> [ { k: Nothing, v: "Nothing", s: false } ] <> map (\o -> { k: Just o, v: showValue o, s: Just o == value }) opts
+
+mkSelect' :: forall o p action. Eq o => (o -> action) -> (o -> String) -> o -> Array o -> HH.HTML p action
+mkSelect' updateAction showValue value opts = HH.select_ options
+  where
+  options = mkOption updateAction <$> map (\o -> { k: o, v: showValue o, s: o == value }) opts
 
 doubleOrnaments :: Array DoubleOrnament
 doubleOrnaments =
@@ -402,40 +479,43 @@ renderNoteExplanation :: forall p. Graph -> Note -> NoteExplanation -> Parents S
 renderNoteExplanation _graph note expl _parents =
   HH.div [ class_ "pure-g", HP.style "height:30px;" ]
     $ [ HH.label [ class_ "pure-u-1-4" ] [ HH.text $ "Note selected: " <> show note.pitch ] ]
-    <> case expl of
-        NoExpl -> [ HH.label [ class_ "pure-u-1-4" ] [ HH.text "no parents" ] ]
-        RootExpl -> [ HH.label [ class_ "pure-u-1-4" ] [ HH.text "root note" ] ]
-        HoriExpl n ->
-          [ HH.button [ class_ "pure-button pure-u-1-24", HE.onClick $ \_ -> removeParent note expl setHoriExplParent ] [ HH.text "x" ]
-          , HH.label [ class_ "pure-u-5-24" ] [ HH.text $ " parent: " <> show n.pitch ]
-          ]
-        LeftExpl lxpl@{ orn, rightParent } ->
-          [ HH.div [ class_ "pure-u-1-4" ] []
-          , HH.div [ class_ "pure-u-1-4" ]
-              [ mkSelect (\orn' -> SetNoteExplanation { noteId: note.id, expl: LeftExpl lxpl { orn = orn' } })
-                  orn
-                  [ LeftRepeat, LeftNeighbor ]
-              ]
-          , HH.button [ class_ "pure-button pure-u-1-24", HE.onClick $ \_ -> removeParent note expl setRightExplParent ] [ HH.text "x" ]
-          , HH.label [ class_ "pure-u-5-24" ] [ HH.text $ " right parent: " <> show rightParent.pitch ]
-          ]
-        RightExpl rxpl@{ orn, leftParent } ->
-          [ HH.button [ class_ "pure-button pure-u-1-24", HE.onClick $ \_ -> removeParent note expl setLeftExplParent ] [ HH.text "x" ]
-          , HH.label [ class_ "pure-u-5-24" ] [ HH.text $ " left parent: " <> show leftParent.pitch ]
-          , HH.div [ class_ "pure-u-1-4" ]
-              [ mkSelect (\orn' -> SetNoteExplanation { noteId: note.id, expl: RightExpl rxpl { orn = orn' } })
-                  orn
-                  [ RightRepeat, RightNeighbor ]
-              ]
-          ]
-        DoubleExpl dxpl@{ orn, rightParent, leftParent } ->
-          [ HH.button [ class_ "pure-button pure-u-1-24", HE.onClick $ \_ -> removeParent note expl setLeftExplParent ] [ HH.text "x" ]
-          , HH.label [ class_ "pure-u-5-24" ] [ HH.text $ " left parent: " <> show leftParent.pitch ]
-          , HH.div [ class_ "pure-u-1-4" ]
-              [ mkSelect (\orn' -> SetNoteExplanation { noteId: note.id, expl: DoubleExpl dxpl { orn = orn' } })
-                  orn
-                  doubleOrnaments
-              ]
-          , HH.button [ class_ "pure-button pure-u-1-24", HE.onClick $ \_ -> removeParent note expl setRightExplParent ] [ HH.text "x" ]
-          , HH.label [ class_ "pure-u-5-24" ] [ HH.text $ " right parent: " <> show rightParent.pitch ]
-          ]
+        <> case expl of
+          NoExpl -> [ HH.label [ class_ "pure-u-1-4" ] [ HH.text "no parents" ] ]
+          RootExpl -> [ HH.label [ class_ "pure-u-1-4" ] [ HH.text "root note" ] ]
+          HoriExpl n ->
+            [ HH.button [ class_ "pure-button pure-u-1-24", HE.onClick $ \_ -> removeParent note expl setHoriExplParent ] [ HH.text "x" ]
+            , HH.label [ class_ "pure-u-5-24" ] [ HH.text $ " parent: " <> show n.pitch ]
+            ]
+          LeftExpl lxpl@{ orn, rightParent } ->
+            [ HH.div [ class_ "pure-u-1-4" ] []
+            , HH.div [ class_ "pure-u-1-4" ]
+                [ mkSelect (\orn' -> SetNoteExplanation { noteId: note.id, expl: LeftExpl lxpl { orn = orn' } })
+                    show
+                    orn
+                    [ LeftRepeat, LeftNeighbor ]
+                ]
+            , HH.button [ class_ "pure-button pure-u-1-24", HE.onClick $ \_ -> removeParent note expl setRightExplParent ] [ HH.text "x" ]
+            , HH.label [ class_ "pure-u-5-24" ] [ HH.text $ " right parent: " <> show rightParent.pitch ]
+            ]
+          RightExpl rxpl@{ orn, leftParent } ->
+            [ HH.button [ class_ "pure-button pure-u-1-24", HE.onClick $ \_ -> removeParent note expl setLeftExplParent ] [ HH.text "x" ]
+            , HH.label [ class_ "pure-u-5-24" ] [ HH.text $ " left parent: " <> show leftParent.pitch ]
+            , HH.div [ class_ "pure-u-1-4" ]
+                [ mkSelect (\orn' -> SetNoteExplanation { noteId: note.id, expl: RightExpl rxpl { orn = orn' } })
+                    show
+                    orn
+                    [ RightRepeat, RightNeighbor ]
+                ]
+            ]
+          DoubleExpl dxpl@{ orn, rightParent, leftParent } ->
+            [ HH.button [ class_ "pure-button pure-u-1-24", HE.onClick $ \_ -> removeParent note expl setLeftExplParent ] [ HH.text "x" ]
+            , HH.label [ class_ "pure-u-5-24" ] [ HH.text $ " left parent: " <> show leftParent.pitch ]
+            , HH.div [ class_ "pure-u-1-4" ]
+                [ mkSelect (\orn' -> SetNoteExplanation { noteId: note.id, expl: DoubleExpl dxpl { orn = orn' } })
+                    show
+                    orn
+                    doubleOrnaments
+                ]
+            , HH.button [ class_ "pure-button pure-u-1-24", HE.onClick $ \_ -> removeParent note expl setRightExplParent ] [ HH.text "x" ]
+            , HH.label [ class_ "pure-u-5-24" ] [ HH.text $ " right parent: " <> show rightParent.pitch ]
+            ]

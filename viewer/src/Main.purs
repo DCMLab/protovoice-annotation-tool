@@ -29,7 +29,7 @@ import ProtoVoices.JSONTransport (ModelJSON, modelFromJSON)
 import ProtoVoices.Model (Model, BottomSurface)
 import ProtoVoices.RenderSVG (insertScore, renderGraph)
 import Pruning (countSteps)
-import Render (noteSize, renderInner, renderReduction, renderScoreSVG, scalex, scoreScale, sliceWidth)
+import Render (renderInner, renderReduction, renderScoreSVG, scalex, scoreScale, sliceWidth)
 import Simple.JSON (readJSON)
 import Web.DOM.Element (Element)
 import Web.DOM.ParentNode (QuerySelector(..))
@@ -213,15 +213,6 @@ viewerComponent prefix { listener, emitter } =
                   , HH.div [ class_ "pv-control-box" ]
                       [ HH.input
                           [ HP.type_ $ HP.InputCheckbox
-                          , HP.checked st.settings.grandStaff
-                          , HE.onChange \_ -> ToggleGrandStaff
-                          , HP.id $ prefix <> "useGrandStaff"
-                          ]
-                      , HH.label [ HP.for $ prefix <> "useGrandStaff" ] [ HH.text "use grand staff" ]
-                      ]
-                  , HH.div [ class_ "pv-control-box" ]
-                      [ HH.input
-                          [ HP.type_ $ HP.InputCheckbox
                           , HP.checked st.settings.showOuter
                           , HE.onChange \_ -> ToggleOuter
                           , HP.id $ prefix <> "showOuterGraph"
@@ -240,7 +231,7 @@ viewerComponent prefix { listener, emitter } =
                   else
                     HH.text ""
                 , if st.settings.showScore then
-                    renderScoreSVG st.settings modelPruned.piece graph (L.length model.reduction.segments == 1)
+                    renderScoreSVG st.settings modelPruned.piece graph (L.length model.reduction.segments == 1) model.styles.staff
                   else
                     HH.text ""
                 , if st.settings.showOuter then
@@ -288,9 +279,6 @@ viewerComponent prefix { listener, emitter } =
     ToggleInner -> H.modify_ \st -> st { settings { showInner = not st.settings.showInner } }
     ToggleOuter -> H.modify_ \st -> st { settings { showOuter = not st.settings.showOuter } }
     ToggleScore -> H.modify_ \st -> st { settings { showScore = not st.settings.showScore } }
-    ToggleGrandStaff -> do
-      H.modify_ \st -> st { settings { grandStaff = not st.settings.grandStaff } }
-      redrawScore
     SetXScale s -> case fromString s of
       Nothing -> pure unit
       Just n -> do
@@ -315,5 +303,5 @@ redrawScore = do
           HS.notify st.eventListener $ Select sel
         toX x = scalex st.settings x -- - (noteSize / 2.0)
       pure $ H.liftEffect $ do
-        insertScore scoreElt $ renderGraph graph model.piece surface st.selected select toX totalWidth scoreScale st.settings.grandStaff
+        insertScore scoreElt $ renderGraph graph model.piece surface model.styles st.selected (Just select) toX totalWidth scoreScale
   fromMaybe (pure unit) update

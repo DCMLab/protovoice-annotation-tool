@@ -3,21 +3,10 @@
 import * as Vex from "vexflow";
 const VF = Vex.Flow;
 
-// TODO: replace this with Accidental.applyAccidentals
-function addAcc(i, chord, n) {
-  if (n > 0) {
-    chord.addModifier(new VF.Accidental("#".repeat(n)), i);
-  }
-  if (n < 0) {
-    chord.addModifier(new VF.Accidental("b".repeat(-n)), i);
-  }
-}
+// Drawing basic score elements
+// ============================
 
-function noteToVex(n) {
-  return n.name + "/" + n.oct;
-}
-
-function drawSlice(slice, grand, scale, useIDs) {
+function drawSlice(slice, staffType, scale, useIDs, styles) {
   let div = document.createElementNS("http://www.w3.org/2000/svg", "g");
   let renderer = new VF.Renderer(div, VF.Renderer.Backends.SVG);
   //renderer.resize(500, 500);
@@ -26,19 +15,33 @@ function drawSlice(slice, grand, scale, useIDs) {
   let voices = [];
   let formatter = new VF.Formatter();
 
+  // renders the notes on one staff
   function renderNotes(notes, clef) {
     let voice = new VF.Voice({ num_beats: 1, beat_value: 4 });
     if (notes.length > 0) {
+      // generate notes using Vexflow
       let chord = new VF.StaveNote({
         clef: clef,
         keys: notes.map(noteToVex),
         duration: "q",
       });
+      
+      // add IDs
       if (useIDs) {
         for (let i = 0; i < notes.length; i++) {
           chord._noteHeads[i].attrs.id = notes[i].id;
         }
         chord.attrs.id = `slice${slice.id}-${clef}`;
+      }
+
+      // add style attributes
+      if (styles) {
+        for (let i = 0; i< notes.length; i++) {
+          let style = styles.noteStyles[notes[i].id];
+          if (style) {
+            chord._noteHeads[i].attrs.class = style.classes;
+          }
+        }
       }
       chord.getStem().setVisibility(false);
 
@@ -49,20 +52,20 @@ function drawSlice(slice, grand, scale, useIDs) {
     }
   }
 
-  if (grand) {
+  if (staffType == "grand") {
     let notesT = slice.notes.filter((n) => n.oct >= 4);
     renderNotes(notesT, "treble");
 
     let notesB = slice.notes.filter((n) => n.oct < 4);
     renderNotes(notesB, "bass");
   } else {
-    renderNotes(slice.notes, "treble");
+    renderNotes(slice.notes, staffType);
   }
 
   formatter.format(voices.map((v) => v.v));
 
   let width = formatter.getMinTotalWidth();
-  if (grand) {
+  if (staffType == "grand") {
     let staveT = new VF.Stave(0, 0, width);
     let staveB = new VF.Stave(0, 70, width);
     voices.forEach((voice) =>
@@ -73,27 +76,30 @@ function drawSlice(slice, grand, scale, useIDs) {
     voices.forEach((voice) => voice.v.draw(ctx, staff));
   }
 
-  // let elt = div.children[0];
-  // 17px is the x offset of a note head
+  // Vexflow draws notes with 17px x-offset, so to place the slice at the correct position,
+  // its x coordinate must be corrected for this offset plus half of the width of the slice.
+  let xcorrection = (width / 2 + 17 * scale).toFixed(3);
   div.setAttribute(
     "transform",
-    `translate(${(-width / 2 - 17 * scale).toFixed(3)} 0)`,
+    `translate(${-xcorrection} 0)`,
   );
-  div.setAttribute("id", "slice-" + slice.id);
+
   return div;
 }
 
-function drawStaff(width, grand) {
+function drawStaff(width, staffType) {
   let div = document.createElement("div");
   let renderer = new VF.Renderer(div, VF.Renderer.Backends.SVG);
   let ctx = renderer.getContext();
 
-  let staveT = new VF.Stave(0, 0, width).addClef("treble");
-  staveT.setContext(ctx).draw();
-
-  if (grand) {
+  if (staffType == "grand") {
+    let staveT = new VF.Stave(0, 0, width).addClef("treble");
+    staveT.setContext(ctx).draw();
     let staveB = new VF.Stave(0, 70, width).addClef("bass");
     staveB.setContext(ctx).draw();
+  } else {
+    let stave = new VF.Stave(0, 0, width).addClef(staffType);
+    stave.setContext(ctx).draw();
   }
 
   let elt = div.children[0];
@@ -101,13 +107,13 @@ function drawStaff(width, grand) {
   return elt;
 }
 
-function drawSystem(slices, totalWidth, scale, grandStaff, useIDs = true) {
+function drawSystem(slices, totalWidth, scale, staffType, useIDs, styles = null) {
   let container = document.createElementNS("http://www.w3.org/2000/svg", "g");
 
   // draw staff
   let staff = document.createElementNS("http://www.w3.org/2000/svg", "g");
   staff.setAttribute("transform", "scale(" + scale + " " + scale + ")");
-  staff.appendChild(drawStaff(totalWidth / scale, grandStaff));
+  staff.appendChild(drawStaff(totalWidth / scale, staffType));
   // container.appendChild(staffG);
 
   // draw slices
@@ -120,15 +126,39 @@ function drawSystem(slices, totalWidth, scale, grandStaff, useIDs = true) {
       "transform",
       "translate(" + slice.x + " 0) scale(" + scale + " " + scale + ")",
     );
-    sliceG.appendChild(drawSlice(slice, grandStaff, scale, useIDs));
+    sliceG.setAttribute("id", "slice-" + slice.id);
+    sliceG.appendChild(drawSlice(slice, staffType, scale, useIDs, styles));
+    
+    // apply slice styles
+    if (styles !== null) {
+      let sliceStyle = styles.sliceStyles[slice.id];
+      if (sliceStyle) {
+        // console.log(sliceStyle);
+        // console.log(sliceStyle.classes);
+        // console.log(sliceStyle.label);
+        // add classes:
+        sliceG.setAttribute("class", "pv-slice " + sliceStyle.classes);
+        // add label
+        let label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        label.setAttribute("y", 20);
+        label.textContent = sliceStyle.label;
+        label.setAttribute("text-anchor", "middle");
+        label.setAttribute("dominant-baseline", "middle");
+        
+        sliceG.appendChild(label);
+      }
+    }
     container.appendChild(sliceG);
   });
   return { notes: container, staff };
 }
 
+// Drawing a score
+// ===============
+
 export const drawScore =
-  (slices) => (totalWidth) => (scale) => (grandStaff) => {
-    let system = drawSystem(slices, totalWidth, scale, grandStaff, false);
+  (slices) => (staffType) => (totalWidth) => (scale) => {
+    let system = drawSystem(slices, totalWidth, scale, staffType, false);
     let container = document.createElementNS("http://www.w3.org/2000/svg", "g");
     container.appendChild(system.staff);
     container.appendChild(system.notes);
@@ -137,22 +167,8 @@ export const drawScore =
 
 export const insertScore = (el) => (score) => () => el.replaceChildren(score);
 
-// drawing an entire derivation
-
-const markerWidth = 5;
-
-// gets the bounding box of a note relative to container
-function getNoteBBox(noteid, container) {
-  let note = container.querySelector("#vf-" + CSS.escape(noteid));
-  let notebb = getBBox(note.children[0], false, container);
-  let slicebb = getBBox(note.parentElement, false, container);
-  return {
-    x: slicebb.x,
-    y: notebb.y,
-    width: slicebb.width,
-    height: notebb.height,
-  };
-}
+// Drawing Derivations
+// ===================
 
 function drawEdge(container, edge, selection, passing, looseness = 1) {
   const bbleft = getNoteBBox(edge.left.id, container);
@@ -219,6 +235,8 @@ function drawMarker(noteid, expl, container, notemap) {
   marker.setAttribute("id", "marker-" + noteid);
   marker.setAttribute("class", "pv-op-marker");
   container.appendChild(marker);
+  // const noteG = container.querySelector("#vf-" + CSS.escape(noteid));
+  // noteG.appendChild(marker);
 
   // select markers based on ornament type (TODO)
   let left = "none";
@@ -293,7 +311,19 @@ function drawTimeLabel(time, y) {
   return label;
 }
 
-export const drawGraph = (graph) => (totalWidth) => (scale) => (grandStaff) => {
+export const drawGraph = (graph) => (totalWidth) => (scale) => {
+  // The graph is drawn in several steps:
+  // - create a container element, add marker defs and CSS
+  // - add a separator element to be able to sort element into foreground and background
+  // - draw the staves and notes for each level
+  // - add styles and optional callbacks to the notes
+  // - draw the score at the bottom of the graph
+  // - add horis, edges, and transitions
+  // - add markers
+  // - highlight selected notes
+  // The last few steps compute bounding boxes so they require the previous
+  // elements to be attached to the DOM, which is done temporarily.
+  
   // initialize container
   let graphContainer = document.createElementNS(
     "http://www.w3.org/2000/svg",
@@ -301,16 +331,25 @@ export const drawGraph = (graph) => (totalWidth) => (scale) => (grandStaff) => {
   );
   // add marker defs
   graphContainer.innerHTML = markers;
+
+  // add CSS
+  let styleElt = document.createElementNS("http://www.w3.org/2000/svg", "style");
+  let combinedStyles = defaultStyles + "@layer userstyles { " + graph.styles.css + " }";
+  styleElt.innerHTML = combinedStyles;
+  graphContainer.appendChild(styleElt);
+
+  // add a foreground separator.
+  // this later allows us to place obects in the foreground or background.
   let fg_sep = document.createElementNS("http://www.w3.org/2000/svg", "g");
   graphContainer.appendChild(fg_sep);
 
   // draw levels with slices
   // if top-level is only ⋊-⋉: start at level 1
   let minLevel = graph.slices.filter((s) => s.depth == 0).length == 2 ? 1 : 0;
-  let levelOffset = grandStaff ? 150 : 80;
+  let levelOffset = graph.styles.staffType == "grand" ? 150 : 80;
   for (let level = minLevel; level <= graph.maxd; level++) {
     let levelSlices = graph.slices.filter((s) => s.depth == level);
-    let levelG = drawSystem(levelSlices, totalWidth, scale, grandStaff);
+    let levelG = drawSystem(levelSlices, totalWidth, scale, graph.styles.staffType, true, graph.styles);
     let transform = `translate(0 ${(level - minLevel) * levelOffset})`;
     levelG.notes.setAttribute("transform", transform);
     levelG.staff.setAttribute(
@@ -321,12 +360,21 @@ export const drawGraph = (graph) => (totalWidth) => (scale) => (grandStaff) => {
     graphContainer.insertBefore(levelG.staff, fg_sep);
   }
 
-  // add callbacks
-  if (graph.select) {
-    graph.slices.forEach((slice) => {
-      slice.notes.forEach((note) => {
-        let elt = graphContainer.querySelector("#vf-" + CSS.escape(note.id));
-        elt.setAttribute("class", elt.getAttribute("class") + " pv-selectable");
+  // add note callbacks and styles
+  graph.slices.forEach((slice) => {
+    slice.notes.forEach((note) => {
+      let elt = graphContainer.querySelector("#vf-" + CSS.escape(note.id));
+      let classes = elt.getAttribute("class") + " pv-note";
+
+      if (graph.styles) {
+        let noteStyle = graph.styles.noteStyles[note.id];
+        if (noteStyle) {
+          classes += " " + noteStyle.classes;
+        }
+      }
+
+      if (graph.select) {
+        classes += " pv-selectable";
         // this note already selected?
         if (graph.selection && graph.selection.note.id == note.id) {
           // yes -> deselect
@@ -335,12 +383,14 @@ export const drawGraph = (graph) => (totalWidth) => (scale) => (grandStaff) => {
           // no -> select
           elt.addEventListener("click", graph.select(note.sel));
         }
-      });
+      }
+
+      elt.setAttribute("class", classes);
     });
-  }
+  });
 
   // draw score
-  let score = drawScore(graph.surfaceSlices)(totalWidth)(scale)(grandStaff);
+  let score = drawScore(graph.surfaceSlices)(graph.styles.staffType)(totalWidth)(scale);
   score.setAttribute(
     "transform",
     `translate(0 ${(graph.maxd - minLevel + 1) * levelOffset})`,
@@ -363,7 +413,7 @@ export const drawGraph = (graph) => (totalWidth) => (scale) => (grandStaff) => {
     graphContainer.insertBefore(drawHori(hori, graphContainer), fg_sep);
   });
 
-  // render edges
+  // render transitions and edges
   graph.transitions.forEach((transition) => {
     transition.regular.forEach((edge) => {
       graphContainer.insertBefore(
@@ -421,9 +471,15 @@ export const drawGraph = (graph) => (totalWidth) => (scale) => (grandStaff) => {
   return graphContainer;
 };
 
-// svg for markers
-const markerStroke = "black";
+// Constant definitions (markers, CSS, ...)
+// ========================================
 
+// size of a note-function marker
+const markerWidth = 5;
+
+// const markerStroke = "black";
+
+// symbols for markers
 const markers = `<defs>
   <symbol id="marker-repeat" width="${markerWidth}" height="3" viewport="0 -2 5 3" overflow="visible">
     <line x1="0" y1="1.5" x2="${markerWidth}" y2="1.5"/>
@@ -452,33 +508,69 @@ const markers = `<defs>
     <polygon points="0,1.5 0,-1.5 ${markerWidth - 1},0 0,1.5"/>
   </symbol>
 </defs>
-<style>
-text {
+<!--rect width="100%" height="100%" fill="white"/-->`;
+
+// default CSS styles for graph elements
+const defaultStyles = `
+@layer defaults, userstyles, ui
+@layer defaults {
+  text {
     font-size: 16px;
-}
-.pv-op-marker {
+  }
+  .pv-op-marker {
     stroke: black;
     stroke-width: 1.5;
     fill: none;
-}
-.pv-edge {
+  }
+  .pv-edge {
     stroke: black;
+  }
 }
-.pv-edge.pv-selected, .pv-op-marker.pv-selected {
+@layer ui {
+  .pv-edge.pv-selected, .pv-op-marker.pv-selected {
     stroke: rgb(30, 144, 255);
-}
-.vf-notehead.pv-selected {
+  }
+  .vf-notehead.pv-selected {
     fill: rgb(30, 144, 255);
-}
-.vf-notehead.pv-parent {
+  }
+  .vf-notehead.pv-parent {
     fill: rgb(135, 206, 250);
-}
-.pv-selectable {
+  }
+  .pv-selectable {
     cursor: pointer;
+  }
 }
-</style>
-<!--rect width="100%" height="100%" fill="white"/-->
 `;
+
+// Helper Functions
+// ================
+
+// TODO: replace this with Accidental.applyAccidentals
+function addAcc(i, chord, n) {
+  if (n > 0) {
+    chord.addModifier(new VF.Accidental("#".repeat(n)), i);
+  }
+  if (n < 0) {
+    chord.addModifier(new VF.Accidental("b".repeat(-n)), i);
+  }
+}
+
+function noteToVex(n) {
+  return n.name + "/" + n.oct;
+}
+
+// gets the bounding box of a note relative to container
+function getNoteBBox(noteid, container) {
+  let note = container.querySelector("#vf-" + CSS.escape(noteid));
+  let notebb = getBBox(note.children[0], false, container);
+  let slicebb = getBBox(note.parentElement, false, container);
+  return {
+    x: slicebb.x,
+    y: notebb.y,
+    width: slicebb.width,
+    height: notebb.height,
+  };
+}
 
 /**
  * From https://gsap.com/community/forums/topic/13681-svg-gotchas/page/2/#comment-72060

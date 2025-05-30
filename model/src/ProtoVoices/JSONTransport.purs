@@ -1,113 +1,124 @@
 module ProtoVoices.JSONTransport where
 
 import Prelude
+
 import Data.Array (fromFoldable, mapWithIndex)
 import Data.Array as A
+import Data.Bifunctor (lmap)
 import Data.Either (Either(..), either)
+import Data.Int as Int
 import Data.Map as M
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), maybe)
 import Data.Pitches (parseNotation)
 import Data.Set as S
-import Data.Traversable (for, sequence)
+import Data.Traversable (for, sequence, traverse)
 import Data.Tuple (Tuple(..))
 import Data.Variant (Variant, case_, inj, on)
+import Foreign.Object as FO
 import ProtoVoices.Common (parseTime)
 import ProtoVoices.Folding (leftmostToReduction, reductionToLeftmost)
 import ProtoVoices.Leftmost (FreezeOp(..), HoriChildren(..), HoriOp(..), Leftmost(..), RootOrnament(..), SplitOp(..))
-import ProtoVoices.Model (DoubleOrnament(..), Edge, Edges, LeftOrnament(..), Model, Note, Piece, RightOrnament(..), SliceId, StartStop, TransId, sortNotes)
+import ProtoVoices.Model (DoubleOrnament(..), Edge, Edges, LeftOrnament(..), Model, Note, Piece, RightOrnament(..), SliceId(..), Staff(..), StartStop, Style, Styles, TransId(..), emptyStyles, sortNotes)
 import Simple.JSON as JSON
 import Type.Proxy (Proxy(..))
 
 ----------
 -- JSON --
 ----------
-type PieceJSON n
-  = Array
-      { time :: String
-      , notes :: Array { pitch :: String, hold :: Boolean | n }
-      }
+type PieceJSON n = Array
+  { time :: String
+  , notes :: Array { pitch :: String, hold :: Boolean | n }
+  }
 
-type ModelJSON
-  = { derivation :: Array LeftmostJSON
-    , start :: SliceJSON
-    , topSegments ::
-        Array
-          { trans :: TransitionJSON
-          , rslice :: SliceJSON
-          }
-    }
-
-type TransitionJSON
-  = { id :: TransId
-    , edges :: EdgesJSON
-    , is2nd :: Boolean
-    }
-
-type SliceJSON
-  = { id :: SliceId
-    , notes :: StartStop (Array Note)
-    }
-
-type EdgesJSON
-  = { regular :: Array Edge, passing :: Array Edge }
-
-type LeftmostJSON
-  = Variant
-      ( freezeLeft :: FreezeJSON
-      , freezeOnly :: FreezeJSON
-      , splitLeft :: SplitJSON
-      , splitRight :: SplitJSON
-      , splitOnly :: SplitJSON
-      , hori :: HoriJSON
-      )
-
-type FreezeJSON
-  = { ties :: Array Edge
-    , prevTime :: String
-    }
-
-type SplitJSON
-  = { regular :: Array { parent :: Edge, children :: Array { child :: Note, orn :: Maybe String } }
-    , passing :: Array { parent :: Edge, children :: Array { child :: Note, orn :: Maybe String } }
-    , fromLeft :: Array { parent :: Note, children :: Array { child :: Note, orn :: Maybe String } }
-    , fromRight :: Array { parent :: Note, children :: Array { child :: Note, orn :: Maybe String } }
-    , unexplained :: Array Note
-    , keepLeft :: Array Edge
-    , keepRight :: Array Edge
-    , passLeft :: Array Edge
-    , passRight :: Array Edge
-    , ids :: { left :: TransId, slice :: SliceId, right :: TransId }
-    }
-
-type HoriJSON
-  = { children ::
-        Array
-          { parent :: Note
-          , child ::
-              Variant
-                ( leftChild :: Note
-                , rightChild :: Note
-                , bothChildren :: { left :: Note, right :: Note }
-                , tooManyChildren ::
-                    { left :: Array Note
-                    , right :: Array Note
-                    }
-                )
-          }
-    , unexplained :: { left :: Array Note, right :: Array Note }
-    , midEdges :: EdgesJSON
-    , ids ::
-        { left :: TransId
-        , lslice :: SliceId
-        , mid :: TransId
-        , rslice :: SliceId
-        , right :: TransId
+type ModelJSON =
+  { derivation :: Array LeftmostJSON
+  , start :: SliceJSON
+  , topSegments ::
+      Array
+        { trans :: TransitionJSON
+        , rslice :: SliceJSON
         }
-    }
+  , styles :: Maybe StylesJSON
+  }
+
+type TransitionJSON =
+  { id :: TransId
+  , edges :: EdgesJSON
+  , is2nd :: Boolean
+  }
+
+type SliceJSON =
+  { id :: SliceId
+  , notes :: StartStop (Array Note)
+  }
+
+type EdgesJSON = { regular :: Array Edge, passing :: Array Edge }
+
+type LeftmostJSON = Variant
+  ( freezeLeft :: FreezeJSON
+  , freezeOnly :: FreezeJSON
+  , splitLeft :: SplitJSON
+  , splitRight :: SplitJSON
+  , splitOnly :: SplitJSON
+  , hori :: HoriJSON
+  )
+
+type FreezeJSON =
+  { ties :: Array Edge
+  , prevTime :: String
+  }
+
+type SplitJSON =
+  { regular :: Array { parent :: Edge, children :: Array { child :: Note, orn :: Maybe String } }
+  , passing :: Array { parent :: Edge, children :: Array { child :: Note, orn :: Maybe String } }
+  , fromLeft :: Array { parent :: Note, children :: Array { child :: Note, orn :: Maybe String } }
+  , fromRight :: Array { parent :: Note, children :: Array { child :: Note, orn :: Maybe String } }
+  , unexplained :: Array Note
+  , keepLeft :: Array Edge
+  , keepRight :: Array Edge
+  , passLeft :: Array Edge
+  , passRight :: Array Edge
+  , ids :: { left :: TransId, slice :: SliceId, right :: TransId }
+  }
+
+type HoriJSON =
+  { children ::
+      Array
+        { parent :: Note
+        , child ::
+            Variant
+              ( leftChild :: Note
+              , rightChild :: Note
+              , bothChildren :: { left :: Note, right :: Note }
+              , tooManyChildren ::
+                  { left :: Array Note
+                  , right :: Array Note
+                  }
+              )
+        }
+  , unexplained :: { left :: Array Note, right :: Array Note }
+  , midEdges :: EdgesJSON
+  , ids ::
+      { left :: TransId
+      , lslice :: SliceId
+      , mid :: TransId
+      , rslice :: SliceId
+      , right :: TransId
+      }
+  }
+
+type StylesJSON =
+  { noteStyles :: FO.Object Style
+  , edgeStyles :: Array { edge :: { left :: String, right :: String }, style :: Style }
+  , sliceStyles :: FO.Object Style
+  , transStyles :: FO.Object Style
+  , css :: String
+  , staffType :: String
+  }
 
 -- encoding JSON
 -- -------------
-pieceToJSON :: Piece -> PieceJSON ( id :: String )
+pieceToJSON :: Piece -> PieceJSON (id :: String)
 pieceToJSON = map \{ notes, time } -> { time: either identity show time, notes: noteToJSON <$> notes }
   where
   noteToJSON { note, hold } = { hold, id: note.id, pitch: show note.pitch }
@@ -119,11 +130,34 @@ modelToJSON model = do
     { derivation: leftmostToJSON <$> lm
     , start: sliceToJSON model.reduction.start
     , topSegments: (\{ trans, rslice } -> { trans: transToJSON trans, rslice: sliceToJSON rslice }) <$> fromFoldable model.reduction.segments
+    , styles: Just $ stylesToJSON model.styles
     }
   where
   sliceToJSON { id, notes } = { id, notes: map _.note <$> notes }
 
   transToJSON t = t { edges = edgesToJSON t.edges }
+
+stylesToJSON :: Styles -> StylesJSON
+stylesToJSON { notes, edges, slices, transitions, css, staff } =
+  { noteStyles: FO.fromFoldableWithIndex notes
+  , edgeStyles: unwrapEdge <$> M.toUnfoldable edges
+  , sliceStyles: FO.fromFoldable $ unwrapSlices $ M.toUnfoldable slices
+  , transStyles: FO.fromFoldable $ unwrapTransitions $ M.toUnfoldable transitions
+  , css
+  , staffType: case staff of
+      TrebleStaff -> "treble"
+      BassStaff -> "bass"
+      GrandStaff -> "grand"
+  }
+  where
+  unwrapEdge :: (Tuple (Tuple String String) Style) -> { edge :: { left :: String, right :: String }, style :: Style }
+  unwrapEdge (Tuple (Tuple left right) style) = { edge: { left, right }, style }
+
+  unwrapSlices :: Array (Tuple SliceId Style) -> Array (Tuple String Style)
+  unwrapSlices = map $ lmap $ \(SliceId id) -> show id
+
+  unwrapTransitions :: Array (Tuple TransId Style) -> Array (Tuple String Style)
+  unwrapTransitions = map $ lmap $ \(TransId id) -> show id
 
 leftmostToJSON :: Leftmost SplitOp FreezeOp HoriOp -> LeftmostJSON
 leftmostToJSON = case _ of
@@ -151,11 +185,11 @@ splitToJSON (SplitOp split@{ unexplained, keepLeft, keepRight, passLeft, passRig
   , ids
   }
   where
-  unwrap ::
-    forall o p s.
-    (o -> s) ->
-    Tuple p (Array { child :: Note, orn :: o }) ->
-    { parent :: p, children :: Array { child :: Note, orn :: s } }
+  unwrap
+    :: forall o p s
+     . (o -> s)
+    -> Tuple p (Array { child :: Note, orn :: o })
+    -> { parent :: p, children :: Array { child :: Note, orn :: s } }
   unwrap f (Tuple parent children) =
     { parent
     , children: (\{ child, orn } -> { child, orn: f orn }) <$> children
@@ -188,9 +222,9 @@ edgesToJSON edges = { regular: A.fromFoldable edges.regular, passing: edges.pass
 
 -- decoding JSON
 -- -------------
-pieceFromJSON ::
-  PieceJSON ( id :: String ) ->
-  Maybe Piece
+pieceFromJSON
+  :: PieceJSON (id :: String)
+  -> Maybe Piece
 pieceFromJSON piece =
   for piece \slice -> do
     notes <-
@@ -199,9 +233,11 @@ pieceFromJSON piece =
     pure { time: parseTime slice.time, notes: sortNotes notes }
 
 modelFromJSON :: ModelJSON -> Either String Model
-modelFromJSON { topSegments, derivation } = do
+modelFromJSON { topSegments, derivation, styles } = do
   deriv <- sequence $ leftmostFromJSON <$> derivation
-  leftmostToReduction topSegments deriv
+  { piece, reduction } <- leftmostToReduction topSegments deriv
+  parsedStyles <- maybe (pure emptyStyles) stylesFromJSON styles
+  pure { piece, reduction, styles: parsedStyles }
 
 leftmostFromJSON :: LeftmostJSON -> Either String (Leftmost SplitOp FreezeOp HoriOp)
 leftmostFromJSON =
@@ -236,11 +272,11 @@ splitFromJSON json@{ unexplained, keepLeft, keepRight, passLeft, passRight, ids 
         , ids
         }
   where
-  wrap ::
-    forall a p s.
-    (s -> Either String a) ->
-    { parent :: p, children :: Array { child :: Note, orn :: s } } ->
-    Either String (Tuple p (Array { child :: Note, orn :: a }))
+  wrap
+    :: forall a p s
+     . (s -> Either String a)
+    -> { parent :: p, children :: Array { child :: Note, orn :: s } }
+    -> Either String (Tuple p (Array { child :: Note, orn :: a }))
   wrap read { parent, children } =
     let
       children' = sequence $ (\{ child, orn } -> { child, orn: _ } <$> read orn) <$> children
@@ -294,15 +330,42 @@ horiFromJSON { midEdges, children, ids, unexplained } =
 
   childFromJSON { parent, child } = Tuple parent (getDist child)
 
+stylesFromJSON :: StylesJSON -> Either String Styles
+stylesFromJSON { noteStyles, edgeStyles, sliceStyles, transStyles, css, staffType } = do
+  slices <- map M.fromFoldable $ readId SliceId $ FO.toUnfoldable sliceStyles
+  transitions <- map M.fromFoldable $ readId TransId $ FO.toUnfoldable transStyles
+  staff <- case staffType of
+    "treble" -> pure TrebleStaff
+    "bass" -> pure BassStaff
+    "grand" -> pure GrandStaff
+    other -> Left $ "Unexpected staff type: " <> other <> " (expected treble, bass, or grand)."
+  pure
+    { notes: M.fromFoldableWithIndex noteStyles
+    , edges: M.fromFoldable $ wrapEdges <$> edgeStyles
+    , slices
+    , transitions
+    , css
+    , staff
+    }
+  where
+  wrapEdges { edge: { left, right }, style } = Tuple (Tuple left right) style
+
+  readId :: forall a. (Int -> a) -> Array (Tuple String Style) -> Either String (Array (Tuple a Style))
+  readId constructor = traverse parse
+    where
+    parse (Tuple id style) = do
+      id' <- maybe (Left $ "cannot parse " <> id <> "as integer.") Right $ Int.fromString id
+      pure $ Tuple (constructor id') style
+
 -------------
 -- helpers --
 -------------
-addJSONIds :: PieceJSON () -> PieceJSON ( id :: String )
+addJSONIds :: PieceJSON () -> PieceJSON (id :: String)
 addJSONIds piece = mapWithIndex (\s slice -> slice { notes = addids s slice.notes }) piece
   where
   addids s = mapWithIndex (\n note -> { id: "note" <> show s <> "." <> show n, pitch: note.pitch, hold: note.hold })
 
-stripJSONIds :: PieceJSON ( id :: String ) -> PieceJSON ()
+stripJSONIds :: PieceJSON (id :: String) -> PieceJSON ()
 stripJSONIds = map (\{ time, notes } -> { time, notes: map (\{ hold, pitch } -> { hold, pitch }) notes })
 
 foreign import unsafeStringifyPretty :: forall a. a -> String

@@ -14,12 +14,13 @@ import Data.Ratio ((%))
 import Effect (Effect)
 import ProtoVoices.Common (MBS(..))
 import ProtoVoices.Folding (Graph)
-import ProtoVoices.Model (Note, NoteExplanation(..), Piece, Slice, SliceId, StartStop(..), Time, BottomSurface, explParents, getInnerNotes)
+import ProtoVoices.JSONTransport (StylesJSON, stylesToJSON)
+import ProtoVoices.Model (BottomSurface, Note, NoteExplanation(..), Piece, Slice, SliceId, Staff, StartStop(..), Styles, explParents, getInnerNotes, staffType2JS)
 import Web.DOM.Element (Element)
 
 foreign import data DOMScore :: Type
 
-type Selection = { note :: Note, expl :: NoteExplanation }
+type SelectionInfo = { note :: Note, expl :: NoteExplanation }
 
 type RenderSlice =
   ( x :: Number
@@ -30,23 +31,23 @@ type RenderSlice =
         , name :: String
         , oct :: Int
         , accs :: Int
-        , sel :: Selection
+        , sel :: SelectionInfo
         , expl :: { typ :: String, parent :: Nullable String }
         }
   )
 
-foreign import drawScore :: Array (Record RenderSlice) -> Number -> Number -> Boolean -> DOMScore
+foreign import drawScore :: Array (Record RenderSlice) -> String -> Number -> Number -> DOMScore
 
 foreign import insertScore :: Element -> DOMScore -> Effect Unit
 
 renderScore
   :: Array Slice --  { x :: Number, id :: SliceId, notes :: Array { note :: Note, expl :: NoteExplanation } }
   -> (Number -> Number)
+  -> Staff
   -> Number
   -> Number
-  -> Boolean
   -> DOMScore
-renderScore slices toX = drawScore (mkRenderSlice toX <$> slices)
+renderScore slices toX staffType = drawScore (mkRenderSlice toX <$> slices) (staffType2JS staffType)
 
 -- where
 -- mkSlice s = s { notes = mkRenderSlice s.notes }
@@ -68,15 +69,25 @@ foreign import drawGraph
      , times :: Array { x :: Number, label :: String }
      , maxd :: Number
      , selection :: Nullable { note :: Note, parents :: Array Note }
-     , select :: Nullable Selection -> Effect Unit
+     , select :: Nullable (Nullable SelectionInfo -> Effect Unit)
+     , styles :: StylesJSON
      }
   -> Number
   -> Number
-  -> Boolean
   -> DOMScore
 
-renderGraph :: Graph -> Piece -> BottomSurface -> Maybe Selection -> (Maybe Selection -> Effect Unit) -> (Number -> Number) -> Number -> Number -> Boolean -> DOMScore
-renderGraph graph piece surface selection selectCallback toX = drawGraph
+renderGraph
+  :: Graph
+  -> Piece
+  -> BottomSurface
+  -> Styles
+  -> (Maybe SelectionInfo)
+  -> Maybe (Maybe SelectionInfo -> Effect Unit)
+  -> (Number -> Number)
+  -> Number
+  -> Number
+  -> DOMScore
+renderGraph graph piece surface styles selection selectCallback toX = drawGraph
   { slices: A.fromFoldable $ mkGraphSlice <$> M.values graph.slices
   , surfaceSlices: mkRenderSlice toX <$> surface.slices
   , transitions: A.fromFoldable $ (mkTrans <<< _.edges) <$> M.values graph.transitions
@@ -87,7 +98,8 @@ renderGraph graph piece surface selection selectCallback toX = drawGraph
   , selection: case selection of
       Nothing -> N.null
       Just { note, expl } -> N.notNull { note, parents: explParents expl }
-  , select: selectCallback <<< N.toMaybe
+  , select: N.toNullable $ map (_ <<< N.toMaybe) selectCallback
+  , styles: stylesToJSON styles
   }
   where
   -- toX x = scalex sett x - (noteSize / 2.0)
