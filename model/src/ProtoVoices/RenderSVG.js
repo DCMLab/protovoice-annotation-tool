@@ -334,7 +334,7 @@ export const drawGraph = (graph) => (totalWidth) => (scale) => {
 
   // add CSS
   let styleElt = document.createElementNS("http://www.w3.org/2000/svg", "style");
-  let combinedStyles = defaultStyles + "@layer userstyles { " + graph.styles.css + " }";
+  let combinedStyles = defaultStyles + "\n" + graph.styles.css + "\n" + uiStyles;
   styleElt.innerHTML = combinedStyles;
   graphContainer.appendChild(styleElt);
 
@@ -512,8 +512,6 @@ const markers = `<defs>
 
 // default CSS styles for graph elements
 const defaultStyles = `
-@layer defaults, userstyles, ui
-@layer defaults {
   text {
     font-size: 16px;
   }
@@ -525,8 +523,9 @@ const defaultStyles = `
   .pv-edge {
     stroke: black;
   }
-}
-@layer ui {
+`;
+
+const uiStyles = `
   .pv-edge.pv-selected, .pv-op-marker.pv-selected {
     stroke: rgb(30, 144, 255);
   }
@@ -539,7 +538,6 @@ const defaultStyles = `
   .pv-selectable {
     cursor: pointer;
   }
-}
 `;
 
 // Helper Functions
