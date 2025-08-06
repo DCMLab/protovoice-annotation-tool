@@ -11,6 +11,7 @@ import Data.Either (Either(..))
 import Data.Foldable (for_)
 import Data.Int (toNumber)
 import Data.List as L
+import Data.Map as M
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Effect (Effect)
 import Effect.Aff.Class (class MonadAff)
@@ -115,9 +116,13 @@ redrawScore = do
           slices = case st.selected of
             SelNote { note, parents } -> A.filter (\s -> s.slice.id `A.elem` getParents parents || note `A.elem` (_.note <$> getInnerNotes s.slice)) $ A.fromFoldable graph.slices
             _ -> A.filter (\s -> s.depth == 0.0) $ A.fromFoldable graph.slices
+          transitions = A.filter (\t -> t.left `A.elem` sliceIds && t.right `A.elem` sliceIds)
+            $ A.fromFoldable (M.values graph.transitions)
+            where
+            sliceIds = _.slice.id <$> slices
 
           totalWidth = scalex st.settings (toNumber $ A.length model.piece) + sliceDistance / 2.0
-        pure $ liftEffect $ insertScore scoreElt $ renderScore (_.slice <$> slices) toX model.styles.staff totalWidth scoreScale
+        pure $ liftEffect $ insertScore scoreElt $ renderScore (_.slice <$> slices) transitions toX model.styles.staff totalWidth scoreScale
     fromMaybe (pure unit) update
 
 autoSaveModel :: forall o m. (MonadEffect m) => H.HalogenM AppState GraphAction AppSlots o m Unit
@@ -171,11 +176,11 @@ handleAction act = do
             model = loadPiece piece
           in
             H.modify_ \st -> st
-              { loaded = Just { model, surface: findSurface model.reduction }
+              { loaded = Just { model, surface: findSurface false model.reduction }
               , name = name
               }
         ImportModel model -> H.modify_ \st -> st
-          { loaded = Just { model, surface: findSurface model.reduction }
+          { loaded = Just { model, surface: findSurface false model.reduction }
           , name = name
           }
       -- ImportCurrentSurface ->

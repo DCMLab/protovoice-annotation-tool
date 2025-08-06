@@ -13,9 +13,9 @@ import Data.Pitches (alteration, letter, octaves)
 import Data.Ratio ((%))
 import Effect (Effect)
 import ProtoVoices.Common (MBS(..))
-import ProtoVoices.Folding (Graph)
+import ProtoVoices.Folding (Graph, GraphTransition)
 import ProtoVoices.JSONTransport (StylesJSON, stylesToJSON)
-import ProtoVoices.Model (BottomSurface, Edges, Note, NoteExplanation(..), Piece, Slice, SliceId, Staff, StartStop(..), Styles, TransId, explParents, getInnerNotes, staffType2JS)
+import ProtoVoices.Model (Edges, Note, NoteExplanation(..), Piece, Slice, SliceId, Staff, StartStop(..), Styles, TransId, BottomSurface, explParents, getInnerNotes, staffType2JS)
 import Web.DOM.Element (Element)
 
 foreign import data DOMScore :: Type
@@ -38,29 +38,34 @@ type RenderSlice =
         }
   )
 
-foreign import drawScore :: Array (Record RenderSlice) -> String -> Number -> Number -> DOMScore
-
-foreign import insertScore :: Element -> DOMScore -> Effect Unit
-
-renderScore
-  :: Array Slice --  { x :: Number, id :: SliceId, notes :: Array { note :: Note, expl :: NoteExplanation } }
-  -> (Number -> Number)
-  -> Staff
-  -> Number
-  -> Number
-  -> DOMScore
-renderScore slices toX staffType = drawScore (mkRenderSlice toX <$> slices) (staffType2JS staffType)
-
--- where
--- mkSlice s = s { notes = mkRenderSlice s.notes }
-
--- Rendering full graph
-
 type RenderGraphSlice = { depth :: Number | RenderSlice }
 
 type InnerEdge = { left :: Note, right :: Note }
 
 type RenderGraphTransition = { id :: TransId, regular :: Array InnerEdge, passing :: Array InnerEdge }
+
+foreign import drawScore :: Array (Record RenderSlice) -> Array RenderGraphTransition -> String -> Number -> Number -> DOMScore
+
+foreign import insertScore :: Element -> DOMScore -> Effect Unit
+
+renderScore
+  :: Array Slice --  { x :: Number, id :: SliceId, notes :: Array { note :: Note, expl :: NoteExplanation } }
+  -> Array GraphTransition
+  -> (Number -> Number)
+  -> Staff
+  -> Number
+  -> Number
+  -> DOMScore
+renderScore slices transitions toX staffType =
+  drawScore
+    (mkRenderSlice toX <$> slices)
+    (mkRenderTrans <$> transitions)
+    (staffType2JS staffType)
+
+-- where
+-- mkSlice s = s { notes = mkRenderSlice s.notes }
+
+-- Rendering full graph
 
 foreign import drawGraph
   :: { slices :: Array RenderGraphSlice
@@ -92,8 +97,8 @@ renderGraph
 renderGraph graph piece surface styles selection selectCallback toX = drawGraph
   { slices: A.fromFoldable $ mkGraphSlice <$> M.values graph.slices
   , surfaceSlices: mkRenderSlice toX <$> surface.slices
-  , transitions: A.fromFoldable $ mkTrans <$> M.values graph.transitions
-  , surfaceTransitions: mkTrans <$> surface.transs
+  , transitions: A.fromFoldable $ mkRenderTrans <$> M.values graph.transitions
+  , surfaceTransitions: mkRenderTrans <$> surface.transs
   , horis: A.fromFoldable graph.horis
   , times: A.mapWithIndex mkTime $ _.time <$> piece
   , maxd: graph.maxd
@@ -114,23 +119,11 @@ renderGraph graph piece surface styles selection selectCallback toX = drawGraph
     where
     rs = mkRenderSlice toX s.slice
 
-  mkTrans :: forall r. { edges :: Edges, id :: TransId | r } -> RenderGraphTransition
-  mkTrans t =
-    { regular: innerEdges $ A.fromFoldable t.edges.regular
-    , passing: innerEdges $ t.edges.passing
-    , id: t.id
-    }
   mkTime i time = { x: toX $ toNumber (i + 1), label }
     where
     label = case time of
       Right (MBS { m, b, s }) -> if s == 0 % 1 then show m <> "." <> show b else ""
       Left str -> str
-
-  innerEdges edges = A.catMaybes $
-    ( \edge -> case edge of
-        { left: Inner l, right: Inner r } -> Just { left: l, right: r }
-        _ -> Nothing
-    ) <$> edges
 
 mkRenderSlice :: (Number -> Number) -> Slice -> Record RenderSlice
 mkRenderSlice toX slice =
@@ -147,6 +140,19 @@ mkRenderSlice toX slice =
     , sel: n
     , expl: encodeExplanation n.expl
     }
+
+mkRenderTrans :: forall r. { edges :: Edges, id :: TransId | r } -> RenderGraphTransition
+mkRenderTrans t =
+  { regular: innerEdges $ A.fromFoldable t.edges.regular
+  , passing: innerEdges $ t.edges.passing
+  , id: t.id
+  }
+  where
+  innerEdges edges = A.catMaybes $
+    ( \edge -> case edge of
+        { left: Inner l, right: Inner r } -> Just { left: l, right: r }
+        _ -> Nothing
+    ) <$> edges
 
 encodeExplanation :: NoteExplanation -> { typ :: String, parent :: Nullable String }
 encodeExplanation expl = case expl of

@@ -6,7 +6,7 @@ const VF = Vex.Flow;
 // Drawing basic score elements
 // ============================
 
-function drawSlice(slice, staffType, scale, useIDs, styles) {
+function drawSlice(slice, staffType, scale, id_pfx, styles) {
   let div = createSvgElt("g");
   let renderer = new VF.Renderer(div, VF.Renderer.Backends.SVG);
   //renderer.resize(500, 500);
@@ -27,12 +27,11 @@ function drawSlice(slice, staffType, scale, useIDs, styles) {
       });
       
       // add IDs
-      if (useIDs) {
-        for (let i = 0; i < notes.length; i++) {
-          chord._noteHeads[i].attrs.id = notes[i].id;
-        }
-        chord.attrs.id = `slice${slice.id}-${clef}`;
+      for (let i = 0; i < notes.length; i++) {
+        chord._noteHeads[i].attrs.id = notes[i].id;
       }
+      chord.attrs.id = `${id_pfx}slice${slice.id}-${clef}`;
+      
 
       // add style attributes
       if (styles) {
@@ -107,7 +106,7 @@ function drawStaff(width, staffType) {
   return elt;
 }
 
-function drawSystem(slices, totalWidth, scale, staffType, useIDs, styles = null) {
+function drawSystem(slices, totalWidth, scale, staffType, id_pfx, styles = null) {
   let container = createSvgElt("g");
 
   // draw staff
@@ -127,7 +126,7 @@ function drawSystem(slices, totalWidth, scale, staffType, useIDs, styles = null)
       "translate(" + slice.x + " 0) scale(" + scale + " " + scale + ")",
     );
     sliceG.setAttribute("id", "slice-" + slice.id);
-    sliceG.appendChild(drawSlice(slice, staffType, scale, useIDs, styles));
+    sliceG.appendChild(drawSlice(slice, staffType, scale, id_pfx, styles));
     
     // apply slice styles
     if (styles !== null) {
@@ -157,12 +156,71 @@ function drawSystem(slices, totalWidth, scale, staffType, useIDs, styles = null)
 // Drawing a score
 // ===============
 
+function drawScoreEdge(container, edge, passing) {
+  // compute coordinates
+  const bbleft = getNoteBBox(edge.left.id, container);
+  const bbright = getNoteBBox(edge.right.id, container);
+  let x1 = bbleft.x + bbleft.width + markerWidth + 2;
+  let y1 = bbleft.y + bbleft.height / 2;
+  let x2 = bbright.x - markerWidth - 2;
+  let y2 = bbright.y + bbright.height / 2;
+
+  // compute
+  let line = createSvgElt("line");
+  line.setAttribute("x1", x1);
+  line.setAttribute("y1", y1);
+  line.setAttribute("x2", x2);
+  line.setAttribute("y2", y2);
+
+  let classes = "pv-score-edge";
+  if (passing) {
+    line.setAttribute("stroke-dasharray", "6,3");
+    classes += " pv-passing";
+  } else {
+    classes += " pv-regular";
+  }
+
+  line.setAttribute("class", classes);
+
+  return line;
+};
+
 export const drawScore =
-  (slices) => (staffType) => (totalWidth) => (scale) => {
-    let system = drawSystem(slices, totalWidth, scale, staffType, false);
+  (slices) => (transitions) => (staffType) => (totalWidth) => (scale) => {
+    // draw system and notes
+    let system = drawSystem(slices, totalWidth, scale, staffType, "score-");
     let container = createSvgElt("g");
     container.appendChild(system.staff);
     container.appendChild(system.notes);
+
+    // make sure that the container is attached to the DOM (required for computing bboxes)
+    let fakesvg = createSvgElt("svg");
+    fakesvg.appendChild(container);
+    document.body.appendChild(fakesvg);
+
+    // draw edges
+    transitions.forEach(transition => {
+      let transElt = createSvgElt("g");
+      transElt.setAttribute("id", `score-transition-${transition.id}`);
+      transElt.setAttribute("class", "pv-score-transition");
+      
+      transition.regular.forEach((edge) => {
+        transElt.appendChild(
+          drawScoreEdge(container, edge, false),
+        );
+      });
+      transition.passing.forEach((edge) => {
+        transElt.appendChild(
+          drawScoreEdge(container, edge, true),
+        );
+      });
+      container.appendChild(transElt);
+    });
+
+    // remove container from DOM
+    fakesvg.remove();
+    container.remove();
+
     return container;
   };
 
@@ -371,7 +429,7 @@ export const drawGraph = (graph) => (totalWidth) => (scale) => {
   let levelOffset = graph.styles.staffType == "grand" ? 150 : 80;
   for (let level = minLevel; level <= graph.maxd; level++) {
     let levelSlices = graph.slices.filter((s) => s.depth == level);
-    let levelG = drawSystem(levelSlices, totalWidth, scale, graph.styles.staffType, true, graph.styles);
+    let levelG = drawSystem(levelSlices, totalWidth, scale, graph.styles.staffType, "", graph.styles);
     let transform = `translate(0 ${(level - minLevel) * levelOffset})`;
     levelG.notes.setAttribute("transform", transform);
     levelG.staff.setAttribute(
@@ -417,7 +475,7 @@ export const drawGraph = (graph) => (totalWidth) => (scale) => {
   });
 
   // draw score
-  let score = drawScore(graph.surfaceSlices)(graph.styles.staffType)(totalWidth)(scale);
+  let score = drawScore(graph.surfaceSlices)(graph.surfaceTransitions)(graph.styles.staffType)(totalWidth)(scale);
   score.setAttribute(
     "transform",
     `translate(0 ${(graph.maxd - minLevel + 1) * levelOffset})`,

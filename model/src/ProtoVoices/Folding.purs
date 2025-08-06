@@ -537,14 +537,16 @@ leftmostToReduction topSegments deriv = do
 -- finding the surface of a reduction
 -- ==================================
 
-findSurface :: Reduction -> BottomSurface
-findSurface red = flip ST.execState { slices: [], transs: [] } $ walkGraph surfaceAlg red.start agenda
+findSurface :: Boolean -> Reduction -> BottomSurface
+findSurface showAllEdges red = flip ST.execState { slices: [], transs: [] } $ walkGraph surfaceAlg red.start agenda
   where
   agenda = nothingMore <$> red.segments
 
-  split ag { childl, childr } = pure $ map nothingMore $ Cons (addUnusedEdgesLeft childl) $ Cons (addUnusedEdgesRight childl.rslice childr') Nil
+  split ag { childl, childr } = pure $ map nothingMore $ segLeft : segRight : Nil
     where
     childr' = attachSegment childr ag.seg.rslice
+    segLeft = if showAllEdges then addUnusedEdgesLeft childl else childl
+    segRight = if showAllEdges then addUnusedEdgesRight childl.rslice childr' else childr'
 
   hori _ ag1 ag2 { childl, childm, childr } = pure $ map nothingMore $ Cons childl' $ Cons childm $ Cons childr' Nil
     where

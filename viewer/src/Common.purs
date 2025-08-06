@@ -123,7 +123,7 @@ fillCache model step cache =
   flip ST.evalState Nothing do
     pruned' <- insertItem identity cache.modelPruned
     graph' <- insertItem (evalGraph true true <<< _.reduction) cache.graph
-    surface' <- insertItem (findSurface <<< _.reduction) cache.surface
+    surface' <- insertItem (findSurface false <<< _.reduction) cache.surface
     pure { modelPruned: pruned', graph: graph', surface: surface' }
   where
   insertItem :: forall a. (Model -> a) -> M.Map Int a -> ST.State (Maybe (Either String Model)) (M.Map Int a)
@@ -156,4 +156,4 @@ cacheGetGraph mpruned step cache = case M.lookup step cache.graph of
 cacheGetSurface :: Model -> Int -> ViewerCache -> BottomSurface
 cacheGetSurface mpruned step cache = case M.lookup step cache.surface of
   Just surfs -> surfs
-  Nothing -> findSurface mpruned.reduction
+  Nothing -> findSurface false mpruned.reduction
