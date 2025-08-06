@@ -2,9 +2,9 @@ module App.Tabs.SVG where
 
 import Prelude
 
-import App.Common (AppSettings, ModelInfo)
+import App.Common (ModelInfo, AppSettings)
 import App.Render (offset, scalex, sliceDistance)
-import App.Utils (class_)
+import App.Utils (class_, download, getElementHTML)
 import Data.Array as A
 import Data.Int (toNumber)
 import Data.List as L
@@ -19,7 +19,7 @@ import Halogen.Query.Input (Input(..))
 import Halogen.Svg.Attributes as SA
 import Halogen.Svg.Elements as SE
 import ProtoVoices.Model (Staff(..))
-import ProtoVoices.RenderSVG (insertScore, renderGraph)
+import ProtoVoices.RenderSVG (DOMScore, insertScore, renderGraph)
 import Web.DOM.Element (Element)
 
 scoreHeightGrand :: Number
@@ -34,17 +34,19 @@ scoreScale = 0.9
 axisHeight :: Number
 axisHeight = offset 2
 
-type SVGInput = { modelInfo :: ModelInfo, settings :: AppSettings }
+type SVGInput = { modelInfo :: ModelInfo, settings :: AppSettings, name :: String }
 
 data SVGAction
   = SVGRegisterElt Element
   | SVGReceive SVGInput
   | SVGToggleSurface
+  | SVGDownload
 
 type SVGState =
   { scoreElt :: Maybe Element
   , modelInfo :: ModelInfo
   , settings :: AppSettings
+  , name :: String
   , showSurface :: Boolean
   }
 
@@ -61,12 +63,12 @@ svgComponent = H.mkComponent
       }
   }
   where
-  initialState { modelInfo, settings } = { modelInfo, settings, scoreElt: Nothing, showSurface: true }
+  initialState { modelInfo, settings, name } = { modelInfo, settings, scoreElt: Nothing, showSurface: true, name: name }
 
   render :: SVGState -> _
   render { modelInfo, settings, showSurface } = HH.div_
     [ HH.div [ class_ "content-np tab pure-form pure-g" ]
-        [ HH.div [ class_ "pure-u-3-4" ]
+        [ HH.div [ class_ "pure-u-4-5" ]
             [ HH.input
                 [ HP.type_ $ HP.InputCheckbox
                 , HP.checked showSurface
@@ -75,6 +77,12 @@ svgComponent = H.mkComponent
                 ]
             , HH.label [ HP.for "showSurface" ] [ HH.text " show full surface below graph" ]
             ]
+        , HH.button
+            [ class_ "pure-button pure-button-primary pure-u-1-5"
+            , HE.onClick \_ -> SVGDownload
+            ]
+            [ HH.text "Download" ]
+
         ]
     , HH.div [ class_ "wide" ]
         [ svgContainer settings showSurface modelInfo ]
@@ -88,6 +96,12 @@ svgComponent = H.mkComponent
         H.modify_ \st -> st { modelInfo = modelInfo, settings = settings }
       SVGToggleSurface ->
         H.modify_ \st -> st { showSurface = not st.showSurface }
+      SVGDownload -> do
+        { name } <- H.get
+        svg <- H.liftEffect $ getElementHTML "svg-graph"
+        _ <- H.liftEffect $
+          download ("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" <> svg) (name <> ".svg") "image/svg+xml"
+        pure unit
     redrawGraph
 
 svgContainer
@@ -115,24 +129,23 @@ svgContainer sett showSurface { model, graph } =
           , SA.viewBox (negate $ scalex sett 1.0) 0.0 width height
           , HP.IProp $ HC.ref $ map (Action <<< SVGRegisterElt)
           , HP.style "overflow: visible;"
+          , HP.id "svg-graph"
+          , HP.attr (HH.AttrName "xmlns") "http://www.w3.org/2000/svg"
           ]
-          [ SE.element (HH.ElemName "svg")
-              [ HP.style "overflow: visible;"
-              , HP.ref $ H.RefLabel $ "svgRendering"
-              ]
-              []
-          ]
+          []
       ]
+
+renderSVG :: ModelInfo -> AppSettings -> Boolean -> DOMScore
+renderSVG { model, graph, surface } settings showSurface = renderGraph graph model.piece surface model.styles Nothing Nothing toX totalWidth scoreScale showSurface
+  where
+  totalWidth = scalex settings (toNumber $ A.length model.piece) + sliceDistance / 2.0
+  toX x = scalex settings x -- - (noteSize / 2.0)
 
 redrawGraph :: forall o m s. (MonadEffect m) => H.HalogenM SVGState SVGAction s o m Unit
 redrawGraph = do
-  { modelInfo: { model, graph, surface }, settings, scoreElt, showSurface } <- H.get
+  { modelInfo, settings, scoreElt, showSurface } <- H.get
   case scoreElt of
     Nothing -> pure unit
     Just elt ->
-      let
-        totalWidth = scalex settings (toNumber $ A.length model.piece) + sliceDistance / 2.0
-        toX x = scalex settings x -- - (noteSize / 2.0)
-      in
-        H.liftEffect $ do
-          insertScore elt $ renderGraph graph model.piece surface model.styles Nothing Nothing toX totalWidth scoreScale showSurface
+      H.liftEffect $ do
+        insertScore elt $ renderSVG modelInfo settings showSurface

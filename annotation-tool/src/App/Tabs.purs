@@ -61,7 +61,7 @@ renderTabs st modelInfo =
         Just SettingsTab -> HH.slot (Proxy :: Proxy "settingsTab") 3 settingsComponent st.settings HandleSettings
         Just SVGTab -> case modelInfo of
           Nothing -> HH.text ""
-          Just modelInfo' -> HH.slot_ (Proxy :: Proxy "svgTab") 4 svgComponent { modelInfo: modelInfo', settings: st.settings }
+          Just modelInfo' -> HH.slot_ (Proxy :: Proxy "svgTab") 4 svgComponent { modelInfo: modelInfo', settings: st.settings, name: st.name }
         Just DebugTab -> debugComponent st modelInfo
     ]
 

@@ -46,6 +46,8 @@ foreign import download_ :: Foreign -> String -> String -> Effect Boolean
 download :: String -> String -> String -> Effect Boolean
 download str filename mimetype = download_ (unsafeToForeign str) filename mimetype
 
+foreign import getElementHTML :: String -> Effect String
+
 -- TODO: better error handling
 foreign import musicxml2pv :: (forall a b. a -> Either a b) -> (forall a b. b -> Either a b) -> Boolean -> String -> Effect (Promise (Either String String))
 

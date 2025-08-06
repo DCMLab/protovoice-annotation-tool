@@ -189,3 +189,7 @@ export function eventTargetIsBody(eventTarget) {
     return false;
   }
 }
+
+export function getElementHTML(id) {
+  return () => document.getElementById(id).outerHTML;
+}
