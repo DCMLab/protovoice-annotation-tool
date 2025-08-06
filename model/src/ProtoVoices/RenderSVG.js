@@ -554,6 +554,10 @@ const markers = `<defs>
 <!--rect width="100%" height="100%" fill="white"/-->`;
 
 // default CSS styles for graph elements
+// the cat* color palettes are tab10 variations:
+// - catN: seaborn "deep"
+// - catNb: light colors from matplotlib "tab20"
+// - catNc: seaborn "dark"
 export const defaultStyles = `
 :root {
   stroke: black;
@@ -584,16 +588,16 @@ text {
   --cat8: #8C8C8C;
   --cat9: #CCB974;
   --cat10: #64B5CD;
-  --cat1b: #A1C9F4;
-  --cat2b: #FFB482;
-  --cat3b: #8DE5A1;
-  --cat4b: #FF9F9B;
-  --cat5b: #D0BBFF;
-  --cat6b: #DEBB9B;
-  --cat7b: #FAB0E4;
-  --cat8b: #CFCFCF;
-  --cat9b: #FFFEA3;
-  --cat10b: #B9F2F0;
+  --cat1b: #aec7e8;
+  --cat2b: #ffbb78;
+  --cat3b: #98df8a;
+  --cat4b: #ff9896;
+  --cat5b: #c5b0d5;
+  --cat6b: #c49c94;
+  --cat7b: #f7b6d2;
+  --cat8b: #c7c7c7;
+  --cat9b: #dbdb8d;
+  --cat10b: #9edae5;
   --cat1c: #001C7F;
   --cat2c: #B1400D;
   --cat3c: #12711C;
@@ -616,16 +620,16 @@ text {
 .cat8, .cat8 svg { fill: #8C8C8C; stroke: #8C8C8C; }
 .cat9, .cat9 svg { fill: #CCB974; stroke: #CCB974; }
 .cat10, .cat10 svg { fill: #64B5CD; stroke: #64B5CD; }
-.cat1b, .cat1b svg { fill: #A1C9F4; stroke: #A1C9F4; }
-.cat2b, .cat2b svg { fill: #FFB482; stroke: #FFB482; }
-.cat3b, .cat3b svg { fill: #8DE5A1; stroke: #8DE5A1; }
-.cat4b, .cat4b svg { fill: #FF9F9B; stroke: #FF9F9B; }
-.cat5b, .cat5b svg { fill: #D0BBFF; stroke: #D0BBFF; }
-.cat6b, .cat6b svg { fill: #DEBB9B; stroke: #DEBB9B; }
-.cat7b, .cat7b svg { fill: #FAB0E4; stroke: #FAB0E4; }
-.cat8b, .cat8b svg { fill: #CFCFCF; stroke: #CFCFCF; }
-.cat9b, .cat9b svg { fill: #FFFEA3; stroke: #FFFEA3; }
-.cat10b, .cat10b svg { fill: #B9F2F0; stroke: #B9F2F0; }
+.cat1b, .cat1b svg { fill: #aec7e8; stroke: #aec7e8; }
+.cat2b, .cat2b svg { fill: #ffbb78; stroke: #ffbb78; }
+.cat3b, .cat3b svg { fill: #98df8a; stroke: #98df8a; }
+.cat4b, .cat4b svg { fill: #ff9896; stroke: #ff9896; }
+.cat5b, .cat5b svg { fill: #c5b0d5; stroke: #c5b0d5; }
+.cat6b, .cat6b svg { fill: #c49c94; stroke: #c49c94; }
+.cat7b, .cat7b svg { fill: #f7b6d2; stroke: #f7b6d2; }
+.cat8b, .cat8b svg { fill: #c7c7c7; stroke: #c7c7c7; }
+.cat9b, .cat9b svg { fill: #dbdb8d; stroke: #dbdb8d; }
+.cat10b, .cat10b svg { fill: #9edae5; stroke: #9edae5; }
 .cat1c, .cat1c svg { fill: #001C7F; stroke: #001C7F; }
 .cat2c, .cat2c svg { fill: #B1400D; stroke: #B1400D; }
 .cat3c, .cat3c svg { fill: #12711C; stroke: #12711C; }
