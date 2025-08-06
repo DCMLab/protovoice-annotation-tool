@@ -3,8 +3,7 @@ module App.Tabs.Import where
 import Prelude
 
 import App.Common (ImportOutput, ImportThing(..))
-import App.Render (class_)
-import App.Utils (convertMusicXML, examplePiece, examplePieceLong, showJSONErrors)
+import App.Utils (convertMusicXML, examplePiece, examplePieceLong, showJSONErrors, class_)
 import DOM.HTML.Indexed.InputAcceptType (InputAcceptTypeAtom(..))
 import Data.Either (Either(..), either)
 import Data.List as L
@@ -57,7 +56,7 @@ importComponent = H.mkComponent { initialState, render, eval: H.mkEval H.default
     }
 
   render { modelText, pieceText, name, musicXMLText, musicXMLUnfold } =
-    HH.div [ class_ "tab" ]
+    HH.div [ class_ "content-np tab" ]
       [ HH.button
           [ class_ "pure-button"
           , HE.onClick $ \_ ->

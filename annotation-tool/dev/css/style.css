@@ -3,6 +3,14 @@
     margin-right: auto;
     max-width: 1044px;
     padding: 0 10px;
+    box-sizing: border-box;
+}
+
+.content-np {
+    margin-left: auto;
+    margin-right: auto;
+    max-width: 1044px;
+    box-sizing: border-box;
 }
 
 .wide {

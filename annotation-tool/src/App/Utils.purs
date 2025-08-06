@@ -9,11 +9,16 @@ import Data.Maybe (fromJust)
 import Effect (Effect)
 import Effect.Aff (Aff)
 import Foreign (Foreign, ForeignError, renderForeignError, unsafeToForeign)
+import Halogen.HTML as HH
+import Halogen.HTML.Properties as HP
 import Partial.Unsafe (unsafePartial)
 import ProtoVoices.Common (MBS)
 import ProtoVoices.JSONTransport (PieceJSON, addJSONIds, pieceFromJSON)
 import ProtoVoices.Model (Note)
 import Web.Event.EventTarget (EventTarget)
+
+class_ :: forall r i. String -> HH.IProp (class :: String | r) i
+class_ str = HP.class_ $ HH.ClassName str
 
 foreign import examplePieceJSON :: PieceJSON ()
 

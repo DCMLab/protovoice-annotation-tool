@@ -4,6 +4,7 @@ import Prelude
 
 import App.Common (AppSettings, ModelInfo)
 import App.Render (offset, scalex, sliceDistance)
+import App.Utils (class_)
 import Data.Array as A
 import Data.Int (toNumber)
 import Data.List as L
@@ -59,7 +60,8 @@ svgComponent = H.mkComponent
   where
   initialState { modelInfo, settings } = { modelInfo, settings, scoreElt: Nothing }
 
-  render { modelInfo, settings } = svgContainer settings modelInfo
+  render { modelInfo, settings } = HH.div [ class_ "wide" ]
+    [ svgContainer settings modelInfo ]
 
   handleSVGAction action = do
     case action of
@@ -68,8 +70,6 @@ svgComponent = H.mkComponent
       SVGReceive { modelInfo, settings } ->
         H.modify_ \st -> st { modelInfo = modelInfo, settings = settings }
     redrawGraph
-
--- TODO!
 
 svgContainer
   :: forall p
@@ -85,7 +85,9 @@ svgContainer sett { model, graph } =
     extraRows = if isComplete then 0.0 else 1.0
     height = systemHeight * (graph.maxd + 1.0 + extraRows) + axisHeight
   in
-    HH.div_
+    HH.div
+      [ HP.style "overflow: scroll; position: relative; left: 50%; transform: translateX(-50%); width: auto;"
+      ]
       [ SE.svg
           [ SA.width width
           , SA.height height

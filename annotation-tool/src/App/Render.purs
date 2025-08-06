@@ -3,6 +3,7 @@ module App.Render where
 import Prelude
 
 import App.Common (AppSettings, GraphAction(..), Selection(..), addParentToNote, noteIsSelected, removeParent)
+import App.Utils (class_)
 import Data.Array (catMaybes, elem, findIndex, fromFoldable, mapWithIndex)
 import Data.Array as A
 import Data.Either (Either(..))
@@ -11,7 +12,6 @@ import Data.Map as M
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Number (exp)
 import Data.Ratio ((%))
-import Data.Tuple (Tuple(..))
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Core as HC
@@ -494,9 +494,6 @@ renderReduction sett piece graph validation styles selection =
         , HH.text $ "@layer userstyles {" <> styles.css <> "}"
         ]
     ]
-
-class_ :: forall r i. String -> HH.IProp (class :: String | r) i
-class_ str = HP.class_ $ HH.ClassName str
 
 mkOption :: forall o p action. (o -> action) -> { k :: o, v :: String, s :: Boolean } -> HH.HTML p action
 mkOption updateAction { k, v, s } =

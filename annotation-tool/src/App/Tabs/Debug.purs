@@ -3,7 +3,7 @@ module App.Tabs.Debug where
 import Prelude
 
 import App.Common (AppState, GraphAction, ModelInfo)
-import App.Render (class_)
+import App.Utils (class_)
 import Data.Either (Either(..))
 import Data.Hashable (hash)
 import Data.Maybe (Maybe(..))
@@ -17,7 +17,7 @@ import Simple.JSON as JSON
 -- ---------------
 debugComponent :: forall p. AppState -> Maybe ModelInfo -> HH.HTML p GraphAction
 debugComponent st modelInfo =
-  HH.div [ class_ "tab" ] $
+  HH.div [ class_ "content-np tab" ] $
     [ HH.h3_ [ HH.text "Selection" ]
     , HH.p_
         [ HH.text "Selection: "

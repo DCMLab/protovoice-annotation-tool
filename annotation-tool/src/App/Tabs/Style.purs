@@ -3,7 +3,8 @@ module App.Tabs.Style where
 import Prelude
 
 import App.Common (ModelInfo, Selection(..))
-import App.Render (class_, mkSelect')
+import App.Render (mkSelect')
+import App.Utils (class_)
 import Data.Either (Either(..))
 import Data.Map as M
 import Data.Maybe (Maybe(..), fromMaybe)
@@ -46,8 +47,9 @@ styleComponent = H.mkComponent
 
   render { modelInfo: minfo, selection } = case minfo of
     Nothing -> HH.text ""
-    Just info -> HH.div [ class_ "tab" ]
+    Just info -> HH.div [ class_ "content-np tab" ]
       [ generalBox info.model.styles, selectionStyle info.model.styles info.graph ]
+
     where
     showStaffType = case _ of
       GrandStaff -> "Grand"
@@ -59,7 +61,7 @@ styleComponent = H.mkComponent
           [ HH.label [ HP.for "style-staff", class_ "pure-u-1-4" ] [ HH.text "Staff Type:" ]
           , mkSelect' StyleActionUpdateStaff showStaffType styles.staff [ GrandStaff, TrebleStaff, BassStaff ]
           ]
-      , HH.label [ HP.for "style-css" ] [ HH.text "CSS:" ]
+      , HH.label [ HP.for "style-css" ] [ HH.text "Custom CSS:" ]
       , HH.textarea [ HP.id "style-css", HP.value styles.css, HE.onValueInput StyleActionUpdateCSS ]
       ]
 
@@ -100,7 +102,7 @@ styleComponent = H.mkComponent
     -- | Creates style inputs (for classes and label) for one graph element
     styleBox :: StyleElement -> String -> Style -> _
     styleBox elt heading style = HH.div_
-      [ HH.h3_ [ HH.text heading ]
+      [ HH.h4_ [ HH.text heading ]
       , HH.p
           [ class_ "pure-g" ]
           [ HH.label [ HP.for "style-classes", class_ "pure-u-1-4" ] [ HH.text "Classes:" ]

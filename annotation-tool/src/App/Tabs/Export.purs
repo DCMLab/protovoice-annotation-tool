@@ -3,9 +3,8 @@ module App.Tabs.Export where
 import Prelude
 
 import App.Common (Selection)
-import App.Render (class_)
 import App.TikZ (tikzOpDecor, tikzReduction)
-import App.Utils (copyToClipboard, download)
+import App.Utils (copyToClipboard, download, class_)
 import Data.Either (Either(..))
 import Data.List as L
 import Data.Maybe (Maybe(..))
@@ -61,7 +60,7 @@ exportComponent =
 
         tikzStrOrErr = Right $ tikzReduction tikzStandalone $ evalGraph true true model.reduction
       in
-        HH.div [ class_ "tab" ]
+        HH.div [ class_ "content-np tab" ]
           [ if validationIsOk val then
               HH.text ""
             else

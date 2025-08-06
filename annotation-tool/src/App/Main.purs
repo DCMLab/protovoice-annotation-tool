@@ -3,9 +3,9 @@ module App.Main (main) where
 import Prelude
 
 import App.Common (AppSlots, AppState, GraphAction(..), ImportThing(..), Selection(..), Tab(..), defaultSettings, getSelSlice, getSelTrans, outerSelected)
-import App.Render (class_, renderNoteExplanation, renderReduction, scalex, scoreScale, sliceDistance)
+import App.Render (renderNoteExplanation, renderReduction, scalex, scoreScale, sliceDistance)
 import App.Tabs (renderTabs)
-import App.Utils (eventTargetIsBody)
+import App.Utils (class_, eventTargetIsBody)
 import Data.Array as A
 import Data.Either (Either(..))
 import Data.Foldable (for_)
@@ -260,11 +260,9 @@ appComponent = H.mkComponent { initialState, render, eval: H.mkEval $ H.defaultE
 
   render st =
     HH.div_
-      [ HH.div [ class_ "content" ]
-          [ HH.h1_ [ HH.text "Proto-Voice Annotation Tool" ]
-          , renderTabs st modelInfo
-          , HH.h2_ [ HH.text $ "Annotations for " <> st.name ]
-          ]
+      [ HH.h1 [ class_ "content" ] [ HH.text "Proto-Voice Annotation Tool" ]
+      , renderTabs st modelInfo
+      , HH.h2 [ class_ "content" ] [ HH.text $ "Annotations for " <> st.name ]
       , case modelInfo of
           Nothing -> HH.text ""
           Just { model, graph, validation } ->

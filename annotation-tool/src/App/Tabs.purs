@@ -3,7 +3,7 @@ module App.Tabs where
 import Prelude
 
 import App.Common (AppSlots, AppState, GraphAction(..), Tab(..), ModelInfo)
-import App.Render (class_)
+import App.Utils (class_)
 import App.Tabs.Debug (debugComponent)
 import App.Tabs.Export (exportComponent)
 import App.Tabs.Import (importComponent)
@@ -41,14 +41,14 @@ renderTabs
   -> HH.ComponentHTML GraphAction AppSlots m
 renderTabs st modelInfo =
   HH.div_
-    [ HH.div [ class_ "pure-menu pure-menu-horizontal" ]
+    [ HH.div [ class_ "content-np pure-menu pure-menu-horizontal" ]
         [ HH.ul [ class_ "pure-menu-list" ]
             [ tabHandle st ImportTab "Import"
             , tabHandle st ExportTab "Export"
-            , tabHandle st StyleTab "Style"
-            , tabHandle st HelpTab "Help"
-            , tabHandle st SettingsTab "Settings"
             , tabHandle st SVGTab "SVG"
+            , tabHandle st StyleTab "Style"
+            , tabHandle st SettingsTab "Settings"
+            , tabHandle st HelpTab "Help"
             , tabHandle st DebugTab "Debug"
             ]
         ]
@@ -69,7 +69,7 @@ renderTabs st modelInfo =
 -- ---------
 helpText :: forall p. HH.HTML p GraphAction
 helpText =
-  HH.div [ class_ "tab" ]
+  HH.div [ class_ "content-np tab" ]
     [ HH.h2_ [ HH.text "Manual" ]
     , HH.p_ [ HH.text "This app can be used to create protovoice analyses of pieces." ]
     , HH.p_ [ HH.text "Load pieces or analyses using the Import tab. Save analyses using the Export tab." ]
@@ -91,3 +91,4 @@ helpText =
         , HH.text "Correctly reduced notes are shown in grey, unreduced notes are shown in black, and inconsistencies are shown in orange or red."
         ]
     ]
+

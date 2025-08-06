@@ -3,7 +3,7 @@ module App.Tabs.Settings where
 import Prelude
 
 import App.Common (AppSettings, defaultSettings)
-import App.Render (class_)
+import App.Utils (class_)
 import Data.Maybe (Maybe(..))
 import Data.Number (fromString)
 import Halogen as H
@@ -26,7 +26,7 @@ settingsComponent = H.mkComponent { initialState, render, eval: H.mkEval H.defau
   initialState settings = { settings }
 
   render { settings } =
-    HH.div [ class_ "tab pure-form" ]
+    HH.div [ class_ "content-np tab pure-form" ]
       [ HH.p_
           [ HH.input
               [ HP.type_ $ HP.InputCheckbox
