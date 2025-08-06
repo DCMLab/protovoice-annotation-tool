@@ -8,8 +8,8 @@ import Data.Either (Either(..))
 import Data.List (List(..))
 import Data.Maybe (Maybe(..))
 import Data.Set as S
-import ProtoVoices.Folding (AgendaAlg, addUnusedEdgesLeft, addUnusedEdgesRight, nothingMore, walkGraph)
-import ProtoVoices.Model (BottomSurface, NoteExplanation(..), Edges, Model, Op(..), Reduction, Segment, Slice, StartStop(..), BottomSurface, attachSegment, detachSegment, horiEdgesMid)
+import ProtoVoices.Folding (AgendaAlg, nothingMore, walkGraph)
+import ProtoVoices.Model (Edges, Model, NoteExplanation(..), Op(..), Reduction, Segment, Slice, StartStop(..), attachSegment, detachSegment)
 
 pruneModel :: Int -> Model -> Either String Model
 pruneModel n model = do
@@ -75,7 +75,7 @@ countSteps red = flip ST.execState 0 $ walkGraph countingAlg red.start agenda
     ST.modify_ (_ + 1)
     pure $ map nothingMore $ Cons childl $ Cons (attachSegment childr ag.seg.rslice) Nil
 
-  splitRight s ag1 ag2 = split s ag2
+  splitRight s _ag1 ag2 = split s ag2
 
   hori _ _ ag2 { childl, childm, childr } = do
     ST.modify_ (_ + 1)

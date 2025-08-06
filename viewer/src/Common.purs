@@ -12,7 +12,7 @@ import Foreign.Index as FI
 import Halogen.HTML as HH
 import Halogen.HTML.Properties as HP
 import ProtoVoices.Folding (Graph, evalGraph, findSurface)
-import ProtoVoices.Model (BottomSurface, DoubleOrnament(..), LeftOrnament(..), Model, Note, NoteExplanation(..), RightOrnament(..), Staff(..), StartStop(..))
+import ProtoVoices.Model (BottomSurface, DoubleOrnament(..), LeftOrnament(..), Model, Note, NoteExplanation(..), RightOrnament(..), StartStop(..))
 import Pruning (pruneModel)
 import Web.DOM.Element (Element)
 

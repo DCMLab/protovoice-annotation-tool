@@ -7,7 +7,7 @@ const VF = Vex.Flow;
 // ============================
 
 function drawSlice(slice, staffType, scale, useIDs, styles) {
-  let div = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  let div = createSvgElt("g");
   let renderer = new VF.Renderer(div, VF.Renderer.Backends.SVG);
   //renderer.resize(500, 500);
   let ctx = renderer.getContext();
@@ -108,10 +108,10 @@ function drawStaff(width, staffType) {
 }
 
 function drawSystem(slices, totalWidth, scale, staffType, useIDs, styles = null) {
-  let container = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  let container = createSvgElt("g");
 
   // draw staff
-  let staff = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  let staff = createSvgElt("g");
   staff.setAttribute("transform", "scale(" + scale + " " + scale + ")");
   staff.appendChild(drawStaff(totalWidth / scale, staffType));
   // container.appendChild(staffG);
@@ -121,7 +121,7 @@ function drawSystem(slices, totalWidth, scale, staffType, useIDs, styles = null)
     if (slice.notes.length === 0) {
       return;
     }
-    let sliceG = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    let sliceG = createSvgElt("g");
     sliceG.setAttribute(
       "transform",
       "translate(" + slice.x + " 0) scale(" + scale + " " + scale + ")",
@@ -139,11 +139,12 @@ function drawSystem(slices, totalWidth, scale, staffType, useIDs, styles = null)
         // add classes:
         sliceG.setAttribute("class", "pv-slice " + sliceStyle.classes);
         // add label
-        let label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        let label = createSvgElt("text");
         label.setAttribute("y", 20);
         label.textContent = sliceStyle.label;
         label.setAttribute("text-anchor", "middle");
         label.setAttribute("dominant-baseline", "middle");
+        label.setAttribute("class", "pv-label");
         
         sliceG.appendChild(label);
       }
@@ -159,7 +160,7 @@ function drawSystem(slices, totalWidth, scale, staffType, useIDs, styles = null)
 export const drawScore =
   (slices) => (staffType) => (totalWidth) => (scale) => {
     let system = drawSystem(slices, totalWidth, scale, staffType, false);
-    let container = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    let container = createSvgElt("g");
     container.appendChild(system.staff);
     container.appendChild(system.notes);
     return container;
@@ -170,7 +171,11 @@ export const insertScore = (el) => (score) => () => el.replaceChildren(score);
 // Drawing Derivations
 // ===================
 
-function drawEdge(container, edge, selection, passing, looseness = 1) {
+function drawEdge(container, edge, selection, passing, edgeStyles, looseness = 1) {
+  let line = createSvgElt("path");
+  line.setAttribute("fill", "none");
+
+  // compute path
   const bbleft = getNoteBBox(edge.left.id, container);
   const bbright = getNoteBBox(edge.right.id, container);
   let x1 = bbleft.x + bbleft.width + markerWidth + 2;
@@ -179,28 +184,45 @@ function drawEdge(container, edge, selection, passing, looseness = 1) {
   let y2 = bbright.y + bbright.height / 2;
   let dist = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
   let d = dist * looseness * 0.3915; // from TikZ source
-  // let line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+  // let line = createSvgElt("line");
   // line.setAttribute("x1", x1);
   // line.setAttribute("y1", y1);
   // line.setAttribute("x2", x2);
   // line.setAttribute("y2", y2);
-  let line = document.createElementNS("http://www.w3.org/2000/svg", "path");
   line.setAttribute(
     "d",
     `M ${x1} ${y1} C ${x1 + d} ${y1}, ${x2 - d} ${y2}, ${x2} ${y2}`,
   );
+
+  // style edge
+  let classes = "pv-edge";
+
   if (passing) {
     line.setAttribute("stroke-dasharray", "6,3");
+    classes += " pv-passing";
+  } else {
+    classes += " pv-regular";
   }
+  
   if (
     selection &&
     (selection.note.id == edge.left.id || selection.note.id == edge.right.id)
   ) {
-    line.setAttribute("class", "pv-edge pv-selected");
-  } else {
-    line.setAttribute("class", "pv-edge");
+    classes += " pv-selected";
   }
-  line.setAttribute("fill", "none");
+
+  let styleKey = JSON.stringify({left: edge.left.id, right: edge.right.id});
+  let style = edgeStyles.get(styleKey);
+  if (style) {
+    classes += " " + style.classes;
+    let label = createSvgElt("title");
+    label.setAttribute("class", "pv-label");
+    label.textContent = style.label;
+    line.appendChild(label);
+  }
+  
+  line.setAttribute("class", classes);
+
   return line;
 }
 
@@ -217,7 +239,7 @@ function drawHori(hori, container) {
     false,
     container,
   );
-  let line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+  let line = createSvgElt("line");
   line.setAttribute("x1", bbparent.x + bbparent.width / 2);
   line.setAttribute("y1", bbparent.y + bbparent.height + 5);
   line.setAttribute("x2", bbchild.x + bbparent.width / 2);
@@ -231,7 +253,7 @@ function drawHori(hori, container) {
 function drawMarker(noteid, expl, container, notemap) {
   const bbox = getNoteBBox(noteid, container);
   const y = bbox.y + bbox.height / 2;
-  let marker = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  let marker = createSvgElt("g");
   marker.setAttribute("id", "marker-" + noteid);
   marker.setAttribute("class", "pv-op-marker");
   container.appendChild(marker);
@@ -302,12 +324,12 @@ function drawMarker(noteid, expl, container, notemap) {
 }
 
 function drawTimeLabel(time, y) {
-  let label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+  let label = createSvgElt("text");
   label.setAttribute("x", time.x);
   label.setAttribute("y", y);
   label.setAttribute("text-anchor", "middle");
   label.setAttribute("dominant-baseline", "middle");
-  label.innerHTML = time.label;
+  label.textContent = time.label;
   return label;
 }
 
@@ -333,14 +355,14 @@ export const drawGraph = (graph) => (totalWidth) => (scale) => {
   graphContainer.innerHTML = markers;
 
   // add CSS
-  let styleElt = document.createElementNS("http://www.w3.org/2000/svg", "style");
+  let styleElt = createSvgElt("style");
   let combinedStyles = defaultStyles + "\n" + graph.styles.css + "\n" + uiStyles;
   styleElt.innerHTML = combinedStyles;
   graphContainer.appendChild(styleElt);
 
   // add a foreground separator.
   // this later allows us to place obects in the foreground or background.
-  let fg_sep = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  let fg_sep = createSvgElt("g");
   graphContainer.appendChild(fg_sep);
 
   // draw levels with slices
@@ -370,6 +392,11 @@ export const drawGraph = (graph) => (totalWidth) => (scale) => {
         let noteStyle = graph.styles.noteStyles[note.id];
         if (noteStyle) {
           classes += " " + noteStyle.classes;
+
+          let label = createSvgElt("title");
+          label.setAttribute("class", "pv-label");
+          label.textContent = noteStyle.label;
+          elt.insertBefore(label, elt.firstChild);
         }
       }
 
@@ -403,8 +430,14 @@ export const drawGraph = (graph) => (totalWidth) => (scale) => {
 
   // draw connections
 
+  // prepare edge style dictionary
+  edgeStyles = new Map();
+  graph.styles.edgeStyles.forEach(function(es) {
+    edgeStyles.set(JSON.stringify(es.edge), es.style);
+  });
+  
   // make sure that the container is attached to the DOM (required for computing bboxes)
-  let fakesvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  let fakesvg = createSvgElt("svg");
   fakesvg.appendChild(graphContainer);
   document.body.appendChild(fakesvg);
 
@@ -415,18 +448,28 @@ export const drawGraph = (graph) => (totalWidth) => (scale) => {
 
   // render transitions and edges
   graph.transitions.forEach((transition) => {
+    let transElt = createSvgElt("g");
+    transElt.setAttribute("id", `transition-${transition.id}`);
+    let transStyle = graph.styles.transStyles[transition.id];
+    if (transStyle) {
+      transElt.setAttribute("class", "pv-trans " + transStyle.classes);
+      let label = createSvgElt("title");
+      label.setAttribute("class", "pv-label");
+      label.textContent = transStyle.label;
+      transElt.appendChild(label);
+    }
+  
     transition.regular.forEach((edge) => {
-      graphContainer.insertBefore(
-        drawEdge(graphContainer, edge, graph.selection, false),
-        fg_sep,
+      transElt.appendChild(
+        drawEdge(graphContainer, edge, graph.selection, false, edgeStyles),
       );
     });
     transition.passing.forEach((edge) => {
-      graphContainer.insertBefore(
-        drawEdge(graphContainer, edge, graph.selection, true),
-        fg_sep,
+      transElt.appendChild(
+        drawEdge(graphContainer, edge, graph.selection, true, edgeStyles),
       );
     });
+    graphContainer.insertBefore(transElt, fg_sep);
   });
 
   // collect all notes (needed for markers)
@@ -511,18 +554,88 @@ const markers = `<defs>
 <!--rect width="100%" height="100%" fill="white"/-->`;
 
 // default CSS styles for graph elements
-const defaultStyles = `
-  text {
-    font-size: 16px;
-  }
-  .pv-op-marker {
-    stroke: black;
-    stroke-width: 1.5;
-    fill: none;
-  }
-  .pv-edge {
-    stroke: black;
-  }
+export const defaultStyles = `
+:root {
+  stroke: black;
+}
+text {
+  font-size: 16px;
+  fill: black;
+  stroke: none;
+}
+.pv-op-marker {
+  stroke-width: 1.5;
+  fill: none;
+}
+
+.visible { display: inline; }
+.hidden { display: none; }
+.strong { font-weight: bold; }
+.emph { font-style: italic; }
+
+:root {
+  --cat1: #4C72B0;
+  --cat2: #DD8452;
+  --cat3: #55A868;
+  --cat4: #C44E52;
+  --cat5: #8172B3;
+  --cat6: #937860;
+  --cat7: #DA8BC3;
+  --cat8: #8C8C8C;
+  --cat9: #CCB974;
+  --cat10: #64B5CD;
+  --cat1b: #A1C9F4;
+  --cat2b: #FFB482;
+  --cat3b: #8DE5A1;
+  --cat4b: #FF9F9B;
+  --cat5b: #D0BBFF;
+  --cat6b: #DEBB9B;
+  --cat7b: #FAB0E4;
+  --cat8b: #CFCFCF;
+  --cat9b: #FFFEA3;
+  --cat10b: #B9F2F0;
+  --cat1c: #001C7F;
+  --cat2c: #B1400D;
+  --cat3c: #12711C;
+  --cat4c: #8C0800;
+  --cat5c: #591E71;
+  --cat6c: #592F0D;
+  --cat7c: #A23582;
+  --cat8c: #3C3C3C;
+  --cat9c: #B8850A;
+  --cat10c: #006374;
+}
+
+.cat1, .cat1 svg { fill: #4C72B0; stroke: #4C72B0; }
+.cat2, .cat2 svg { fill: #DD8452; stroke: #DD8452; }
+.cat3, .cat3 svg { fill: #55A868; stroke: #55A868; }
+.cat4, .cat4 svg { fill: #C44E52; stroke: #C44E52; }
+.cat5, .cat5 svg { fill: #8172B3; stroke: #8172B3; }
+.cat6, .cat6 svg { fill: #937860; stroke: #937860; }
+.cat7, .cat7 svg { fill: #DA8BC3; stroke: #DA8BC3; }
+.cat8, .cat8 svg { fill: #8C8C8C; stroke: #8C8C8C; }
+.cat9, .cat9 svg { fill: #CCB974; stroke: #CCB974; }
+.cat10, .cat10 svg { fill: #64B5CD; stroke: #64B5CD; }
+.cat1b, .cat1b svg { fill: #A1C9F4; stroke: #A1C9F4; }
+.cat2b, .cat2b svg { fill: #FFB482; stroke: #FFB482; }
+.cat3b, .cat3b svg { fill: #8DE5A1; stroke: #8DE5A1; }
+.cat4b, .cat4b svg { fill: #FF9F9B; stroke: #FF9F9B; }
+.cat5b, .cat5b svg { fill: #D0BBFF; stroke: #D0BBFF; }
+.cat6b, .cat6b svg { fill: #DEBB9B; stroke: #DEBB9B; }
+.cat7b, .cat7b svg { fill: #FAB0E4; stroke: #FAB0E4; }
+.cat8b, .cat8b svg { fill: #CFCFCF; stroke: #CFCFCF; }
+.cat9b, .cat9b svg { fill: #FFFEA3; stroke: #FFFEA3; }
+.cat10b, .cat10b svg { fill: #B9F2F0; stroke: #B9F2F0; }
+.cat1c, .cat1c svg { fill: #001C7F; stroke: #001C7F; }
+.cat2c, .cat2c svg { fill: #B1400D; stroke: #B1400D; }
+.cat3c, .cat3c svg { fill: #12711C; stroke: #12711C; }
+.cat4c, .cat4c svg { fill: #8C0800; stroke: #8C0800; }
+.cat5c, .cat5c svg { fill: #591E71; stroke: #591E71; }
+.cat6c, .cat6c svg { fill: #592F0D; stroke: #592F0D; }
+.cat7c, .cat7c svg { fill: #A23582; stroke: #A23582; }
+.cat8c, .cat8c svg { fill: #3C3C3C; stroke: #3C3C3C; }
+.cat9c, .cat9c svg { fill: #B8850A; stroke: #B8850A; }
+.cat10c, .cat10c svg { fill: #006374; stroke: #006374; }
 `;
 
 const uiStyles = `
@@ -543,6 +656,8 @@ const uiStyles = `
 // Helper Functions
 // ================
 
+let createSvgElt = (name) => document.createElementNS("http://www.w3.org/2000/svg", name);
+
 // TODO: replace this with Accidental.applyAccidentals
 function addAcc(i, chord, n) {
   if (n > 0) {
@@ -560,7 +675,7 @@ function noteToVex(n) {
 // gets the bounding box of a note relative to container
 function getNoteBBox(noteid, container) {
   let note = container.querySelector("#vf-" + CSS.escape(noteid));
-  let notebb = getBBox(note.children[0], false, container);
+  let notebb = getBBox(note, false, container);
   let slicebb = getBBox(note.parentElement, false, container);
   return {
     x: slicebb.x,

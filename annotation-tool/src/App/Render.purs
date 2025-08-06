@@ -11,6 +11,7 @@ import Data.Map as M
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Number (exp)
 import Data.Ratio ((%))
+import Data.Tuple (Tuple(..))
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Core as HC
@@ -21,7 +22,8 @@ import Halogen.Svg.Attributes as SA
 import Halogen.Svg.Elements as SE
 import ProtoVoices.Common (MBS(..))
 import ProtoVoices.Folding (Graph, GraphSlice, GraphTransition)
-import ProtoVoices.Model (DoubleOrnament(..), Edge, LeftOrnament(..), Note, NoteExplanation(..), Notes, Parents, Piece, RightOrnament(..), SliceId, StartStop(..), Styles, explHasParent, getInnerNotes, getParents, setHoriExplParent, setLeftExplParent, setRightExplParent)
+import ProtoVoices.Model (DoubleOrnament(..), Edge, LeftOrnament(..), Note, NoteExplanation(..), Notes, Parents, Piece, RightOrnament(..), SliceId, StartStop(..), Styles, edgeIds, explHasParent, getInnerNotes, getParents, setHoriExplParent, setLeftExplParent, setRightExplParent)
+import ProtoVoices.RenderSVG as RenderSVG
 import ProtoVoices.Validation (EdgeError(..), NoteError(..), SliceError(..), Validation)
 import Web.UIEvent.MouseEvent (ctrlKey)
 
@@ -82,18 +84,29 @@ defaultCSS =
   .slice {
     fill: lightgray;
   }
+  .transition {
+    stroke: lightgray;
+  }
   .test {
     fill: red;
   }
+""" <> RenderSVG.defaultStyles <>
+    """
 }
 @layer ui {
+  .node {
+    stroke: none;
+  }
   .slice {
     rx: 5px;
+    stroke: none;
   }
+
   .hidden {
     display: inline !important;
     stroke: lightgray;
   }
+
   .selected {
     fill: #1e90ff;
   }
@@ -105,6 +118,17 @@ defaultCSS =
   }
   .error {
     fill: red;
+  }
+
+
+  .transition.selected, .edge.selected {
+    stroke: #1e90ff;
+  }
+  .edge.warning {
+    stroke: #ffa500;
+  }
+  .edge.error {
+    stroke: red;
   }
 }
 """
@@ -146,26 +170,27 @@ derive instance eqSelectionStatus :: Eq SelectionStatus
 renderSlice :: forall p. AppSettings -> Selection -> Validation -> Styles -> GraphSlice -> HH.HTML p GraphAction
 renderSlice sett selection validation styles { slice: { id, notes, x, parents }, depth: d } = case notes of
   Inner inotes ->
-    SE.g []
-      $
-        [ SE.rect $
-            [ SA.x svgx
-            , SA.y svgy
-            , SA.width noteSize
-            , SA.height $ offset 1
-            , SA.class_ $ HH.ClassName $ "slice " <> sliceClasses <> if selected then " selected" else if activeParent then " related" else if sliceInvalid then " error" else ""
-            ] <> selectionAttr
-        , SE.element (HH.ElemName "text")
-            [ SA.x (svgx + noteSize / 2.0)
-            , SA.y svgy
-            , SA.textAnchor SA.AnchorMiddle
-            , SA.dominantBaseline SA.BaselineMiddle
-            , HP.style "pointer-events: none;"
-            , SA.class_ $ HH.ClassName $ "slice-label " <> sliceClasses
-            ]
-            [ HH.text sliceLabel ]
-        ]
-          <> mapWithIndex mknote inotes
+    SE.g [] $
+      [ SE.g [ SA.class_ $ HH.ClassName sliceClasses ]
+          [ SE.rect $
+              [ SA.x svgx
+              , SA.y svgy
+              , SA.width noteSize
+              , SA.height $ offset 1
+              , SA.class_ $ HH.ClassName $ "slice " <> sliceClasses <> if selected then " selected" else if activeParent then " related" else if sliceInvalid then " error" else ""
+              ] <> selectionAttr
+          , SE.element (HH.ElemName "text")
+              [ SA.x (svgx + noteSize / 2.0)
+              , SA.y svgy
+              , SA.textAnchor SA.AnchorMiddle
+              , SA.dominantBaseline SA.BaselineMiddle
+              , HP.style "pointer-events: none;"
+              , SA.class_ $ HH.ClassName "slice-label"
+              ]
+              [ HH.text sliceLabel ]
+          ]
+      ]
+        <> mapWithIndex mknote inotes
   startstop -> mknode (show startstop) (show startstop) (scalex sett x) (scaley sett d) (if activeParent then Related else NotSelected) Nothing [] ""
   where
   svgx = scalex sett x - (noteSize / 2.0)
@@ -201,11 +226,6 @@ renderSlice sett selection validation styles { slice: { id, notes, x, parents },
         , SA.y $ ycoord - (offset 1 / 2.0)
         , SA.width noteSize
         , SA.height $ offset 1
-        -- , SA.fill
-        --     $ case selStatus of
-        --         NotSelected -> white
-        --         Selected -> selColorInner
-        --         Related -> selColorInner'
         , SA.class_ $ HH.ClassName $ "node " <> classes <> case selStatus of
             NotSelected -> ""
             Selected -> " selected"
@@ -273,8 +293,8 @@ renderSlice sett selection validation styles { slice: { id, notes, x, parents },
 
     label = maybe "" (\s -> " - " <> s.label) style
 
-renderTrans :: forall p. AppSettings -> Selection -> Validation -> M.Map SliceId GraphSlice -> GraphTransition -> HH.HTML p GraphAction
-renderTrans sett selection validation slices { id, left, right, edges } =
+renderTrans :: forall p. AppSettings -> Selection -> Validation -> Styles -> M.Map SliceId GraphSlice -> GraphTransition -> HH.HTML p GraphAction
+renderTrans sett selection validation styles slices { id, left, right, edges } =
   fromMaybe (HH.text "")
     $ do
         { depth: yl, slice: { x: xl, notes: nl } } <- M.lookup left slices
@@ -285,40 +305,69 @@ renderTrans sett selection validation slices { id, left, right, edges } =
           bar =
             [ SE.line
                 $
-                  [ SA.x1 $ scalex sett xl
+                  [ SA.id $ show id
+                  , SA.x1 $ scalex sett xl
                   , SA.y1 $ scaley sett yl
                   , SA.x2 $ scalex sett xr
                   , SA.y2 $ scaley sett yr
                   , SA.stroke if transSelected then selColorOuter else lightgray
-                  , SA.strokeWidth $ if topLevel then (noteSize / 2.0) else 5.0
+                  , SA.strokeWidth $ if topLevel then (noteSize / 2.0) else 7.0
+                  , SA.class_ $ HH.ClassName $ "transition " <> transClasses <> if transSelected then " selected" else ""
                   ]
                     <> selectionAttr
+            , SE.text [ SA.textAnchor SA.AnchorMiddle, SA.dominantBaseline SA.Auto ]
+                [ SE.element (H.ElemName "textPath")
+                    [ SA.href $ "#" <> show id
+                    -- SA.path
+                    --   [ SA.m SA.Abs (scalex sett xl) (scaley sett yl)
+                    --   , SA.l SA.Abs (scalex sett xr) (scaley sett yr)
+                    --   ]
+                    , HP.attr (HH.AttrName "startOffset") "50%"
+                    ]
+                    [ HH.text transLabel ]
+                ]
             ]
 
           mkedge :: Boolean -> Edge -> HH.HTML p GraphAction
-          mkedge isPassing edge@{ left: p1, right: p2 } =
-            SE.line
-              [ SA.x1 $ scalex sett xl
-              , SA.y1 $ scaley sett yl + offset offl
-              , SA.x2 $ scalex sett xr
-              , SA.y2 $ scaley sett yr + offset offr
-              , SA.stroke
-                  if edgeSelected then
-                    selColorInner
-                  else case M.lookup edge validation.edges of
-                    Just ESNotUsed -> warnColor
-                    Just ESNotStepwise -> errColor
-                    Just ESNotRepetition -> errColor
-                    _ -> black
-              , SA.strokeWidth 1.0
-              , HP.attr (HH.AttrName "stroke-dasharray") (if isPassing then "6,3" else "")
-              ]
+          mkedge isPassing edge@{ left: p1, right: p2 } = SE.g []
+            [ SE.line
+                [ SA.x1 $ x1
+                , SA.y1 $ y1
+                , SA.x2 $ x2
+                , SA.y2 $ y2
+                , SA.strokeWidth 1.0
+                , HP.attr (HH.AttrName "stroke-dasharray") (if isPassing then "6,3" else "")
+                , SA.class_ $ HH.ClassName $ "edge " <> edgeClasses <>
+                    if edgeSelected then
+                      " selected"
+                    else case M.lookup edge validation.edges of
+                      Just ESNotUsed -> " warning"
+                      Just ESNotStepwise -> " error"
+                      Just ESNotRepetition -> " error"
+                      _ -> ""
+                ]
+            , SE.text [ SA.textAnchor SA.AnchorMiddle, SA.dominantBaseline SA.Hanging ]
+                [ SE.element (H.ElemName "textPath")
+                    [ SA.path [ SA.m SA.Abs x1 y1, SA.l SA.Abs x2 y2 ]
+                    , HP.attr (HH.AttrName "startOffset") "50%"
+                    ]
+                    [ HH.text edgeLabel ]
+                ]
+            ]
             where
             offl = findPitchIndex p1 nl
-
             offr = findPitchIndex p2 nr
 
+            x1 = scalex sett xl
+            x2 = scalex sett xr
+            y1 = scaley sett yl + offset offl
+            y2 = scaley sett yr + offset offr
+
             edgeSelected = noteIsSelected selection p1 || noteIsSelected selection p2
+
+            edgeStyle = M.lookup (edgeIds edge) styles.edges
+            edgeClasses = maybe "" (_.classes) edgeStyle
+            edgeLabel = maybe "" (_.label) edgeStyle
 
           edgeLines = map (mkedge false) (A.fromFoldable edges.regular) <> map (mkedge true) (A.fromFoldable edges.passing)
         pure $ SE.g [] (bar <> edgeLines)
@@ -329,6 +378,10 @@ renderTrans sett selection validation slices { id, left, right, edges } =
     [ cursor "pointer"
     , HE.onClick $ \_ -> Select (if transSelected then SelNone else SelTrans id)
     ]
+
+  transStyle = M.lookup id styles.transitions
+  transClasses = maybe "" (_.classes) transStyle
+  transLabel = maybe "" (_.label) transStyle
 
 renderHori
   :: forall p
@@ -427,7 +480,7 @@ renderReduction sett piece graph validation styles selection =
 
   svgSlices = map (renderSlice sett selection validation styles) $ fromFoldable $ M.values slices
 
-  svgTranss = map (renderTrans sett selection validation slices) $ fromFoldable $ M.values transitions
+  svgTranss = map (renderTrans sett selection validation styles slices) $ fromFoldable $ M.values transitions
 
   svgHoris = map (renderHori sett selection slices) $ fromFoldable horis
 

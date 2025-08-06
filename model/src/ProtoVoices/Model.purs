@@ -312,6 +312,12 @@ isRepeatingEdge = case _ of
   { left: Inner left, right: Inner right } -> pc left.pitch == pc right.pitch
   _ -> false
 
+edgeIds :: Edge -> Tuple String String
+edgeIds { left, right } = Tuple (getId left) (getId right)
+  where
+  getId (Inner note) = note.id
+  getId s = show s
+
 type Notes = Array { note :: Note, expl :: NoteExplanation }
 
 sortNotes :: forall r. Array { note :: Note | r } -> Array { note :: Note | r }
@@ -438,7 +444,7 @@ attachSegment { trans, op } rslice = { trans, op, rslice }
 detachSegment :: Segment -> EndSegment
 detachSegment { trans, op } = { trans, op }
 
-type BottomSurface = { slices :: Array Slice, transs :: Array Edges }
+type BottomSurface = { slices :: Array Slice, transs :: Array Transition }
 
 type Reduction =
   { start :: Slice
@@ -517,58 +523,7 @@ emptyStyles =
   }
 
 defaultCSS :: String
-defaultCSS =
-  """text {
-    font-size: 16px;
-    fill: black;
-}
-.pv-op-marker {
-    stroke: black;
-    stroke-width: 1.5;
-    fill: none;
-}
-.pv-edge {
-    stroke: black;
-}
-
-.cat1, .cat1 svg { fill: #4C72B0; }
-.cat2, .cat2 svg { fill: #DD8452; }
-.cat3, .cat3 svg { fill: #55A868; }
-.cat4, .cat4 svg { fill: #C44E52; }
-.cat5, .cat5 svg { fill: #8172B3; }
-.cat6, .cat6 svg { fill: #937860; }
-.cat7, .cat7 svg { fill: #DA8BC3; }
-.cat8, .cat8 svg { fill: #8C8C8C; }
-.cat9, .cat9 svg { fill: #CCB974; }
-.cat10, .cat10 svg { fill: #64B5CD; }
-
-.cat1b, .cat1b svg { fill: #A1C9F4; }
-.cat2b, .cat2b svg { fill: #FFB482; }
-.cat3b, .cat3b svg { fill: #8DE5A1; }
-.cat4b, .cat4b svg { fill: #FF9F9B; }
-.cat5b, .cat5b svg { fill: #D0BBFF; }
-.cat6b, .cat6b svg { fill: #DEBB9B; }
-.cat7b, .cat7b svg { fill: #FAB0E4; }
-.cat8b, .cat8b svg { fill: #CFCFCF; }
-.cat9b, .cat9b svg { fill: #FFFEA3; }
-.cat10b, .cat10b svg { fill: #B9F2F0; }
-
-.cat1c, .cat10c svg { fill: #001C7F; }
-.cat2c, .cat10c svg { fill: #B1400D; }
-.cat3c, .cat10c svg { fill: #12711C; }
-.cat4c, .cat10c svg { fill: #8C0800; }
-.cat5c, .cat10c svg { fill: #591E71; }
-.cat6c, .cat10c svg { fill: #592F0D; }
-.cat7c, .cat10c svg { fill: #A23582; }
-.cat8c, .cat10c svg { fill: #3C3C3C; }
-.cat9c, .cat10c svg { fill: #B8850A; }
-.cat10c, .cat10c svg { fill: #006374; }
-
-.visible { display: inline; }
-.hidden { display: none; }
-.strong { font-weight: bold; }
-.emph { font-style: italic; }
-"""
+defaultCSS = ""
 
 type Model =
   { piece :: Piece

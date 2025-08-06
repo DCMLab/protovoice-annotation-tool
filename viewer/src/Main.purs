@@ -114,9 +114,10 @@ viewerComponent prefix { listener, emitter } =
       Just m -> fillCache m.model m.step emptyCache
       Nothing -> emptyCache
 
+  render :: ViewerState -> _
   render st = case st.model of
     Nothing -> HH.div [ class_ "pv-content" ] [ HH.text "No analysis loaded." ]
-    Just { model, modelPruned, graph, surface, step, max } ->
+    Just { model, graph, surface, step, max } ->
       HH.div [ class_ "pv-widget" ]
         [ HH.header [ class_ "pv-content pv-controls" ]
             [ HH.div [ class_ "pv-toolbar" ]
@@ -231,11 +232,11 @@ viewerComponent prefix { listener, emitter } =
                   else
                     HH.text ""
                 , if st.settings.showScore then
-                    renderScoreSVG st.settings modelPruned.piece graph (L.length model.reduction.segments == 1) model.styles.staff
+                    renderScoreSVG st.settings graph (L.length model.reduction.segments == 1) model.styles.staff
                   else
                     HH.text ""
                 , if st.settings.showOuter then
-                    renderReduction st.settings modelPruned.piece graph surface st.selected
+                    renderReduction st.settings graph st.selected
                   else
                     HH.text ""
                 ]

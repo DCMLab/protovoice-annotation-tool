@@ -557,7 +557,7 @@ findSurface red = flip ST.execState { slices: [], transs: [] } $ walkGraph surfa
   freeze _lslice ag = do
     ST.modify_ \st ->
       { slices: A.snoc st.slices ag.seg.rslice
-      , transs: A.snoc st.transs ag.seg.trans.edges
+      , transs: A.snoc st.transs ag.seg.trans
       }
 
   surfaceAlg :: AgendaAlg Unit BottomSurface

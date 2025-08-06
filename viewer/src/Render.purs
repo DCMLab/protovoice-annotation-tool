@@ -22,7 +22,7 @@ import Halogen.Query.Input (Input(..))
 import Halogen.Svg.Attributes as SA
 import Halogen.Svg.Elements as SE
 import ProtoVoices.Folding (GraphSlice, GraphTransition, Graph)
-import ProtoVoices.Model (BottomSurface, Edge, Note, NoteExplanation(..), Notes, Piece, SliceId, Staff(..), StartStop(..), explHasParent, getInnerNotes)
+import ProtoVoices.Model (BottomSurface, Edge, Note, NoteExplanation(..), Notes, SliceId, Staff(..), StartStop(..), explHasParent, getInnerNotes)
 
 sliceWidth :: Number
 sliceWidth = 70.0
@@ -123,7 +123,7 @@ noteSelectionStatus sel note = if selected then Selected else if parentSelected 
     Nothing -> false
 
 renderSlice :: forall p. AppSettings -> Selection -> GraphSlice -> HH.HTML p ViewerAction
-renderSlice sett selection { slice: slice@{ id, notes, x, parents }, depth: d } = case notes of
+renderSlice sett selection { slice: { notes, x }, depth: d } = case notes of
   Inner inotes ->
     SE.g []
       $
@@ -135,6 +135,7 @@ renderSlice sett selection { slice: slice@{ id, notes, x, parents }, depth: d } 
                   , SA.width noteSize
                   , SA.height $ offset (A.length inotes - 1) + noteSize
                   , SA.fill white
+                  , SA.class_ $ HH.ClassName "slice"
                   ]
               ]
                 <> A.mapWithIndex mknote inotes
@@ -146,8 +147,6 @@ renderSlice sett selection { slice: slice@{ id, notes, x, parents }, depth: d } 
   selIsRoot = case selection of
     Just { expl } -> expl == RootExpl
     Nothing -> false
-
-  isTopLevel = d == 0.0
 
   mknode text title xcoord ycoord selStatus attr =
     SE.g attr
@@ -164,6 +163,7 @@ renderSlice sett selection { slice: slice@{ id, notes, x, parents }, depth: d } 
                 NotSelected -> white
                 Selected -> selColorInner
                 Related -> selColorInner'
+        , SA.class_ $ HH.ClassName "node"
         ]
 
     label =
@@ -196,7 +196,7 @@ renderSlice sett selection { slice: slice@{ id, notes, x, parents }, depth: d } 
     attrsSel =
       [ cursor "pointer"
       , HE.onClick
-          $ \ev ->
+          $ \_ev ->
               if nselectable then
                 Select if nodeselected == Selected then Nothing else Just { note, expl }
               else
@@ -204,7 +204,7 @@ renderSlice sett selection { slice: slice@{ id, notes, x, parents }, depth: d } 
       ]
 
 renderTrans :: forall p. AppSettings -> Selection -> M.Map SliceId GraphSlice -> GraphTransition -> HH.HTML p ViewerAction
-renderTrans sett selection slices { id, left, right, edges } =
+renderTrans sett selection slices { left, right, edges } =
   fromMaybe (HH.text "")
     $ do
         { depth: yl, slice: { x: xl, notes: nl } } <- M.lookup left slices
@@ -225,7 +225,7 @@ renderTrans sett selection slices { id, left, right, edges } =
             ]
 
           mkedge :: Boolean -> Edge -> HH.HTML p ViewerAction
-          mkedge isPassing edge@{ left: p1, right: p2 } =
+          mkedge isPassing { left: p1, right: p2 } =
             SE.line
               [ SA.x1 $ scalex sett xl
               , SA.y1 $ scaley sett yl + offset offl
@@ -310,7 +310,7 @@ renderInner sett sel { slices, transs } graph = svg
     S.fromFoldable
       $ do
           trans <- transs
-          A.fromFoldable trans.regular <> trans.passing
+          A.fromFoldable trans.edges.regular <> trans.edges.passing
 
   miny = fromMaybe 0 $ minimum $ map (_.note.note.pitch >>> diasteps) $ M.values notes
 
@@ -365,12 +365,12 @@ renderInner sett sel { slices, transs } graph = svg
       , SE.title [] [ HH.text title ]
       ]
 
-  mkNote { note: { note, expl }, x: notex } = mkNode (notePosition $ Inner note) (show note.pitch) (showExplanation expl) selected selAttr
+  mkNote { note: { note, expl } } = mkNode (notePosition $ Inner note) (show note.pitch) (showExplanation expl) selected selAttr
     where
     selected = noteSelectionStatus sel note
 
     selAttr =
-      [ HE.onClick \ev ->
+      [ HE.onClick \_ev ->
           Select if selected == Selected then Nothing else Just { note, expl }
       ]
 
@@ -432,12 +432,11 @@ renderInner sett sel { slices, transs } graph = svg
 renderScoreSVG
   :: forall p
    . AppSettings
-  -> Piece
   -> Graph
   -> Boolean
   -> Staff
   -> HH.HTML p ViewerAction
-renderScoreSVG sett piece graph isComplete staffType =
+renderScoreSVG sett graph isComplete staffType =
   HH.div_
     [ SE.svg
         [ SA.width width
@@ -465,15 +464,15 @@ renderScoreSVG sett piece graph isComplete staffType =
 
   height = systemHeight * (graph.maxd + 1.0 + extraRows) + axisHeight
 
-renderReduction :: forall p. AppSettings -> Piece -> Graph -> BottomSurface -> Selection -> HH.HTML p ViewerAction
-renderReduction sett piece graph surface selection =
+renderReduction :: forall p. AppSettings -> Graph -> Selection -> HH.HTML p ViewerAction
+renderReduction sett graph selection =
   HH.div_
     [ SE.svg
         [ SA.width width
         , SA.height height
         , SA.viewBox (negate $ scalex sett 1.0) (-offset 1) width height
         ]
-        (svgTranss <> svgHoris <> svgSlices)
+        ([ css ] <> svgTranss <> svgHoris <> svgSlices)
     ]
   where
   { slices, transitions, horis, maxx, maxd } = graph
@@ -491,6 +490,12 @@ renderReduction sett piece graph surface selection =
   svgTranss = map (renderTrans sett selection slices) $ A.fromFoldable $ M.values transitions
 
   svgHoris = map (renderHori sett selection slices) $ A.fromFoldable horis
+
+  css = SE.defs []
+    [ HH.style_
+        [ HH.text ".node, .slice { stroke: none; }"
+        ]
+    ]
 
 -- svgAxis = A.mapWithIndex (renderTime sett 0.0) piece
 -- svgScore = [ renderScore ]

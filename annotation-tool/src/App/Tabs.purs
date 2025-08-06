@@ -57,7 +57,7 @@ renderTabs st modelInfo =
         Just HelpTab -> helpText
         Just ImportTab -> HH.slot (Proxy :: Proxy "importTab") 1 importComponent unit HandleImport
         Just ExportTab -> HH.slot_ (Proxy :: Proxy "exportTab") 0 exportComponent { model: _.model <$> st.loaded, name: st.name, selection: st.selected }
-        Just StyleTab -> HH.slot (Proxy :: Proxy "styleTab") 2 styleComponent { model: _.model <$> st.loaded, selection: st.selected } HandleStyle
+        Just StyleTab -> HH.slot (Proxy :: Proxy "styleTab") 2 styleComponent { modelInfo, selection: st.selected } HandleStyle
         Just SettingsTab -> HH.slot (Proxy :: Proxy "settingsTab") 3 settingsComponent st.settings HandleSettings
         Just SVGTab -> case modelInfo of
           Nothing -> HH.text ""

@@ -15,10 +15,12 @@ import Effect (Effect)
 import ProtoVoices.Common (MBS(..))
 import ProtoVoices.Folding (Graph)
 import ProtoVoices.JSONTransport (StylesJSON, stylesToJSON)
-import ProtoVoices.Model (BottomSurface, Note, NoteExplanation(..), Piece, Slice, SliceId, Staff, StartStop(..), Styles, explParents, getInnerNotes, staffType2JS)
+import ProtoVoices.Model (BottomSurface, Edges, Note, NoteExplanation(..), Piece, Slice, SliceId, Staff, StartStop(..), Styles, TransId, explParents, getInnerNotes, staffType2JS)
 import Web.DOM.Element (Element)
 
 foreign import data DOMScore :: Type
+
+foreign import defaultStyles :: String
 
 type SelectionInfo = { note :: Note, expl :: NoteExplanation }
 
@@ -58,7 +60,7 @@ type RenderGraphSlice = { depth :: Number | RenderSlice }
 
 type InnerEdge = { left :: Note, right :: Note }
 
-type RenderGraphTransition = { regular :: Array InnerEdge, passing :: Array InnerEdge }
+type RenderGraphTransition = { id :: TransId, regular :: Array InnerEdge, passing :: Array InnerEdge }
 
 foreign import drawGraph
   :: { slices :: Array RenderGraphSlice
@@ -90,7 +92,7 @@ renderGraph
 renderGraph graph piece surface styles selection selectCallback toX = drawGraph
   { slices: A.fromFoldable $ mkGraphSlice <$> M.values graph.slices
   , surfaceSlices: mkRenderSlice toX <$> surface.slices
-  , transitions: A.fromFoldable $ (mkTrans <<< _.edges) <$> M.values graph.transitions
+  , transitions: A.fromFoldable $ mkTrans <$> M.values graph.transitions
   , surfaceTransitions: mkTrans <$> surface.transs
   , horis: A.fromFoldable graph.horis
   , times: A.mapWithIndex mkTime $ _.time <$> piece
@@ -111,9 +113,12 @@ renderGraph graph piece surface styles selection selectCallback toX = drawGraph
     }
     where
     rs = mkRenderSlice toX s.slice
+
+  mkTrans :: forall r. { edges :: Edges, id :: TransId | r } -> RenderGraphTransition
   mkTrans t =
-    { regular: innerEdges $ A.fromFoldable t.regular
-    , passing: innerEdges $ t.passing
+    { regular: innerEdges $ A.fromFoldable t.edges.regular
+    , passing: innerEdges $ t.edges.passing
+    , id: t.id
     }
   mkTime i time = { x: toX $ toNumber (i + 1), label }
     where
