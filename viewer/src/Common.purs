@@ -32,6 +32,7 @@ data ViewerAction
   | ToggleInner
   | ToggleOuter
   | ToggleScore
+  | ToggleSurface
   | SetXScale String
   | SetYScale String
 
@@ -43,6 +44,7 @@ type AppSettings =
   , showInner :: Boolean
   , showOuter :: Boolean
   , showScore :: Boolean
+  , showSurface :: Boolean
   }
 
 defaultSettings :: AppSettings
@@ -54,6 +56,7 @@ defaultSettings =
   , showInner: false
   , showOuter: false
   , showScore: true
+  , showSurface: true
   }
 
 readOptions :: F.Foreign -> AppSettings
@@ -65,6 +68,7 @@ readOptions obj =
   , showInner: fromRight defaultSettings.showInner $ runExcept $ obj FI.! "showInner" >>= F.readBoolean
   , showOuter: fromRight defaultSettings.showOuter $ runExcept $ obj FI.! "showOuter" >>= F.readBoolean
   , showScore: fromRight defaultSettings.showScore $ runExcept $ obj FI.! "showScore" >>= F.readBoolean
+  , showSurface: fromRight defaultSettings.showSurface $ runExcept $ obj FI.! "showSurface" >>= F.readBoolean
   }
 
 type Selection = Maybe { note :: Note, expl :: NoteExplanation }

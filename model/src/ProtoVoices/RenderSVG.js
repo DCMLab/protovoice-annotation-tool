@@ -391,7 +391,7 @@ function drawTimeLabel(time, y) {
   return label;
 }
 
-export const drawGraph = (graph) => (totalWidth) => (scale) => {
+export const drawGraph = (graph) => (totalWidth) => (scale) => (showScore) => {
   // The graph is drawn in several steps:
   // - create a container element, add marker defs and CSS
   // - add a separator element to be able to sort element into foreground and background
@@ -475,13 +475,17 @@ export const drawGraph = (graph) => (totalWidth) => (scale) => {
   });
 
   // draw score
-  let score = drawScore(graph.surfaceSlices)(graph.surfaceTransitions)(graph.styles.staffType)(totalWidth)(scale);
-  score.setAttribute(
-    "transform",
-    `translate(0 ${(graph.maxd - minLevel + 1) * levelOffset})`,
-  );
-  graphContainer.appendChild(score);
-  let yoff = (graph.maxd - minLevel + 2) * levelOffset + 20;
+  if (showScore) {
+    let score = drawScore(graph.surfaceSlices)(graph.surfaceTransitions)(graph.styles.staffType)(totalWidth)(scale);
+    score.setAttribute(
+      "transform",
+      `translate(0 ${(graph.maxd - minLevel + 1) * levelOffset})`,
+    );
+    graphContainer.appendChild(score);
+  }
+
+  // draw time labels
+  let yoff = (graph.maxd - minLevel + (showScore ? 2 : 1)) * levelOffset + 20;
   graph.times.forEach((time) => {
     graphContainer.appendChild(drawTimeLabel(time, yoff));
   });

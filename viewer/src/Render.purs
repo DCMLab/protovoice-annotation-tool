@@ -455,14 +455,11 @@ renderScoreSVG sett graph isComplete staffType =
     -- <> (A.mapWithIndex (renderTime sett ((graph.maxd + 1.0 + extraRows) * systemHeight)) piece)
     ]
   where
-
   width = scalex sett (graph.maxx + 1.0) + sliceWidth / 2.0
-
   systemHeight = if staffType == GrandStaff then scoreHeightGrand else scoreHeightSingle
-
   extraRows = if isComplete then 0.0 else 1.0
-
-  height = systemHeight * (graph.maxd + 1.0 + extraRows) + axisHeight
+  surfaceRows = if sett.showSurface then 1.0 else 0.0
+  height = systemHeight * (graph.maxd + surfaceRows + extraRows) + axisHeight
 
 renderReduction :: forall p. AppSettings -> Graph -> Selection -> HH.HTML p ViewerAction
 renderReduction sett graph selection =

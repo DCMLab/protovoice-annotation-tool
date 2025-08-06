@@ -79,8 +79,9 @@ foreign import drawGraph
      , select :: Nullable (Nullable SelectionInfo -> Effect Unit)
      , styles :: StylesJSON
      }
-  -> Number
-  -> Number
+  -> Number -- | total width
+  -> Number -- | scaling
+  -> Boolean -- | show score?
   -> DOMScore
 
 renderGraph
@@ -93,6 +94,7 @@ renderGraph
   -> (Number -> Number)
   -> Number
   -> Number
+  -> Boolean
   -> DOMScore
 renderGraph graph piece surface styles selection selectCallback toX = drawGraph
   { slices: A.fromFoldable $ mkGraphSlice <$> M.values graph.slices

@@ -202,14 +202,26 @@ viewerComponent prefix { listener, emitter } =
                           ]
                       , HH.label [ HP.for $ prefix <> "showInnerGraph" ] [ HH.text "show inner graph" ]
                       ]
-                  , HH.div [ class_ "pv-control-box" ]
-                      [ HH.input
-                          [ HP.type_ $ HP.InputCheckbox
-                          , HP.checked st.settings.showScore
-                          , HE.onChange \_ -> ToggleScore
-                          , HP.id $ prefix <> "showScore"
+                  , HH.div [ class_ "pure-g" ]
+                      [ HH.div [ class_ "pure-u-1-2 pv-control-box" ]
+                          [ HH.input
+                              [ HP.type_ $ HP.InputCheckbox
+                              , HP.checked st.settings.showScore
+                              , HE.onChange \_ -> ToggleScore
+                              , HP.id $ prefix <> "showScore"
+                              ]
+                          , HH.label [ HP.for $ prefix <> "showScore" ] [ HH.text "show score" ]
                           ]
-                      , HH.label [ HP.for $ prefix <> "showScore" ] [ HH.text "show score" ]
+                      , HH.div [ class_ "pure-u-1-2 pv-control-box" ]
+                          [ HH.input
+                              [ HP.type_ $ HP.InputCheckbox
+                              , HP.checked st.settings.showSurface
+                              , HP.enabled st.settings.showScore
+                              , HE.onChange \_ -> ToggleSurface
+                              , HP.id $ prefix <> "showSurface"
+                              ]
+                          , HH.label [ HP.for $ prefix <> "showSurface" ] [ HH.text "show surface below graph" ]
+                          ]
                       ]
                   , HH.div [ class_ "pv-control-box" ]
                       [ HH.input
@@ -280,6 +292,9 @@ viewerComponent prefix { listener, emitter } =
     ToggleInner -> H.modify_ \st -> st { settings { showInner = not st.settings.showInner } }
     ToggleOuter -> H.modify_ \st -> st { settings { showOuter = not st.settings.showOuter } }
     ToggleScore -> H.modify_ \st -> st { settings { showScore = not st.settings.showScore } }
+    ToggleSurface -> do
+      H.modify_ \st -> st { settings { showSurface = not st.settings.showSurface } }
+      redrawScore
     SetXScale s -> case fromString s of
       Nothing -> pure unit
       Just n -> do
@@ -304,5 +319,5 @@ redrawScore = do
           HS.notify st.eventListener $ Select sel
         toX x = scalex st.settings x -- - (noteSize / 2.0)
       pure $ H.liftEffect $ do
-        insertScore scoreElt $ renderGraph graph model.piece surface model.styles st.selected (Just select) toX totalWidth scoreScale
+        insertScore scoreElt $ renderGraph graph model.piece surface model.styles st.selected (Just select) toX totalWidth scoreScale st.settings.showSurface
   fromMaybe (pure unit) update
