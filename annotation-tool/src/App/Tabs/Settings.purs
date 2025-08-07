@@ -27,32 +27,33 @@ settingsComponent = H.mkComponent { initialState, render, eval: H.mkEval H.defau
 
   render { settings } =
     HH.div [ class_ "content-np tab pure-form" ]
-      [ HH.p_
-          [ HH.input
-              [ HP.type_ $ HP.InputCheckbox
-              , HP.checked settings.flatHori
-              , HE.onChange \_ -> SettingsToggleFlatHori
-              , HP.id "flatHori"
+      [ HH.div [ class_ "pure-g" ]
+          [ HH.label [ class_ "pure-u-1-5" ]
+              [ HH.input
+                  [ HP.type_ $ HP.InputCheckbox
+                  , HP.checked settings.flatHori
+                  , HE.onChange \_ -> SettingsToggleFlatHori
+                  ]
+              , HH.text " render horis flat"
               ]
-          , HH.label [ HP.for "flatHori" ] [ HH.text " render horis flat" ]
-          ]
-      , HH.p_
-          [ HH.input
-              [ HP.type_ $ HP.InputCheckbox
-              , HP.checked settings.showAllEdges
-              , HE.onChange \_ -> SettingsToggleShowAllEdges
-              , HP.id "showAllEdges"
+
+          , HH.label [ class_ "pure-u-1-5" ]
+              [ HH.input
+                  [ HP.type_ $ HP.InputCheckbox
+                  , HP.checked settings.showAllEdges
+                  , HE.onChange \_ -> SettingsToggleShowAllEdges
+                  ]
+              , HH.text " show all edges"
               ]
-          , HH.label [ HP.for "showAllEdges" ] [ HH.text " show all edges" ]
-          ]
-      , HH.p_
-          [ HH.input
-              [ HP.type_ $ HP.InputCheckbox
-              , HP.checked settings.showScore
-              , HE.onChange \_ -> SettingsToggleShowScore
-              , HP.id "showScore"
+
+          , HH.label [ class_ "pure-u-1-5" ]
+              [ HH.input
+                  [ HP.type_ $ HP.InputCheckbox
+                  , HP.checked settings.showScore
+                  , HE.onChange \_ -> SettingsToggleShowScore
+                  ]
+              , HH.text " show score"
               ]
-          , HH.label [ HP.for "showScore" ] [ HH.text " show score" ]
           ]
       , HH.p [ class_ "pure-g" ]
           [ HH.label [ class_ "pure-u-1-5", HP.for "xscale" ] [ HH.text $ "horizontal zoom: " <> show settings.xscale ]

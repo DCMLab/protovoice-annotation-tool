@@ -68,17 +68,17 @@ svgComponent = H.mkComponent
   render :: SVGState -> _
   render { modelInfo, settings, showSurface } = HH.div_
     [ HH.div [ class_ "content-np tab pure-form pure-g" ]
-        [ HH.div [ class_ "pure-u-4-5" ]
+        [ HH.label [ class_ "pure-u-4-5" ]
             [ HH.input
                 [ HP.type_ $ HP.InputCheckbox
                 , HP.checked showSurface
                 , HE.onChange \_ -> SVGToggleSurface
                 , HP.id "showSurface"
                 ]
-            , HH.label [ HP.for "showSurface" ] [ HH.text " show full surface below graph" ]
+            , HH.text " show full surface below graph"
             ]
         , HH.button
-            [ class_ "pure-button pure-button-primary pure-u-1-5"
+            [ class_ "pure-button pure-button-primary pure-u-1-5 center"
             , HE.onClick \_ -> SVGDownload
             ]
             [ HH.text "Download" ]

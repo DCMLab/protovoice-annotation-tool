@@ -60,7 +60,7 @@ exportComponent =
 
         tikzStrOrErr = Right $ tikzReduction tikzStandalone $ evalGraph true true model.reduction
       in
-        HH.div [ class_ "content-np tab" ]
+        HH.div [ class_ "content-np tab pure-form" ]
           [ if validationIsOk val then
               HH.text ""
             else
@@ -70,14 +70,14 @@ exportComponent =
               Right jsonStr ->
                 HH.div_
                   [ HH.div [ class_ "pure-g" ]
-                      [ HH.div [ class_ "pure-u-3-5" ]
+                      [ HH.label [ class_ "pure-u-3-5" ]
                           [ HH.input
                               [ HP.type_ $ HP.InputCheckbox
                               , HP.checked pretty
                               , HE.onChange \_ -> TogglePretty
                               , HP.id "prettyJSON"
                               ]
-                          , HH.label [ HP.for "prettyJSON" ] [ HH.text " pretty" ]
+                          , HH.text " pretty"
                           ]
                       , HH.button
                           [ class_ "pure-button pure-u-1-5"
@@ -122,14 +122,14 @@ exportComponent =
               Right tikzStr ->
                 HH.div_
                   [ HH.div [ class_ "pure-g" ]
-                      [ HH.div [ class_ "pure-u-3-5" ]
+                      [ HH.label [ class_ "pure-u-3-5" ]
                           [ HH.input
                               [ HP.type_ $ HP.InputCheckbox
                               , HP.checked tikzStandalone
                               , HE.onChange \_ -> ToggleTikzStandalone
                               , HP.id "tikzStandalone"
                               ]
-                          , HH.label [ HP.for "prettyJSON" ] [ HH.text " standalone document" ]
+                          , HH.text " standalone document"
                           ]
                       , HH.button
                           [ class_ "pure-button pure-u-1-5"
