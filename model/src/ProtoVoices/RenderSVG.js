@@ -493,7 +493,7 @@ export const drawGraph = (graph) => (totalWidth) => (scale) => (showScore) => {
   // draw connections
 
   // prepare edge style dictionary
-  edgeStyles = new Map();
+  let edgeStyles = new Map();
   graph.styles.edgeStyles.forEach(function(es) {
     edgeStyles.set(JSON.stringify(es.edge), es.style);
   });
