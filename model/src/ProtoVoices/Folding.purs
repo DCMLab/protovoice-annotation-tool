@@ -374,7 +374,7 @@ reductionToLeftmost { reduction, piece } = do
 -- -------------------------------------------
 -- 
 leftmostToReduction
-  :: Array { trans :: { id :: TransId, edges :: { regular :: Array Edge, passing :: Array Edge }, is2nd :: Boolean }, rslice :: { id :: SliceId, notes :: StartStop (Array Note) } }
+  :: Array { trans :: { id :: TransId, edges :: { regular :: Array Edge, passing :: Array Edge } }, rslice :: { id :: SliceId, notes :: StartStop (Array Note) } }
   -> Array (Leftmost SplitOp FreezeOp HoriOp)
   -> Either String { piece :: Piece, reduction :: Reduction }
 leftmostToReduction topSegments deriv = do

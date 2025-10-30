@@ -2,13 +2,14 @@ module ProtoVoices.JSONTransport where
 
 import Prelude
 
+import Control.Monad.State as ST
 import Data.Array (fromFoldable, mapWithIndex)
 import Data.Array as A
 import Data.Bifunctor (lmap)
 import Data.Either (Either(..), either)
 import Data.Int as Int
 import Data.Map as M
-import Data.Maybe (Maybe(..), maybe)
+import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Pitches (parseNotation)
 import Data.Set as S
 import Data.Traversable (for, sequence, traverse)
@@ -42,13 +43,12 @@ type ModelJSON =
   }
 
 type TransitionJSON =
-  { id :: TransId
+  { id :: Maybe TransId
   , edges :: EdgesJSON
-  , is2nd :: Boolean
   }
 
 type SliceJSON =
-  { id :: SliceId
+  { id :: Maybe SliceId
   , notes :: StartStop (Array Note)
   }
 
@@ -65,7 +65,7 @@ type LeftmostJSON = Variant
 
 type FreezeJSON =
   { ties :: Array Edge
-  , prevTime :: String
+  , prevTime :: Maybe String
   }
 
 type SplitJSON =
@@ -73,12 +73,12 @@ type SplitJSON =
   , passing :: Array { parent :: Edge, children :: Array { child :: Note, orn :: Maybe String } }
   , fromLeft :: Array { parent :: Note, children :: Array { child :: Note, orn :: Maybe String } }
   , fromRight :: Array { parent :: Note, children :: Array { child :: Note, orn :: Maybe String } }
-  , unexplained :: Array Note
+  , unexplained :: Maybe (Array Note)
   , keepLeft :: Array Edge
   , keepRight :: Array Edge
   , passLeft :: Array Edge
   , passRight :: Array Edge
-  , ids :: { left :: TransId, slice :: SliceId, right :: TransId }
+  , ids :: Maybe { left :: TransId, slice :: SliceId, right :: TransId }
   }
 
 type HoriJSON =
@@ -96,15 +96,16 @@ type HoriJSON =
                   }
               )
         }
-  , unexplained :: { left :: Array Note, right :: Array Note }
+  , unexplained :: Maybe { left :: Array Note, right :: Array Note }
   , midEdges :: EdgesJSON
   , ids ::
-      { left :: TransId
-      , lslice :: SliceId
-      , mid :: TransId
-      , rslice :: SliceId
-      , right :: TransId
-      }
+      Maybe
+        { left :: TransId
+        , lslice :: SliceId
+        , mid :: TransId
+        , rslice :: SliceId
+        , right :: TransId
+        }
   }
 
 type StylesJSON =
@@ -133,9 +134,9 @@ modelToJSON model = do
     , styles: Just $ stylesToJSON model.styles
     }
   where
-  sliceToJSON { id, notes } = { id, notes: map _.note <$> notes }
+  sliceToJSON { id, notes } = { id: Just id, notes: map _.note <$> notes }
 
-  transToJSON t = t { edges = edgesToJSON t.edges }
+  transToJSON { edges, id } = { edges: edgesToJSON edges, id: Just id }
 
 stylesToJSON :: Styles -> StylesJSON
 stylesToJSON { notes, edges, slices, transitions, css, staff } =
@@ -169,7 +170,7 @@ leftmostToJSON = case _ of
   LMHorizontalize h -> inj (Proxy :: Proxy "hori") $ horiToJSON h
 
 freezeToJSON :: FreezeOp -> FreezeJSON
-freezeToJSON (FreezeOp { ties, prevTime }) = { ties, prevTime: either identity show prevTime }
+freezeToJSON (FreezeOp { ties, prevTime }) = { ties, prevTime: Just $ either identity show prevTime }
 
 splitToJSON :: SplitOp -> SplitJSON
 splitToJSON (SplitOp split@{ unexplained, keepLeft, keepRight, passLeft, passRight, ids }) =
@@ -177,12 +178,12 @@ splitToJSON (SplitOp split@{ unexplained, keepLeft, keepRight, passLeft, passRig
   , passing: unwrap (map show) <$> M.toUnfoldable split.passing
   , fromLeft: unwrap (map show) <$> M.toUnfoldable split.fromLeft
   , fromRight: unwrap (map show) <$> M.toUnfoldable split.fromRight
-  , unexplained
+  , unexplained: Just unexplained
   , keepLeft
   , keepRight
   , passLeft
   , passRight
-  , ids
+  , ids: Just ids
   }
   where
   unwrap
@@ -203,8 +204,8 @@ horiToJSON :: HoriOp -> HoriJSON
 horiToJSON (HoriOp { midEdges, children, ids, unexplained }) =
   { midEdges: edgesToJSON midEdges
   , children: childToJSON <$> M.toUnfoldable children
-  , ids
-  , unexplained
+  , ids: Just ids
+  , unexplained: Just unexplained
   }
   where
   childToJSON (Tuple parent dist) =
@@ -232,39 +233,64 @@ pieceFromJSON piece =
         (\p -> { hold: note.hold, note: { pitch: p, id: note.id } }) <$> parseNotation note.pitch
     pure { time: parseTime slice.time, notes: sortNotes notes }
 
-modelFromJSON :: ModelJSON -> Either String Model
-modelFromJSON { topSegments, derivation, styles } = do
-  deriv <- sequence $ leftmostFromJSON <$> derivation
-  { piece, reduction } <- leftmostToReduction topSegments deriv
-  parsedStyles <- maybe (pure emptyStyles) stylesFromJSON styles
-  pure { piece, reduction, styles: parsedStyles }
+newTId :: forall m. (Monad m) => ST.StateT { nextS :: Int, nextT :: Int } m TransId
+newTId = do
+  { nextT, nextS } <- ST.get
+  ST.put { nextT: nextT + 1, nextS }
+  pure $ TransId nextT
 
-leftmostFromJSON :: LeftmostJSON -> Either String (Leftmost SplitOp FreezeOp HoriOp)
+newSId :: forall m. (Monad m) => ST.StateT { nextS :: Int, nextT :: Int } m SliceId
+newSId = do
+  { nextT, nextS } <- ST.get
+  ST.put { nextT, nextS: nextS + 1 }
+  pure $ SliceId nextS
+
+modelFromJSON :: ModelJSON -> Either String Model
+modelFromJSON { topSegments, derivation, styles } = flip ST.evalStateT { nextS: 1, nextT: 0 } $ do
+  deriv <- (sequence $ leftmostFromJSON <$> derivation)
+  topSegments' <- sequence $ addSliceId <$> topSegments
+  { piece, reduction } <- ST.lift $ leftmostToReduction topSegments' deriv
+  parsedStyles <- ST.lift $ maybe (pure emptyStyles) stylesFromJSON styles
+  pure { piece, reduction, styles: parsedStyles }
+  where
+  addSliceId { trans, rslice } = do
+    sid <- maybe newSId pure rslice.id
+    tid <- maybe newTId pure trans.id
+    pure $ { trans: trans { id = tid }, rslice: rslice { id = sid } }
+
+leftmostFromJSON :: LeftmostJSON -> ST.StateT { nextS :: Int, nextT :: Int } (Either String) (Leftmost SplitOp FreezeOp HoriOp)
 leftmostFromJSON =
   case_
-    # on (Proxy :: Proxy "freezeLeft") (map LMFreezeLeft <<< freezeFromJSON)
-    # on (Proxy :: Proxy "freezeOnly") (map LMFreezeOnly <<< freezeFromJSON)
     # on (Proxy :: Proxy "splitLeft") (map LMSplitLeft <<< splitFromJSON)
     # on (Proxy :: Proxy "splitOnly") (map LMSplitOnly <<< splitFromJSON)
     # on (Proxy :: Proxy "splitRight") (map LMSplitRight <<< splitFromJSON)
     # on (Proxy :: Proxy "hori") (map LMHorizontalize <<< horiFromJSON)
+    # on (Proxy :: Proxy "freezeLeft") (map LMFreezeLeft <<< ST.lift <<< freezeFromJSON)
+    # on (Proxy :: Proxy "freezeOnly") (map LMFreezeOnly <<< ST.lift <<< freezeFromJSON)
 
 freezeFromJSON :: FreezeJSON -> Either String FreezeOp
-freezeFromJSON { ties, prevTime } = Right $ FreezeOp { ties, prevTime: parseTime prevTime }
+freezeFromJSON { ties, prevTime } = Right $ FreezeOp { ties, prevTime: maybe (Left "") parseTime prevTime }
 
-splitFromJSON :: SplitJSON -> Either String SplitOp
-splitFromJSON json@{ unexplained, keepLeft, keepRight, passLeft, passRight, ids } = do
-  regular <- M.fromFoldable <$> (sequence $ wrap readDoubleOrnament <$> json.regular)
-  passing <- M.fromFoldable <$> (sequence $ wrap readPassingOrnament <$> json.passing)
-  fromLeft <- M.fromFoldable <$> (sequence $ wrap readRightOrnament <$> json.fromLeft)
-  fromRight <- M.fromFoldable <$> (sequence $ wrap readLeftOrnament <$> json.fromRight)
+splitFromJSON :: SplitJSON -> ST.StateT { nextS :: Int, nextT :: Int } (Either String) SplitOp
+splitFromJSON json@{ unexplained, keepLeft, keepRight, passLeft, passRight, ids: idsMaybe } = do
+  regular <- ST.lift $ M.fromFoldable <$> (sequence $ wrap readDoubleOrnament <$> json.regular)
+  passing <- ST.lift $ M.fromFoldable <$> (sequence $ wrap readPassingOrnament <$> json.passing)
+  fromLeft <- ST.lift $ M.fromFoldable <$> (sequence $ wrap readRightOrnament <$> json.fromLeft)
+  fromRight <- ST.lift $ M.fromFoldable <$> (sequence $ wrap readLeftOrnament <$> json.fromRight)
+  ids <- case idsMaybe of
+    Just i -> pure i
+    Nothing -> do
+      left <- newTId
+      slice <- newSId
+      right <- newTId
+      pure { left, slice, right }
   pure
     $ SplitOp
         { regular
         , passing
         , fromLeft
         , fromRight
-        , unexplained
+        , unexplained: fromMaybe [] unexplained
         , keepLeft
         , keepRight
         , passLeft
@@ -311,14 +337,23 @@ splitFromJSON json@{ unexplained, keepLeft, keepRight, passLeft, passRight, ids 
     Just other -> Left $ "Expected left ornament type but got " <> other
     Nothing -> Right Nothing
 
-horiFromJSON :: HoriJSON -> Either String HoriOp
-horiFromJSON { midEdges, children, ids, unexplained } =
-  Right
+horiFromJSON :: HoriJSON -> ST.StateT { nextS :: Int, nextT :: Int } (Either String) HoriOp
+horiFromJSON { midEdges, children, ids: idsMaybe, unexplained } = do
+  ids <- case idsMaybe of
+    Just i -> pure i
+    Nothing -> do
+      left <- newTId
+      lslice <- newSId
+      mid <- newTId
+      rslice <- newSId
+      right <- newTId
+      pure { left, lslice, mid, rslice, right }
+  pure
     $ HoriOp
         { midEdges: { regular: S.fromFoldable midEdges.regular, passing: midEdges.passing }
         , children: M.fromFoldable (childFromJSON <$> children)
         , ids
-        , unexplained
+        , unexplained: fromMaybe { left: [], right: [] } unexplained
         }
   where
   getDist =
