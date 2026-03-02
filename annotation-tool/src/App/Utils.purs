@@ -5,7 +5,7 @@ import Prelude
 import Control.Promise (Promise, toAffE)
 import Data.Either (Either(..))
 import Data.Foldable (class Foldable, intercalate)
-import Data.Maybe (fromJust)
+import Data.Maybe (Maybe, fromJust)
 import Effect (Effect)
 import Effect.Aff (Aff)
 import Foreign (Foreign, ForeignError, renderForeignError, unsafeToForeign)
@@ -13,28 +13,29 @@ import Halogen.HTML as HH
 import Halogen.HTML.Properties as HP
 import Partial.Unsafe (unsafePartial)
 import ProtoVoices.Common (MBS)
-import ProtoVoices.JSONTransport (PieceJSON, addJSONIds, pieceFromJSON)
+import ProtoVoices.JSONTransport (pieceFromJSON)
 import ProtoVoices.Model (Note)
 import Web.Event.EventTarget (EventTarget)
+import Simple.JSON as JSON
 
 class_ :: forall r i. String -> HH.IProp (class :: String | r) i
 class_ str = HP.class_ $ HH.ClassName str
 
-foreign import examplePieceJSON :: PieceJSON ()
+foreign import examplePieceJSON :: Foreign
 
-foreign import examplePieceJSONLong :: PieceJSON ()
+foreign import examplePieceJSONLong :: Foreign
 
-examplePieceJSONWithIds :: PieceJSON (id :: String)
-examplePieceJSONWithIds = addJSONIds examplePieceJSON
+-- examplePieceJSONWithIds :: PieceJSON (id :: String)
+-- examplePieceJSONWithIds = addJSONIds examplePieceJSON
 
-examplePieceJSONLongWithIds :: PieceJSON (id :: String)
-examplePieceJSONLongWithIds = addJSONIds examplePieceJSONLong
+-- examplePieceJSONLongWithIds :: PieceJSON (id :: String)
+-- examplePieceJSONLongWithIds = addJSONIds examplePieceJSONLong
 
-examplePiece :: Array { time :: Either String MBS, notes :: Array { hold :: Boolean, note :: Note } }
-examplePiece = unsafePartial $ fromJust $ pieceFromJSON examplePieceJSONWithIds
+examplePiece :: Array { time :: Either String MBS, notes :: Array { hold :: Maybe String, note :: Note } }
+examplePiece = unsafePartial $ fromJust $ pieceFromJSON =<< JSON.read_ examplePieceJSON
 
-examplePieceLong :: Array { time :: Either String MBS, notes :: Array { hold :: Boolean, note :: Note } }
-examplePieceLong = unsafePartial $ fromJust $ pieceFromJSON examplePieceJSONLongWithIds
+examplePieceLong :: Array { time :: Either String MBS, notes :: Array { hold :: Maybe String, note :: Note } }
+examplePieceLong = unsafePartial $ fromJust $ pieceFromJSON =<< JSON.read_ examplePieceJSONLong
 
 showJSONErrors :: forall a f. Foldable f => Functor f => f ForeignError -> Either String a
 showJSONErrors errs = Left $ "Errors parsing JSON:\n  " <> intercalate "\n  " (renderForeignError <$> errs)

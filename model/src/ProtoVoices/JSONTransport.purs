@@ -28,7 +28,7 @@ import Type.Proxy (Proxy(..))
 ----------
 type PieceJSON n = Array
   { time :: String
-  , notes :: Array { pitch :: String, hold :: Boolean | n }
+  , notes :: Array { pitch :: String, hold :: Maybe String | n }
   }
 
 type ModelJSON =

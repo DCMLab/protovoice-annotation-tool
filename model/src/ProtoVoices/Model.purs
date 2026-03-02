@@ -36,7 +36,7 @@ type Time = Either String MBS
 
 type Note = { pitch :: SPitch, id :: String }
 
-type Piece = Array { time :: Time, notes :: Array { hold :: Boolean, note :: Note } }
+type Piece = Array { time :: Time, notes :: Array { hold :: Maybe String, note :: Note } }
 
 data RightOrnament
   = RightRepeat
@@ -579,21 +579,22 @@ showReduction { segments } = intercalate "\n" $ showSegment 0 <$> segments
 startSlice :: Slice
 startSlice = { id: SliceId 0, notes: Start, x: 0.0, parents: NoParents }
 
-thawTrans :: Array Note -> Int -> Array { note :: Note, hold :: Boolean } -> Transition
+thawTrans :: Array Edge -> Int -> Array { note :: Note, hold :: Maybe String } -> Transition
 thawTrans ties id slice =
   { id: TransId id
   , is2nd: false
   , edges:
-      { regular: S.fromFoldable $ A.catMaybes $ map findSecond ties
+      { regular: S.fromFoldable ties
       , passing: []
       }
   }
-  where
-  notes = map _.note slice
 
-  findSecond fst = (\snd -> { left: Inner fst, right: Inner snd }) <$> find (\snd -> snd.pitch == fst.pitch) notes
+-- where
+-- notes = map _.note slice
 
-thawSlice :: Array { note :: Note, hold :: Boolean } -> Int -> Slice
+-- findSecond fst = (\snd -> { left: Inner fst, right: Inner snd }) <$> find (\snd -> snd.pitch == fst.pitch) notes
+
+thawSlice :: Array { note :: Note, hold :: Maybe String } -> Int -> Slice
 thawSlice slice id =
   { id: SliceId id
   , notes: Inner $ map (\n -> { note: n.note, expl: NoExpl }) $ sortNotes slice
@@ -609,7 +610,7 @@ thawPiece piece =
   , nextTransId: TransId $ imax + 1
   }
   where
-  thaw st { notes } = { seg, ties, i: st.i + 1 }
+  thaw st { notes } = { seg, ties: tiesNext, i: st.i + 1 }
     where
     seg =
       Just
@@ -618,7 +619,11 @@ thawPiece piece =
         , op: Freeze
         }
 
-    ties = map _.note $ A.filter _.hold notes
+    tiesNext = A.mapMaybe mkTie notes -- map _.note $ A.filter _.hold notes
+
+    mkTie note = case note.hold of
+      Nothing -> Nothing
+      Just r -> Just { left: Inner note.note, right: Inner (note.note { id = r }) }
 
   init = { seg: Nothing, ties: [], i: 0 }
 
@@ -643,19 +648,19 @@ thawPiece piece =
 loadPiece :: Piece -> Model
 loadPiece piece = { piece, reduction: thawPiece piece, styles: emptyStyles }
 
-surfaceToModel :: Model -> Model
-surfaceToModel model = { piece, reduction: model.reduction { segments = segs }, styles: model.styles }
-  where
-  toSlice seg =
-    { time: Left ""
-    , notes: (\n -> { note: n.note, hold: false }) <$> getInnerNotes seg.rslice
-    }
+-- surfaceToModel :: Model -> Model
+-- surfaceToModel model = { piece, reduction: model.reduction { segments = segs }, styles: model.styles }
+--   where
+--   toSlice seg =
+--     { time: Left ""
+--     , notes: (\n -> { note: n.note, hold: Nothing }) <$> getInnerNotes seg.rslice
+--     }
 
-  convertSegment i seg = seg { op = Freeze, rslice = seg.rslice { x = toNumber i + 1.0 } }
+--   convertSegment i seg = seg { op = Freeze, rslice = seg.rslice { x = toNumber i + 1.0 } }
 
-  piece = A.fromFoldable $ toSlice <$> L.dropEnd 1 model.reduction.segments
+--   piece = A.fromFoldable $ toSlice <$> L.dropEnd 1 model.reduction.segments
 
-  segs = mapWithIndex convertSegment model.reduction.segments
+--   segs = mapWithIndex convertSegment model.reduction.segments
 
 -- outer structure operations
 -- ==========================

@@ -15,7 +15,7 @@ import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Set as S
 import Data.Tuple (Tuple(..))
 import ProtoVoices.Leftmost (FreezeOp(..), HoriChildren(..), HoriOp(..), Leftmost(..), RootOrnament(..), SplitOp(..), horiLeftChildren, horiRightChildren, splitGetChildNotes)
-import ProtoVoices.Model (DoubleOrnament(..), Edge, Edges, EndSegment, Model, Note, NoteExplanation(..), Notes, Op(..), Parents(..), Piece, Reduction, Segment, Slice, SliceId(..), StartStop(..), Time, TransId(..), Transition, BottomSurface, attachSegment, detachSegment, explLeftEdge, explRightEdge, getInnerNotes, horiEdgesLeft, horiEdgesMid, horiEdgesRight, incS, incT, parentEdges, sortNotes, vertEdgesLeft, vertEdgesRight)
+import ProtoVoices.Model (BottomSurface, DoubleOrnament(..), Edge, Edges, EndSegment, Model, Note, NoteExplanation(..), Notes, Op(..), Parents(..), Piece, Reduction, Segment, Slice, SliceId(..), StartStop(..), Time, TransId(..), Transition, attachSegment, detachSegment, explLeftEdge, explRightEdge, getInner, getInnerNotes, horiEdgesLeft, horiEdgesMid, horiEdgesRight, incS, incT, parentEdges, sortNotes, vertEdgesLeft, vertEdgesRight)
 
 type AgendaItem a = { seg :: Segment, more :: a }
 
@@ -270,7 +270,7 @@ reductionToLeftmost { reduction, piece } = do
          ( Either
              String
              { lm :: List (Leftmost SplitOp FreezeOp HoriOp)
-             , piece :: List { time :: Time, notes :: Array { hold :: Boolean, note :: Note } }
+             , piece :: List { time :: Time, notes :: Array { hold :: Maybe String, note :: Note } }
              }
          )
   lmAlg =
@@ -462,7 +462,12 @@ leftmostToReduction topSegments deriv = do
   freeze :: Slice -> FreezeOp -> _ -> _
   freeze lslice (FreezeOp fop) { transId: tid, rslice: { id: sid, notes, parents } } = do
     let
-      holdNote { note } = { note, hold: A.any (\{ left } -> left == Inner note) fop.ties }
+      holdNote { note } = { note, hold }
+        where
+        hold = do -- Maybe
+          edge <- A.find (\{ left } -> left == Inner note) fop.ties
+          right <- getInner edge.right
+          Just $ right.id
 
       pieceNotes = map holdNote $ sortNotes $ getInnerNotes lslice
     st <-
